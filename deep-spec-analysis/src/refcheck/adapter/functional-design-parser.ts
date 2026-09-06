@@ -60,13 +60,18 @@ import {
   TypeName,
 } from "@deep-spec-analysis/refcheck-domain";
 
-function str(v: Json): string | null {
+function str(v: Json | undefined): string | null {
   return typeof v === "string" ? v : null;
+}
+
+function own(v: { [k: string]: Json }, key: string): Json | undefined {
+  return Object.hasOwn(v, key) ? v[key] : undefined;
 }
 
 function pick(v: { [k: string]: Json }, keys: string[]): Json {
   for (const k of keys) {
-    if (k in v) return v[k] as Json;
+    const value = own(v, k);
+    if (value !== undefined) return value;
   }
   return null;
 }
@@ -105,7 +110,8 @@ function extractEntities(value: Json): Result<DeclaredEntities, string> {
     shapeErrors: [],
   };
   const model = collected;
-  if (!isObject(value) || !Array.isArray(value.entities)) {
+  const entities = isObject(value) ? own(value, "entities") : undefined;
+  if (!Array.isArray(entities)) {
     model.shapeErrors.push(
       ShapeError.of({ element: ElementPath.of("entities"), detail: "top-level `entities:` list is missing" }),
     );
@@ -116,7 +122,7 @@ function extractEntities(value: Json): Result<DeclaredEntities, string> {
     });
     return parsed.ok ? ok(DeclaredEntities.of(parsed.value)) : err(JSON.stringify(parsed.error));
   }
-  for (const [i, raw] of value.entities.entries()) {
+  for (const [i, raw] of entities.entries()) {
     const element = `entities[${i}]`;
     if (!isObject(raw)) {
       model.shapeErrors.push(
@@ -124,7 +130,7 @@ function extractEntities(value: Json): Result<DeclaredEntities, string> {
       );
       continue;
     }
-    const name = str(raw.name);
+    const name = str(own(raw, "name"));
     if (name === null) {
       model.shapeErrors.push(
         ShapeError.of({ element: ElementPath.of(`${element}.name`), detail: "entity has no string `name`" }),
@@ -140,8 +146,9 @@ function extractEntities(value: Json): Result<DeclaredEntities, string> {
     }
     const attrs: AttributeDeclaration[] = [];
     let collectionError: string | null = null;
-    if (Array.isArray(raw.attributes)) {
-      (raw.attributes as Json[]).forEach((a, j) => {
+    const rawAttributes = own(raw, "attributes");
+    if (Array.isArray(rawAttributes)) {
+      rawAttributes.forEach((a, j) => {
         const ael = `${element}.attributes[${j}]`;
         if (!isObject(a)) {
           model.shapeErrors.push(
@@ -149,7 +156,7 @@ function extractEntities(value: Json): Result<DeclaredEntities, string> {
           );
           return;
         }
-        const aname = str(a.name);
+        const aname = str(own(a, "name"));
         if (aname === null) {
           model.shapeErrors.push(
             ShapeError.of({ element: ElementPath.of(`${ael}.name`), detail: "attribute has no string `name`" }),
@@ -210,8 +217,9 @@ function extractEntities(value: Json): Result<DeclaredEntities, string> {
     }
     if (collectionError !== null) return err(collectionError);
     const rels: RelationshipDeclaration[] = [];
-    if (Array.isArray(raw.relationships)) {
-      (raw.relationships as Json[]).forEach((r, j) => {
+    const rawRelationships = own(raw, "relationships");
+    if (Array.isArray(rawRelationships)) {
+      rawRelationships.forEach((r, j) => {
         const rel = extractRel(r, `${element}.relationships[${j}]`, name);
         if (!rel.ok)
           model.shapeErrors.push(
@@ -233,8 +241,9 @@ function extractEntities(value: Json): Result<DeclaredEntities, string> {
       }),
     );
   }
-  if (Array.isArray(value.relationships)) {
-    (value.relationships as Json[]).forEach((r, j) => {
+  const valueRelationships = isObject(value) ? own(value, "relationships") : undefined;
+  if (Array.isArray(valueRelationships)) {
+    valueRelationships.forEach((r, j) => {
       const rel = extractRel(r, `relationships[${j}]`, null);
       if (!rel.ok)
         model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`relationships[${j}]`), detail: rel.error }));
@@ -272,9 +281,10 @@ export function parseRulesDocument(md: string | null): RulesOutcome {
     return RulesOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), parsed.error);
   }
   const v = parsed.value ?? null;
-  if (!isObject(v) || !Array.isArray(v.rules)) return RulesOutcome.noRulesList();
+  const rawRules = isObject(v) ? own(v, "rules") : undefined;
+  if (!Array.isArray(rawRules)) return RulesOutcome.noRulesList();
   let collectionError: string | null = null;
-  const ruleList: RuleDeclaration[] = (v.rules as Json[]).map((raw, i) => {
+  const ruleList: RuleDeclaration[] = rawRules.map((raw, i) => {
     const element = `rules[${i}]`;
     if (!isObject(raw)) {
       return RuleDeclaration.of({
@@ -286,14 +296,14 @@ export function parseRulesDocument(md: string | null): RulesOutcome {
         missing: ["<entry is not a mapping>"],
       });
     }
-    const missing = ["id", "statement", "category"].filter((k) => !(k in raw));
-    if (!("source" in raw) && !("sources" in raw)) missing.push("source");
+    const missing = ["id", "statement", "category"].filter((k) => own(raw, k) === undefined);
+    if (own(raw, "source") === undefined && own(raw, "sources") === undefined) missing.push("source");
     const source = pick(raw, ["source", "sources"]);
     const sourceText = Array.isArray(source)
       ? (source as Json[]).filter((s): s is string => typeof s === "string").join(" ")
       : (str(source) ?? "");
-    const id = str(raw.id);
-    const category = str(raw.category);
+    const id = str(own(raw, "id"));
+    const category = str(own(raw, "category"));
     const appliesTo = str(pick(raw, ["applies_to", "applies-to", "applies to", "appliesTo"]));
     const parsedId = id === null ? ok(null) : DeclaredRuleIdentifier.parse(id);
     if (!parsedId.ok) missing.push("id");
@@ -408,7 +418,12 @@ export function parseFunctionalSpecDocument(md: string | null): FunctionalSpecif
       break;
     }
   }
-  return FunctionalSpecificationOutcome.present(StateMachineSketches.of(machines));
+  const parsedMachines = StateMachineSketches.parse(machines);
+  if (parsedMachines.ok) return FunctionalSpecificationOutcome.present(parsedMachines.value);
+  const error = ErrorMessage.parse(JSON.stringify(parsedMachines.error));
+  if (!error.ok)
+    throw new Error(`defect: state-machine overflow diagnostic could not be represented (${error.error.kind})`);
+  return FunctionalSpecificationOutcome.unparseable(error.value);
 }
 
 export function parseDomainEntitiesDocument(md: string | null): DomainEntitiesOutcome {
@@ -418,18 +433,25 @@ export function parseDomainEntitiesDocument(md: string | null): DomainEntitiesOu
   if (parsed.error !== undefined) return DomainEntitiesOutcome.unusable(parsed.error);
   const value = "value" in parsed ? (parsed.value ?? null) : null;
   const out: DomainEntitySketch[] = [];
-  if (isObject(value) && Array.isArray(value.components)) {
-    for (const raw of value.components as Json[]) {
-      if (!isObject(raw) || typeof raw.name !== "string") continue;
-      if (!Array.isArray(raw.entities)) continue;
-      for (const e of raw.entities as Json[]) {
-        if (!isObject(e) || typeof e.name !== "string") continue;
-        const attributes = Array.isArray(e.attributes)
-          ? (e.attributes as Json[]).filter((a): a is string => typeof a === "string")
+  const components = isObject(value) ? own(value, "components") : undefined;
+  if (Array.isArray(components)) {
+    for (const raw of components) {
+      if (!isObject(raw)) continue;
+      const componentName = own(raw, "name");
+      if (typeof componentName !== "string") continue;
+      const entities = own(raw, "entities");
+      if (!Array.isArray(entities)) continue;
+      for (const e of entities) {
+        if (!isObject(e)) continue;
+        const entityName = own(e, "name");
+        if (typeof entityName !== "string") continue;
+        const rawAttributes = own(e, "attributes");
+        const attributes = Array.isArray(rawAttributes)
+          ? rawAttributes.filter((a): a is string => typeof a === "string")
           : [];
         const fields = combineResults({
-          name: EntityName.parse(e.name),
-          component: ComponentName.parse(raw.name),
+          name: EntityName.parse(entityName),
+          component: ComponentName.parse(componentName),
           attributes: traverseResult(attributes, AttributeName.parse),
         });
         if (!fields.ok) return DomainEntitiesOutcome.unusable(JSON.stringify(fields.error));

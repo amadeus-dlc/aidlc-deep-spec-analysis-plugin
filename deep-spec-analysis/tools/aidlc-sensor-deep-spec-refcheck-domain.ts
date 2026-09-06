@@ -182,12 +182,19 @@ function flatMapResult(result, next) {
   return result.ok ? next(result.value) : result;
 }
 function combineResults(fields) {
-  const values = {};
-  for (const key in fields) {
+  const values = Array.isArray(fields) ? new Array(fields.length) : {};
+  for (const key of Reflect.ownKeys(fields)) {
+    if (Array.isArray(fields) && key === "length")
+      continue;
     const field = fields[key];
     if (!field.ok)
       return err(field.error);
-    values[key] = field.value;
+    Object.defineProperty(values, key, {
+      configurable: true,
+      enumerable: true,
+      value: field.value,
+      writable: true
+    });
   }
   return ok(values);
 }
@@ -2513,7 +2520,7 @@ function isMappingEntry(text) {
   return /^[^:]+:(\s|$)/.test(text);
 }
 function parseMapping(lines, start, indent) {
-  const out = {};
+  const entries = [];
   let i = start;
   while (i < lines.length) {
     const line = lines[i];
@@ -2530,10 +2537,10 @@ function parseMapping(lines, start, indent) {
       const next = lines[i + 1];
       if (next && next.indent > indent) {
         const [child, ni] = parseBlock(lines, i + 1, next.indent);
-        out[key] = child;
+        entries.push([key, child]);
         i = ni;
       } else {
-        out[key] = null;
+        entries.push([key, null]);
         i++;
       }
       continue;
@@ -2545,15 +2552,15 @@ function parseMapping(lines, start, indent) {
         parts.push(lines[j]?.text ?? "");
         j++;
       }
-      out[key] = parts.join(valPart.startsWith(">") ? " " : `
-`);
+      entries.push([key, parts.join(valPart.startsWith(">") ? " " : `
+`)]);
       i = j;
       continue;
     }
-    out[key] = parseScalar(valPart, line.n);
+    entries.push([key, parseScalar(valPart, line.n)]);
     i++;
   }
-  return [out, i];
+  return [Object.fromEntries(entries), i];
 }
 function unquote(s) {
   if (s.startsWith('"') && s.endsWith('"') || s.startsWith("'") && s.endsWith("'")) {
@@ -4235,24 +4242,35 @@ class EntitiesOutcome {
 
 // src/refcheck/domain/functional-specification-outcome.ts
 class FunctionalSpecificationOutcome {
-  #machines;
-  constructor(machines) {
-    this.#machines = machines;
+  #state;
+  constructor(state) {
+    this.#state = state;
   }
   static absent() {
-    return new FunctionalSpecificationOutcome(null);
+    return new FunctionalSpecificationOutcome({ kind: "absent" });
+  }
+  static unparseable(error) {
+    return new FunctionalSpecificationOutcome({ kind: "unparseable", error });
   }
   static present(machines) {
-    return new FunctionalSpecificationOutcome(machines);
+    return new FunctionalSpecificationOutcome({ kind: "present", machines });
   }
   match(handlers) {
-    return this.#machines === null ? handlers.absent() : handlers.present(this.#machines);
+    if (this.#state.kind === "absent")
+      return handlers.absent();
+    if (this.#state.kind === "unparseable")
+      return handlers.unparseable(this.#state.error);
+    return handlers.present(this.#state.machines);
   }
   check(report, specArtifact, entitiesArtifact, entities) {
     this.match({
       absent: () => {
         report.skip(FD_S1, "absent-input", "functional-spec.md is not present in this unit's functional-design record");
         report.skip(FD_S2, "absent-input", "functional-spec.md is not present in this unit's functional-design record");
+      },
+      unparseable: (error) => {
+        report.skip(FD_S1, "unrecognized-format", `functional-spec.md is unusable (${error.asString()})`);
+        report.skip(FD_S2, "unrecognized-format", `functional-spec.md is unusable (${error.asString()})`);
       },
       present: (machines) => {
         if (entities === null) {
@@ -6275,10 +6293,14 @@ import { basename as basename2, dirname as dirname3, join as join4 } from "path"
 function str2(v) {
   return typeof v === "string" ? v : null;
 }
+function own(v, key) {
+  return Object.hasOwn(v, key) ? v[key] : undefined;
+}
 function pick(v, keys) {
   for (const k of keys) {
-    if (k in v)
-      return v[k];
+    const value = own(v, k);
+    if (value !== undefined)
+      return value;
   }
   return null;
 }
@@ -6311,7 +6333,8 @@ function extractEntities(value) {
     shapeErrors: []
   };
   const model = collected;
-  if (!isObject(value) || !Array.isArray(value.entities)) {
+  const entities = isObject(value) ? own(value, "entities") : undefined;
+  if (!Array.isArray(entities)) {
     model.shapeErrors.push(ShapeError.of({ element: ElementPath.of("entities"), detail: "top-level `entities:` list is missing" }));
     const parsed2 = combineResults({
       entities: EntityDeclarations.parse(collected.entities),
@@ -6320,13 +6343,13 @@ function extractEntities(value) {
     });
     return parsed2.ok ? ok(DeclaredEntities.of(parsed2.value)) : err(JSON.stringify(parsed2.error));
   }
-  for (const [i, raw] of value.entities.entries()) {
+  for (const [i, raw] of entities.entries()) {
     const element = `entities[${i}]`;
     if (!isObject(raw)) {
       model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(element), detail: "entity entry is not a mapping" }));
       continue;
     }
-    const name = str2(raw.name);
+    const name = str2(own(raw, "name"));
     if (name === null) {
       model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${element}.name`), detail: "entity has no string `name`" }));
       continue;
@@ -6338,14 +6361,15 @@ function extractEntities(value) {
     }
     const attrs = [];
     let collectionError = null;
-    if (Array.isArray(raw.attributes)) {
-      raw.attributes.forEach((a, j) => {
+    const rawAttributes = own(raw, "attributes");
+    if (Array.isArray(rawAttributes)) {
+      rawAttributes.forEach((a, j) => {
         const ael = `${element}.attributes[${j}]`;
         if (!isObject(a)) {
           model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(ael), detail: "attribute entry is not a mapping" }));
           return;
         }
-        const aname = str2(a.name);
+        const aname = str2(own(a, "name"));
         if (aname === null) {
           model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${ael}.name`), detail: "attribute has no string `name`" }));
           return;
@@ -6399,8 +6423,9 @@ function extractEntities(value) {
     if (collectionError !== null)
       return err(collectionError);
     const rels = [];
-    if (Array.isArray(raw.relationships)) {
-      raw.relationships.forEach((r, j) => {
+    const rawRelationships = own(raw, "relationships");
+    if (Array.isArray(rawRelationships)) {
+      rawRelationships.forEach((r, j) => {
         const rel = extractRel(r, `${element}.relationships[${j}]`, name);
         if (!rel.ok)
           model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${element}.relationships[${j}]`), detail: rel.error }));
@@ -6421,8 +6446,9 @@ function extractEntities(value) {
       rels: parsedRelationships.value
     }));
   }
-  if (Array.isArray(value.relationships)) {
-    value.relationships.forEach((r, j) => {
+  const valueRelationships = isObject(value) ? own(value, "relationships") : undefined;
+  if (Array.isArray(valueRelationships)) {
+    valueRelationships.forEach((r, j) => {
       const rel = extractRel(r, `relationships[${j}]`, null);
       if (!rel.ok)
         model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`relationships[${j}]`), detail: rel.error }));
@@ -6461,10 +6487,11 @@ function parseRulesDocument(md) {
     return RulesOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), parsed.error);
   }
   const v = parsed.value ?? null;
-  if (!isObject(v) || !Array.isArray(v.rules))
+  const rawRules = isObject(v) ? own(v, "rules") : undefined;
+  if (!Array.isArray(rawRules))
     return RulesOutcome.noRulesList();
   let collectionError = null;
-  const ruleList = v.rules.map((raw, i) => {
+  const ruleList = rawRules.map((raw, i) => {
     const element = `rules[${i}]`;
     if (!isObject(raw)) {
       return RuleDeclaration.of({
@@ -6476,13 +6503,13 @@ function parseRulesDocument(md) {
         missing: ["<entry is not a mapping>"]
       });
     }
-    const missing = ["id", "statement", "category"].filter((k) => !(k in raw));
-    if (!("source" in raw) && !("sources" in raw))
+    const missing = ["id", "statement", "category"].filter((k) => own(raw, k) === undefined);
+    if (own(raw, "source") === undefined && own(raw, "sources") === undefined)
       missing.push("source");
     const source = pick(raw, ["source", "sources"]);
     const sourceText = Array.isArray(source) ? source.filter((s) => typeof s === "string").join(" ") : str2(source) ?? "";
-    const id = str2(raw.id);
-    const category = str2(raw.category);
+    const id = str2(own(raw, "id"));
+    const category = str2(own(raw, "category"));
     const appliesTo = str2(pick(raw, ["applies_to", "applies-to", "applies to", "appliesTo"]));
     const parsedId = id === null ? ok(null) : DeclaredRuleIdentifier.parse(id);
     if (!parsedId.ok)
@@ -6587,7 +6614,13 @@ function parseFunctionalSpecDocument(md) {
       break;
     }
   }
-  return FunctionalSpecificationOutcome.present(StateMachineSketches.of(machines));
+  const parsedMachines = StateMachineSketches.parse(machines);
+  if (parsedMachines.ok)
+    return FunctionalSpecificationOutcome.present(parsedMachines.value);
+  const error = ErrorMessage.parse(JSON.stringify(parsedMachines.error));
+  if (!error.ok)
+    throw new Error(`defect: state-machine overflow diagnostic could not be represented (${error.error.kind})`);
+  return FunctionalSpecificationOutcome.unparseable(error.value);
 }
 function parseDomainEntitiesDocument(md) {
   if (md === null)
@@ -6598,19 +6631,28 @@ function parseDomainEntitiesDocument(md) {
     return DomainEntitiesOutcome.unusable(parsed.error);
   const value = "value" in parsed ? parsed.value ?? null : null;
   const out = [];
-  if (isObject(value) && Array.isArray(value.components)) {
-    for (const raw of value.components) {
-      if (!isObject(raw) || typeof raw.name !== "string")
+  const components = isObject(value) ? own(value, "components") : undefined;
+  if (Array.isArray(components)) {
+    for (const raw of components) {
+      if (!isObject(raw))
         continue;
-      if (!Array.isArray(raw.entities))
+      const componentName = own(raw, "name");
+      if (typeof componentName !== "string")
         continue;
-      for (const e of raw.entities) {
-        if (!isObject(e) || typeof e.name !== "string")
+      const entities = own(raw, "entities");
+      if (!Array.isArray(entities))
+        continue;
+      for (const e of entities) {
+        if (!isObject(e))
           continue;
-        const attributes = Array.isArray(e.attributes) ? e.attributes.filter((a) => typeof a === "string") : [];
+        const entityName = own(e, "name");
+        if (typeof entityName !== "string")
+          continue;
+        const rawAttributes = own(e, "attributes");
+        const attributes = Array.isArray(rawAttributes) ? rawAttributes.filter((a) => typeof a === "string") : [];
         const fields = combineResults({
-          name: EntityName.parse(e.name),
-          component: ComponentName.parse(raw.name),
+          name: EntityName.parse(entityName),
+          component: ComponentName.parse(componentName),
           attributes: traverseResult(attributes, AttributeName.parse)
         });
         if (!fields.ok)
@@ -6727,6 +6769,9 @@ class DesignRecordRepositoryImplementation {
     };
     const unitDir = dirname3(fdDir);
     const unit = recordRoot !== null && basename2(unitDir) !== "construction" && unitDir !== recordRoot ? basename2(unitDir) : undefined;
+    const parsedUnit = unit === undefined ? ok(undefined) : UnitName.parse(unit);
+    if (!parsedUnit.ok)
+      return err({ kind: "corrupt", path: fdDir, cause: JSON.stringify(parsedUnit.error) });
     const entitiesPath = join4(fdDir, "entities.md");
     const entities = load(entitiesPath, (t) => parseEntitiesDocument(t));
     const rulesPath = join4(fdDir, "rules.md");
@@ -6763,7 +6808,7 @@ class DesignRecordRepositoryImplementation {
     if (!siblingInputs.ok)
       return err({ kind: "corrupt", path: fdDir, cause: JSON.stringify(siblingInputs.error) });
     return ok({
-      unit: unit === undefined ? undefined : UnitName.of(unit),
+      unit: parsedUnit.value,
       entitiesArtifact: ArtifactPath.of(rel(entitiesPath)),
       entities,
       rulesArtifact: ArtifactPath.of(rel(rulesPath)),

@@ -1,5 +1,10 @@
 import { QueryLabel } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  boundedValueSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import { sameArray, sameRecord } from "./value-equality.ts";
 
 // refinement クエリ 1 件の判定。主従の裁定（#71 波2）: interpret が吸い出して
@@ -27,11 +32,12 @@ export class RefinementQueryVerdict {
 
   // 未検証の構築引数はParam型として明示し、各生成経路で共有する。
   private constructor(props: RefinementQueryVerdictParam) {
-    this.#status = props.status;
-    // 判定の内部状態は外部と参照を共有しない（入出力ともにコピー）。
-    this.#decodedModel = props.decodedModel === undefined ? undefined : { ...props.decodedModel };
-    this.#decodedPostModel = props.decodedPostModel === undefined ? undefined : { ...props.decodedPostModel };
-    this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.of(label));
+    // child応答と証拠文書の処理予算を一度のsnapshotで適用し、ofからの迂回を防ぐ。
+    const snapshot = boundedValueSnapshot(props, { string: 65_536, nodes: 65_536, depth: 4, total: 16_777_216 });
+    this.#status = snapshot.status;
+    this.#decodedModel = snapshot.decodedModel;
+    this.#decodedPostModel = snapshot.decodedPostModel;
+    this.#core = snapshot.core === undefined ? undefined : snapshot.core.map((label) => QueryLabel.of(label));
   }
 
   static parse(props: RefinementQueryVerdictParam): Result<RefinementQueryVerdict, ParseError> {

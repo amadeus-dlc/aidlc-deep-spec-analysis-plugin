@@ -1,6 +1,6 @@
 import { KeySet, type UnitName } from "@deep-spec-analysis/kernel-domain";
 import {
-  IllegalArgumentException,
+  boundedCollectionSnapshot,
   type ParseError,
   parseConstruction,
   type Result,
@@ -32,13 +32,14 @@ export class FunctionalObservation {
   readonly #requirementsModelModifiedAt: ArtifactModifiedAt | null;
   /** intent単位のunit台帳は各65,536件まで。走査・コピーの前に制限する。 */
   private constructor(props: FunctionalObservationParam) {
-    if (props.units.length > 65_536 || props.modelUnits.length > 65_536 || props.completedUnits.length > 65_536)
-      throw new IllegalArgumentException({ kind: "too-many-functional-units" });
+    const units = boundedCollectionSnapshot(props.units, 65_536, "too-many-functional-units");
+    const modelUnits = boundedCollectionSnapshot(props.modelUnits, 65_536, "too-many-functional-units");
+    const completedUnits = boundedCollectionSnapshot(props.completedUnits, 65_536, "too-many-functional-units");
     this.#location = props.location;
-    this.#units = Object.freeze([...props.units]);
+    this.#units = units;
     this.#modelModifiedAt = props.modelModifiedAt;
-    this.#modelUnits = KeySet.of(props.modelUnits);
-    this.#completedUnits = KeySet.of(props.completedUnits);
+    this.#modelUnits = KeySet.of(modelUnits);
+    this.#completedUnits = KeySet.of(completedUnits);
     this.#hasFindings = props.hasFindings;
     this.#requirementsModelModifiedAt = props.requirementsModelModifiedAt;
   }

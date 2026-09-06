@@ -68,13 +68,18 @@ export class IntermediateRepresentationValidationMaterials {
   }): T {
     const errors = ErrorMessages.collect(this.#initialDiagnostics());
     if (!errors.isEmpty()) return cases.complete(ValidationAssessment.of(errors));
+    const references = FunctionalRequirementReferenceIndex.parse(this.#functionalRequirementReferenceClaims.toArray());
+    if (!references.ok)
+      return cases.complete(
+        ValidationAssessment.of(
+          ErrorMessages.collect([
+            ErrorMessage.parse(`functional requirement reference index is unusable: ${references.error.kind}`),
+          ]),
+        ),
+      );
     return cases.sourceRequired(
       this.#sourceId,
-      RequirementsSourceValidation.of(
-        this.#view,
-        FunctionalRequirementReferenceIndex.of(this.#functionalRequirementReferenceClaims.toArray()),
-        this.#declaredDigest,
-      ),
+      RequirementsSourceValidation.of(this.#view, references.value, this.#declaredDigest),
     );
   }
 

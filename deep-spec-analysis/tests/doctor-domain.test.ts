@@ -32,6 +32,7 @@ import {
   StructuralDebt,
   StructuralObservation,
   UnitCoverage,
+  UnitCoverageProblem,
   VerificationObservation,
   VerificationStaleness,
 } from "@deep-spec-analysis/doctor-domain";
@@ -42,7 +43,7 @@ import {
   CheckStructuralDebtUseCase,
   CheckVerificationCoverageUseCase,
 } from "@deep-spec-analysis/doctor-usecase";
-import { ContentHash, UnitName } from "@deep-spec-analysis/kernel-domain";
+import { ContentHash, ErrorMessage, UnitName } from "@deep-spec-analysis/kernel-domain";
 import { IllegalArgumentException } from "@deep-spec-analysis/kernel-infrastructure";
 
 const location = (intent: string) => IntentLocation.of(ArtifactPath.of("default"), ArtifactPath.of(intent));
@@ -165,6 +166,7 @@ describe("assessment aggregates", () => {
         ),
       ],
       scopes("feature"),
+      [],
     );
     expect(u.hasEligible()).toBe(true);
     expect(u.isClean()).toBe(false);
@@ -173,8 +175,8 @@ describe("assessment aggregates", () => {
     expect(u.problems()).toHaveLength(1);
     expect(u.refinementStale()).toHaveLength(1);
     expect([...u.scopes()].map((scope) => scope.asString())).toEqual(["feature"]);
-    expect(UnitCoverage.of([], scopes()).hasEligible()).toBe(false);
-    expect(UnitCoverage.of([], scopes()).isClean()).toBe(true);
+    expect(UnitCoverage.of([], scopes(), []).hasEligible()).toBe(false);
+    expect(UnitCoverage.of([], scopes(), []).isClean()).toBe(true);
   });
 
   test("the health verdict keeps the frozen checks order and serialized shape", () => {
@@ -316,6 +318,7 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
       UnitCoverage.of(
         [functional("i1", units(["u1", 50], ["u2", 150]), names("u2"), names("u2"), 200)],
         scopes("feature"),
+        [],
       ),
     );
     expect(rows.map((c) => c.label())).toEqual([
@@ -324,7 +327,7 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
       "deep-spec-analysis: unit default/i1/u2 changed its functional-design artifacts after the last design verification",
       "deep-spec-analysis: design verification coverage — 0/2 eligible units verified (scopes: feature)",
     ]);
-    expect(presenter.functionalCoverage(UnitCoverage.of([], scopes()))).toHaveLength(0);
+    expect(presenter.functionalCoverage(UnitCoverage.of([], scopes(), []))).toHaveLength(0);
   });
 });
 
@@ -341,6 +344,7 @@ describe("doctor flow and observation ownership", () => {
         ),
       ],
       scopes("feature"),
+      [],
     );
     const repo: DoctorWorkspaceClient = {
       verificationCoverage: () => CoverageAssessment.of([], scopes()),
@@ -349,12 +353,16 @@ describe("doctor flow and observation ownership", () => {
     };
     const out = new CheckFunctionalCoverageUseCase(repo).execute();
     expect(
-      out
-        .problems()
-        .map((row) => [
-          row.unit().asString(),
-          row.matchState({ unverified: () => "unverified", stale: () => "stale" }),
-        ]),
+      out.problems().map((row) => [
+        row.match({
+          valid: (unit) => unit.asString(),
+          invalid: (detail) => detail.asString(),
+        }),
+        row.match({
+          valid: (_unit, state) => state.match({ unverified: () => "unverified", stale: () => "stale" }),
+          invalid: () => "invalid",
+        }),
+      ]),
     ).toEqual([
       ["u2", "stale"],
       ["u3", "unverified"],
@@ -385,7 +393,7 @@ describe("doctor flow and observation ownership", () => {
     const out = new CheckStructuralDebtUseCase(
       {
         verificationCoverage: () => CoverageAssessment.of([], scopes()),
-        functionalCoverage: () => UnitCoverage.of([], scopes()),
+        functionalCoverage: () => UnitCoverage.of([], scopes(), []),
         designArtifacts: () => targets,
       },
       {
@@ -489,23 +497,39 @@ describe("doctor observation construction contracts", () => {
       expect(() => FunctionalObservation.of(oversized)).toThrow(IllegalArgumentException);
       expect(FunctionalObservation.parse(oversized).ok).toBe(false);
     }
-    expect(UnitCoverage.parse([intent], scopes()).ok).toBe(true);
-    expect(UnitCoverage.of(Array(65_536).fill(intent), scopes()).eligibleCount()).toBe(65_536);
-    expect(() => UnitCoverage.of(Array(65_537).fill(intent), scopes())).toThrow(IllegalArgumentException);
-    expect(UnitCoverage.parse(Array(65_537).fill(intent), scopes()).ok).toBe(false);
+    expect(UnitCoverage.parse([intent], scopes(), []).ok).toBe(true);
+    expect(UnitCoverage.of(Array(65_536).fill(intent), scopes(), []).eligibleCount()).toBe(65_536);
+    expect(() => UnitCoverage.of(Array(65_537).fill(intent), scopes(), [])).toThrow(IllegalArgumentException);
+    expect(UnitCoverage.parse(Array(65_537).fill(intent), scopes(), []).ok).toBe(false);
     const largeIntent = FunctionalObservation.of({
       ...input,
       units: Array(32_769).fill(FunctionalUnitObservation.of(UnitName.of("u1"), ArtifactModifiedAt.of(1))),
     });
-    expect(() => UnitCoverage.of([largeIntent, largeIntent], scopes())).toThrow(IllegalArgumentException);
-    expect(UnitCoverage.parse([largeIntent, largeIntent], scopes()).ok).toBe(false);
+    expect(() => UnitCoverage.of([largeIntent, largeIntent], scopes(), [])).toThrow(IllegalArgumentException);
+    expect(UnitCoverage.parse([largeIntent, largeIntent], scopes(), []).ok).toBe(false);
+    const invalid = UnitCoverageProblem.invalid(location("i1"), ErrorMessage.of("invalid unit name"));
+    const invalidAtLimit = Array.from({ length: 65_536 }, () => invalid);
+    expect(UnitCoverage.of([], scopes(), invalidAtLimit).problems()).toHaveLength(65_536);
+    expect(UnitCoverage.parse([], scopes(), invalidAtLimit).ok).toBe(true);
+    expect(() => UnitCoverage.of([intent], scopes(), invalidAtLimit)).toThrow(IllegalArgumentException);
+    const totalOverflow = UnitCoverage.parse([intent], scopes(), invalidAtLimit);
+    expect(totalOverflow).toEqual({ ok: false, error: { kind: "too-many-covered-units", raw: 65_537 } });
+    if (!totalOverflow.ok) expect(totalOverflow.error).not.toBeInstanceOf(Error);
+    const invalidOverflow = [...invalidAtLimit, invalid];
+    expect(() => UnitCoverage.of([], scopes(), invalidOverflow)).toThrow(IllegalArgumentException);
+    expect(UnitCoverage.parse([], scopes(), invalidOverflow).ok).toBe(false);
     const withoutEvidence = FunctionalObservation.of({
       ...input,
       units: units(["u1", 150]),
       hasFindings: false,
       modelModifiedAt: null,
     });
-    expect(withoutEvidence.problems()[0]?.matchState({ unverified: () => true, stale: () => false })).toBe(true);
+    expect(
+      withoutEvidence.problems()[0]?.match({
+        valid: (_unit, state) => state.match({ unverified: () => true, stale: () => false }),
+        invalid: () => false,
+      }),
+    ).toBe(true);
     expect(withoutEvidence.refinementIsStale()).toBe(false);
 
     const reference = artifact("components.md");
@@ -554,9 +578,12 @@ describe("workspace timestamp observation", () => {
       const preEpoch = workspace.functionalCoverage();
       expect(preEpoch.eligibleCount()).toBe(1);
       expect(
-        preEpoch
-          .problems()
-          .map((problem) => problem.matchState({ stale: () => "stale", unverified: () => "unverified" })),
+        preEpoch.problems().map((problem) =>
+          problem.match({
+            valid: (_unit, state) => state.match({ stale: () => "stale", unverified: () => "unverified" }),
+            invalid: () => "invalid",
+          }),
+        ),
       ).toEqual(["stale"]);
 
       writeFileSync(findingsPath, JSON.stringify({ checked: [] }));
@@ -564,14 +591,24 @@ describe("workspace timestamp observation", () => {
         workspace
           .functionalCoverage()
           .problems()
-          .map((problem) => problem.matchState({ stale: () => "stale", unverified: () => "unverified" })),
+          .map((problem) =>
+            problem.match({
+              valid: (_unit, state) => state.match({ stale: () => "stale", unverified: () => "unverified" }),
+              invalid: () => "invalid",
+            }),
+          ),
       ).toEqual(["unverified"]);
       rmSync(modelPath);
       expect(
         workspace
           .functionalCoverage()
           .problems()
-          .map((problem) => problem.matchState({ stale: () => "stale", unverified: () => "unverified" })),
+          .map((problem) =>
+            problem.match({
+              valid: (_unit, state) => state.match({ stale: () => "stale", unverified: () => "unverified" }),
+              invalid: () => "invalid",
+            }),
+          ),
       ).toEqual(["unverified"]);
     } finally {
       rmSync(project, { recursive: true, force: true });
@@ -607,4 +644,88 @@ test("invalid or oversized authored stage scopes use the default range without c
   } finally {
     rmSync(project, { recursive: true, force: true });
   }
+});
+
+test("invalid functional-design unit names become explicit coverage problems", () => {
+  const project = mkdtempSync(join(tmpdir(), "doctor-invalid-unit-name-"));
+  const unit = "u".repeat(129);
+  const record = join(project, "aidlc", "spaces", "default", "intents", "i1");
+  try {
+    mkdirSync(join(record, "construction", unit, "functional-design"), { recursive: true });
+    writeFileSync(join(record, "aidlc-state.md"), "- **Scope**: feature\n");
+    const workspace = new DoctorWorkspaceClientImplementation({
+      projectDir: project,
+      root: join(project, ".claude"),
+      refcheckToolNames: { domain: "domain.ts", contract: "contract.ts", functional: "functional.ts" },
+    });
+    const coverage = workspace.functionalCoverage();
+    expect(coverage.isClean()).toBe(false);
+    expect(
+      coverage
+        .problems()
+        .map((problem) =>
+          problem.match({ valid: (unitName) => unitName.asString(), invalid: () => "<invalid-unit-name>" }),
+        ),
+    ).toEqual(["<invalid-unit-name>"]);
+    expect(coverage.problems()[0]?.match({ valid: () => "", invalid: (detail) => detail.asString() })).toContain(
+      "unit-name-too-long",
+    );
+    expect(new DoctorPresenter({ harnessDir: ".claude" }).functionalCoverage(coverage)[0]?.label()).toContain(
+      "invalid functional-design unit name",
+    );
+  } finally {
+    rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test("functional observation enforces iteration budgets before constructing KeySets", () => {
+  const unit = FunctionalUnitObservation.of(UnitName.of("u1"), ArtifactModifiedAt.of(1));
+  const locationValue = location("i1");
+  const overUnits: FunctionalUnitObservation[] = [unit];
+  overUnits[Symbol.iterator] = function* () {
+    for (let index = 0; index < 65_537; index++) yield unit;
+    return undefined;
+  };
+  const overModelUnits: UnitName[] = [UnitName.of("u1")];
+  overModelUnits[Symbol.iterator] = function* () {
+    for (let index = 0; index < 65_537; index++) yield UnitName.of("u1");
+    return undefined;
+  };
+  const overCompletedUnits: UnitName[] = [UnitName.of("u1")];
+  overCompletedUnits[Symbol.iterator] = function* () {
+    for (let index = 0; index < 65_537; index++) yield UnitName.of("u1");
+    return undefined;
+  };
+  const seed = {
+    location: locationValue,
+    units: [unit],
+    modelModifiedAt: ArtifactModifiedAt.of(1),
+    modelUnits: [UnitName.of("u1")],
+    completedUnits: [UnitName.of("u1")],
+    hasFindings: true,
+    requirementsModelModifiedAt: null,
+  };
+  expect(() => FunctionalObservation.of({ ...seed, units: overUnits })).toThrow(IllegalArgumentException);
+  expect(FunctionalObservation.parse({ ...seed, units: overUnits }).ok).toBe(false);
+  expect(() => FunctionalObservation.of({ ...seed, modelUnits: overModelUnits })).toThrow(IllegalArgumentException);
+  expect(FunctionalObservation.parse({ ...seed, modelUnits: overModelUnits }).ok).toBe(false);
+  expect(() => FunctionalObservation.of({ ...seed, completedUnits: overCompletedUnits })).toThrow(
+    IllegalArgumentException,
+  );
+  expect(FunctionalObservation.parse({ ...seed, completedUnits: overCompletedUnits }).ok).toBe(false);
+});
+
+test("unavailable functional coverage is explicitly presented", () => {
+  const coverage = UnitCoverage.unavailable(scopes("feature"), ErrorMessage.of("coverage budget exceeded"));
+  expect(coverage.isClean()).toBe(false);
+  expect(coverage.eligibleCount()).toBe(0);
+  expect(coverage.hasEligible()).toBe(false);
+  expect(coverage.verifiedCount()).toBe(0);
+  expect(coverage.problems()).toEqual([]);
+  expect(coverage.refinementStale()).toEqual([]);
+  expect([...coverage.scopes()].map((scope) => scope.asString())).toEqual(["feature"]);
+  expect(coverage.unavailableReason()?.asString()).toBe("coverage budget exceeded");
+  expect(new DoctorPresenter({ harnessDir: ".claude" }).functionalCoverage(coverage)[0]?.label()).toContain(
+    "coverage unavailable",
+  );
 });

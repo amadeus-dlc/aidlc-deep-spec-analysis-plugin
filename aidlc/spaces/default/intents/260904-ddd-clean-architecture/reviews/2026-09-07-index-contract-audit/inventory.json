@@ -1,0 +1,432 @@
+{
+  "baseline": "20d768cb457f90c45751b7da83f687fe7835393f",
+  "criteria": "domainの直接フィールド型と同一ファイル型別名を走査。KeyedIndex/KeySet/Map/Set/Record/string index signature。外部Json等の再帰文書型や子VO内の索引は再帰展開しない。",
+  "domainFiles": 383,
+  "sourceDomainFingerprint": "033edbc009c0951891ee9422a096f03d45c09ea2396a2667cfd8ca0f87c2ff9c",
+  "count": 33,
+  "entries": [
+    {
+      "name": "AttributeMapping",
+      "path": "src/design/domain/attribute-mapping.ts",
+      "fields": [
+        {
+          "name": "#variant",
+          "type": "AttributeMappingParam",
+          "line": 48
+        }
+      ]
+    },
+    {
+      "name": "AttributePaths",
+      "path": "src/design/domain/attribute-paths.ts",
+      "fields": [
+        {
+          "name": "#values",
+          "type": "KeySet<AttributePath>",
+          "line": 10
+        }
+      ]
+    },
+    {
+      "name": "BusinessRuleReferenceIndex",
+      "path": "src/design/domain/business-rule-reference-index.ts",
+      "fields": [
+        {
+          "name": "#ids",
+          "type": "KeySet<BusinessRuleReference>",
+          "line": 20
+        }
+      ]
+    },
+    {
+      "name": "DesignAssignments",
+      "path": "src/design/domain/design-assignments.ts",
+      "fields": [
+        {
+          "name": "#values",
+          "type": "KeyedIndex<AttributePath, DesignAssignment>",
+          "line": 17
+        }
+      ]
+    },
+    {
+      "name": "DesignAttributeCatalog",
+      "path": "src/design/domain/design-attribute-catalog.ts",
+      "fields": [
+        {
+          "name": "#byPath",
+          "type": "KeyedIndex<AttributePath, DesignAttributeDeclaration>",
+          "line": 30
+        }
+      ]
+    },
+    {
+      "name": "DesignEventRuleCatalog",
+      "path": "src/design/domain/design-event-rule-catalog.ts",
+      "fields": [
+        {
+          "name": "#events",
+          "type": "KeyedIndex<TargetIdentifier, DesignEventRule>",
+          "line": 14
+        }
+      ]
+    },
+    {
+      "name": "EffectAssignments",
+      "path": "src/design/domain/effect-assignments.ts",
+      "fields": [
+        {
+          "name": "#values",
+          "type": "KeyedIndex<AttributePath, EffectAssignment>",
+          "line": 18
+        }
+      ]
+    },
+    {
+      "name": "IssuedLoweredIdentifiers",
+      "path": "src/design/domain/issued-lowered-identifiers.ts",
+      "fields": [
+        {
+          "name": "#values",
+          "type": "KeySet<LoweredIdentifier>",
+          "line": 13
+        }
+      ]
+    },
+    {
+      "name": "LoweringIndex",
+      "path": "src/design/domain/lowering-index.ts",
+      "fields": [
+        {
+          "name": "#origins",
+          "type": "KeyedIndex<LoweredIdentifier, LoweredOrigin>",
+          "line": 33
+        },
+        {
+          "name": "#scenarioDesignIds",
+          "type": "KeyedIndex<LoweredIdentifier, DesignScenarioIdentifier>",
+          "line": 34
+        },
+        {
+          "name": "#machinesByTransition",
+          "type": "KeyedIndex<DesignTransitionIdentifier, DesignMachine>",
+          "line": 35
+        },
+        {
+          "name": "#attrPathsByMachine",
+          "type": "KeyedIndex<DesignMachineIdentifier, AttributePath>",
+          "line": 36
+        }
+      ]
+    },
+    {
+      "name": "MachineReachability",
+      "path": "src/design/domain/machine-reachability.ts",
+      "fields": [
+        {
+          "name": "#observations",
+          "type": "ReadonlyMap<ReachabilityProbe, ReachabilityVerdict>",
+          "line": 30
+        }
+      ]
+    },
+    {
+      "name": "RefinementQueryVerdict",
+      "path": "src/design/domain/refinement-query-verdict.ts",
+      "fields": [
+        {
+          "name": "#decodedModel",
+          "type": "{ [path: string]: boolean | number | string } | undefined",
+          "line": 24
+        },
+        {
+          "name": "#decodedPostModel",
+          "type": "{ [path: string]: boolean | number | string } | undefined",
+          "line": 25
+        }
+      ]
+    },
+    {
+      "name": "RefinementQueryVerdicts",
+      "path": "src/design/domain/refinement-query-verdicts.ts",
+      "fields": [
+        {
+          "name": "#values",
+          "type": "KeyedIndex<QueryLabel, RefinementQueryVerdictEntry>",
+          "line": 19
+        }
+      ]
+    },
+    {
+      "name": "RefinementSolverPlan",
+      "path": "src/design/domain/refinement-solver-plan.ts",
+      "fields": [
+        {
+          "name": "#pending",
+          "type": "KeyedIndex<QueryLabel, RefinementProbe>",
+          "line": 30
+        }
+      ]
+    },
+    {
+      "name": "UnformalizedTargets",
+      "path": "src/design/domain/unformalized-targets.ts",
+      "fields": [
+        {
+          "name": "#values",
+          "type": "KeySet<TargetIdentifier>",
+          "line": 10
+        }
+      ]
+    },
+    {
+      "name": "UnitRefinementPlan",
+      "path": "src/design/domain/unit-refinement-plan.ts",
+      "fields": [
+        {
+          "name": "#obligationStatus",
+          "type": "KeyedIndex<ObligationIdentifier, RefinementStatus>",
+          "line": 39
+        },
+        {
+          "name": "#scenarioStatus",
+          "type": "KeyedIndex<ScenarioIdentifier, RefinementStatus>",
+          "line": 40
+        },
+        {
+          "name": "#eventTransitions",
+          "type": "KeyedIndex<ObligationIdentifier, readonly TransitionReference[]>",
+          "line": 41
+        }
+      ]
+    },
+    {
+      "name": "FunctionalObservation",
+      "path": "src/doctor/domain/functional-observation.ts",
+      "fields": [
+        {
+          "name": "#modelUnits",
+          "type": "KeySet<UnitName>",
+          "line": 29
+        },
+        {
+          "name": "#completedUnits",
+          "type": "KeySet<UnitName>",
+          "line": 30
+        }
+      ]
+    },
+    {
+      "name": "KeySet",
+      "path": "src/kernel/domain/key-set.ts",
+      "fields": [
+        {
+          "name": "#values",
+          "type": "ReadonlyMap<string, K>",
+          "line": 6
+        }
+      ]
+    },
+    {
+      "name": "KeyedIndex",
+      "path": "src/kernel/domain/keyed-index.ts",
+      "fields": [
+        {
+          "name": "#entries",
+          "type": "ReadonlyMap<string, readonly [K, V]>",
+          "line": 11
+        }
+      ]
+    },
+    {
+      "name": "RequirementIdentifiers",
+      "path": "src/kernel/domain/requirement-identifiers.ts",
+      "fields": [
+        {
+          "name": "#values",
+          "type": "KeySet<RequirementIdentifier>",
+          "line": 22
+        }
+      ]
+    },
+    {
+      "name": "EntityDeclarations",
+      "path": "src/refcheck/domain/entity-declarations.ts",
+      "fields": [
+        {
+          "name": "#names",
+          "type": "KeySet<EntityName>",
+          "line": 34
+        }
+      ]
+    },
+    {
+      "name": "SiblingUnitIndex",
+      "path": "src/refcheck/domain/sibling-unit-index.ts",
+      "fields": [
+        {
+          "name": "#units",
+          "type": "KeyedIndex<UnitName, KeyedIndex<NormalizedName, EntityDeclaration>>",
+          "line": 24
+        }
+      ]
+    },
+    {
+      "name": "FunctionalRequirementReferenceIndex",
+      "path": "src/requirements/domain/functional-requirement-reference-index.ts",
+      "fields": [
+        {
+          "name": "#ownersByRef",
+          "type": "KeyedIndex<RequirementIdentifier, FunctionalRequirementReferenceClaims>",
+          "line": 21
+        }
+      ]
+    },
+    {
+      "name": "IntermediateRepresentationAttributeCatalog",
+      "path": "src/requirements/domain/intermediate-representation-attribute-catalog.ts",
+      "fields": [
+        {
+          "name": "#byPath",
+          "type": "KeyedIndex<AttributePath, IntermediateRepresentationAttributeDeclaration>",
+          "line": 29
+        }
+      ]
+    },
+    {
+      "name": "QuintMachinePlan",
+      "path": "src/requirements/domain/quint-machine-plan.ts",
+      "fields": [
+        {
+          "name": "#scenariosWithInit",
+          "type": "KeySet<ScenarioIdentifier>",
+          "line": 21
+        }
+      ]
+    },
+    {
+      "name": "QuintRuns",
+      "path": "src/requirements/domain/quint-runs.ts",
+      "fields": [
+        {
+          "name": "#temporals",
+          "type": "KeyedIndex<ObligationIdentifier, QuintTemporalVerdict>",
+          "line": 15
+        },
+        {
+          "name": "#scenarios",
+          "type": "KeyedIndex<ScenarioIdentifier, QuintScenarioVerdict>",
+          "line": 16
+        }
+      ]
+    },
+    {
+      "name": "RequirementAttributeDeclarations",
+      "path": "src/requirements/domain/requirement-attribute-declarations.ts",
+      "fields": [
+        {
+          "name": "#byPath",
+          "type": "KeyedIndex<AttributePath, RequirementAttributeDeclaration>",
+          "line": 22
+        }
+      ]
+    },
+    {
+      "name": "SatisfiabilityModuloTheoriesProbe",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-probe.ts",
+      "fields": [
+        {
+          "name": "#subject",
+          "type": "SatisfiabilityModuloTheoriesProbeParam",
+          "line": 28
+        }
+      ]
+    },
+    {
+      "name": "SatisfiabilityModuloTheoriesQueryVerdict",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-query-verdict.ts",
+      "fields": [
+        {
+          "name": "#decodedModel",
+          "type": "{ [path: string]: boolean | number | string } | undefined",
+          "line": 22
+        }
+      ]
+    },
+    {
+      "name": "SatisfiabilityModuloTheoriesQueryVerdicts",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-query-verdicts.ts",
+      "fields": [
+        {
+          "name": "#values",
+          "type": "KeyedIndex<QueryLabel, SatisfiabilityModuloTheoriesQueryVerdictEntry>",
+          "line": 24
+        }
+      ]
+    },
+    {
+      "name": "SatisfiabilityModuloTheoriesVerificationPlan",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-verification-plan.ts",
+      "fields": [
+        {
+          "name": "#compiled",
+          "type": "KeySet<ObligationIdentifier>",
+          "line": 37
+        },
+        {
+          "name": "#vacuityQueries",
+          "type": "KeyedIndex<ObligationIdentifier, QueryLabel>",
+          "line": 38
+        },
+        {
+          "name": "#labelToTarget",
+          "type": "KeyedIndex<QueryLabel, TargetIdentifier>",
+          "line": 40
+        },
+        {
+          "name": "#gapTriggers",
+          "type": "KeyedIndex<TriggerName, TargetIdentifiers>",
+          "line": 42
+        },
+        {
+          "name": "#scenarioQueries",
+          "type": "KeyedIndex<ScenarioIdentifier, QueryLabel>",
+          "line": 43
+        }
+      ]
+    },
+    {
+      "name": "TraceState",
+      "path": "src/requirements/domain/trace-state.ts",
+      "fields": [
+        {
+          "name": "#entries",
+          "type": "KeyedIndex<AttributePath, TraceStateEntry>",
+          "line": 19
+        }
+      ]
+    },
+    {
+      "name": "TraceValue",
+      "path": "src/requirements/domain/trace-value.ts",
+      "fields": [
+        {
+          "name": "#value",
+          "type": "TraceValueParam",
+          "line": 19
+        }
+      ]
+    },
+    {
+      "name": "VerificationWitness",
+      "path": "src/requirements/domain/verification-witness.ts",
+      "fields": [
+        {
+          "name": "#document",
+          "type": "WitnessDocument",
+          "line": 19
+        }
+      ]
+    }
+  ]
+}

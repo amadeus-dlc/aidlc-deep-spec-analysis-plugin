@@ -208,23 +208,23 @@ export function decodeDesignModel(
   model: { [name: string]: string },
   primed: boolean,
 ): { [path: string]: boolean | number | string } {
-  const out: { [path: string]: boolean | number | string } = {};
+  const entries: [string, boolean | number | string][] = [];
   for (const attr of [...ctx.attrs].sort((a, b) => (a.path < b.path ? -1 : 1))) {
     const raw = model[smtVar(attr.path, primed)];
     if (raw === undefined) continue;
-    if (attr.kind === "bool") out[attr.path] = raw === "true";
+    if (attr.kind === "bool") entries.push([attr.path, raw === "true"]);
     else {
       const n = smtIntOf(raw);
       if (!Number.isSafeInteger(n)) {
         // 安全整数範囲外は number で正確に持てない——正確な十進文字列で運ぶ
         //（凍結解除 #34 項 4。読めない生値はそのまま生値）。
         const m = raw.match(/^\(-\s*(\d+)\)$/);
-        out[attr.path] = m ? `-${m[1]}` : raw;
-      } else if (attr.kind === "enum" && attr.values) out[attr.path] = attr.values[n] ?? n;
-      else out[attr.path] = n;
+        entries.push([attr.path, m ? `-${m[1]}` : raw]);
+      } else if (attr.kind === "enum" && attr.values) entries.push([attr.path, attr.values[n] ?? n]);
+      else entries.push([attr.path, n]);
     }
   }
-  return out;
+  return Object.fromEntries(entries);
 }
 
 export interface RefinementQueryPlan {

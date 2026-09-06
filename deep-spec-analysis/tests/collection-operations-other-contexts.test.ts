@@ -48,6 +48,8 @@ import {
   ObligationIdentifier,
   QuintMachineComponent,
   QuintMachineComponents,
+  RequirementAttributeDeclaration,
+  RequirementAttributeDeclarations,
   SatisfiabilityModuloTheoriesEventPairProbe,
   SatisfiabilityModuloTheoriesQueryVerdict,
   SatisfiabilityModuloTheoriesQueryVerdictEntry,
@@ -268,6 +270,38 @@ describe("KeyedIndex を使うコレクションの操作", () => {
     expect(() => FunctionalRequirementReferenceIndex.of(oversized)).toThrow();
     const indexParsed = FunctionalRequirementReferenceIndex.parse(oversized);
     expect(indexParsed.ok).toBe(false);
+  });
+
+  test("FR参照索引は重複除去前の展開件数が65,536件を超えたら拒否する", () => {
+    const references = FunctionalRequirementReferences.of(
+      Array.from({ length: 10_000 }, () => RequirementIdentifier.of("FR-1")),
+    );
+    const claims = Array.from({ length: 7 }, (_, index) =>
+      FunctionalRequirementReferenceClaim.of(`OB-${index + 1}`, references),
+    );
+    expect(() => FunctionalRequirementReferenceIndex.of(claims)).toThrow();
+    const parsed = FunctionalRequirementReferenceIndex.parse(claims);
+    expect(parsed).toEqual({
+      ok: false,
+      error: { kind: "too-many-functional-requirement-reference-index-entries", raw: 70_000 },
+    });
+  });
+
+  test("要件属性索引は検証済みsnapshotと同じ要素を保持する", () => {
+    const first = RequirementAttributeDeclaration.of({ path: AttributePath.of("E.first"), kind: "bool" });
+    const second = RequirementAttributeDeclaration.of({ path: AttributePath.of("E.second"), kind: "bool" });
+    const source: RequirementAttributeDeclaration[] = [];
+    let reads = 0;
+    Object.defineProperty(source, "0", {
+      configurable: true,
+      enumerable: true,
+      get: () => (++reads === 1 ? first : second),
+    });
+    source.length = 1;
+    const declarations = RequirementAttributeDeclarations.of(source);
+    expect(declarations.toArray().map((value) => value.path().asString())).toEqual(["E.first"]);
+    expect(declarations.byPath(first.path())?.path().asString()).toBe("E.first");
+    expect(declarations.byPath(second.path())).toBeUndefined();
   });
 
   test("FR参照claim/indexは別instanceの等価要素を受理し、具体型を再構築する", () => {

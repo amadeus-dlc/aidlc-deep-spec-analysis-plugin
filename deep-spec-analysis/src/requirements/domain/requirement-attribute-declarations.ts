@@ -24,7 +24,7 @@ export class RequirementAttributeDeclarations
   private constructor(values: readonly RequirementAttributeDeclaration[]) {
     super();
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-requirement-attribute-declarations");
-    this.#byPath = KeyedIndex.of(values.map((a) => [a.path(), a] as const));
+    this.#byPath = KeyedIndex.of(this.#values.map((a) => [a.path(), a] as const));
   }
 
   protected rebuild(values: readonly RequirementAttributeDeclaration[]): RequirementAttributeDeclarations {

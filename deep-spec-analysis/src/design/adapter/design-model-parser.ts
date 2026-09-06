@@ -228,13 +228,13 @@ export function parseDesignModel(
       background: DesignBackgroundAssumptions.parse(background),
     });
     if (!collections.ok) return err(JSON.stringify(collections.error));
-    units.push(
-      DesignUnit.of({
-        unit: unit.value,
-        catalog: catalog.value,
-        ...collections.value,
-      }),
-    );
+    const constructed = DesignUnit.parse({
+      unit: unit.value,
+      catalog: catalog.value,
+      ...collections.value,
+    });
+    if (!constructed.ok) return err(JSON.stringify(constructed.error));
+    units.push(constructed.value);
   }
   if (units.length === 0) return err("design IR carries no parseable units");
   const declaredUnits = DesignUnits.parse(units);

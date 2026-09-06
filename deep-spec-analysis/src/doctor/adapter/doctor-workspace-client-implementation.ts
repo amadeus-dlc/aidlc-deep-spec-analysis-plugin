@@ -12,11 +12,19 @@ import {
   StageScope,
   StageScopes,
   UnitCoverage,
+  UnitCoverageProblem,
   VerificationObservation,
 } from "@deep-spec-analysis/doctor-domain";
 import type { DoctorWorkspaceClient } from "@deep-spec-analysis/doctor-usecase";
-import { ArtifactPath, ContentHash, UnitName } from "@deep-spec-analysis/kernel-domain";
+import { ArtifactPath, ContentHash, ErrorMessage, UnitName } from "@deep-spec-analysis/kernel-domain";
+import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
 import type { DoctorWorkspaceClientConfiguration } from "./doctor-workspace-client-configuration.ts";
+
+function invalidUnitProblem(location: IntentLocation, error: ParseError): UnitCoverageProblem {
+  const detail = ErrorMessage.parse(JSON.stringify(error));
+  if (!detail.ok) throw new Error(`defect: unit name diagnostic could not be represented (${detail.error.kind})`);
+  return UnitCoverageProblem.invalid(location, detail.value);
+}
 
 // aidlc ワークスペース走査の実 Gateway。旧 doctor の scopesOfStage /
 // scanVerificationCoverage / scanDesignDebt / scanFunctionalCoverage の
@@ -206,6 +214,7 @@ export class DoctorWorkspaceClientImplementation implements DoctorWorkspaceClien
   functionalCoverage(): UnitCoverage {
     const scopes = this.#functionalScopes();
     const out: FunctionalObservation[] = [];
+    const invalidUnits: UnitCoverageProblem[] = [];
     for (const space of this.#spaces()) {
       for (const intent of this.#intents(space)) {
         const record = this.#record(space, intent);
@@ -263,37 +272,57 @@ export class DoctorWorkspaceClientImplementation implements DoctorWorkspaceClien
             hasFindings = false;
           }
         }
-        const units: FunctionalUnitObservation[] = unitDirs.map((unit) => {
+        const location = IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent));
+        const units: FunctionalUnitObservation[] = [];
+        for (const unit of unitDirs) {
           const fdDir = join(constructionDir, unit, "functional-design");
           let newest = 0;
           for (const f of ["entities.md", "rules.md", "functional-spec.md"]) {
             const p = join(fdDir, f);
             if (existsSync(p)) newest = Math.max(newest, statSync(p).mtimeMs);
           }
-          return FunctionalUnitObservation.of(UnitName.of(unit), ArtifactModifiedAt.of(newest));
-        });
+          const parsedUnit = UnitName.parse(unit);
+          if (!parsedUnit.ok) {
+            invalidUnits.push(invalidUnitProblem(location, parsedUnit.error));
+            continue;
+          }
+          units.push(FunctionalUnitObservation.of(parsedUnit.value, ArtifactModifiedAt.of(newest)));
+        }
         const reqModel = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
-        out.push(
-          FunctionalObservation.of({
-            location: IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent)),
-            units,
-            modelModifiedAt: modelMtime === null ? null : ArtifactModifiedAt.of(modelMtime),
-            modelUnits: modelUnits.flatMap((name) => {
-              const parsed = UnitName.parse(name);
-              return parsed.ok ? [parsed.value] : [];
-            }),
-            completedUnits: [...completedUnits].flatMap((name) => {
-              const parsed = UnitName.parse(name);
-              return parsed.ok ? [parsed.value] : [];
-            }),
-            hasFindings,
-            requirementsModelModifiedAt: existsSync(reqModel)
-              ? ArtifactModifiedAt.of(statSync(reqModel).mtimeMs)
-              : null,
-          }),
-        );
+        const modelUnitValues: UnitName[] = [];
+        for (const name of modelUnits) {
+          const parsed = UnitName.parse(name);
+          if (parsed.ok) modelUnitValues.push(parsed.value);
+          else invalidUnits.push(invalidUnitProblem(location, parsed.error));
+        }
+        const completedUnitValues: UnitName[] = [];
+        for (const name of completedUnits) {
+          const parsed = UnitName.parse(name);
+          if (parsed.ok) completedUnitValues.push(parsed.value);
+          else invalidUnits.push(invalidUnitProblem(location, parsed.error));
+        }
+        const observation = FunctionalObservation.parse({
+          location,
+          units,
+          modelModifiedAt: modelMtime === null ? null : ArtifactModifiedAt.of(modelMtime),
+          modelUnits: modelUnitValues,
+          completedUnits: completedUnitValues,
+          hasFindings,
+          requirementsModelModifiedAt: existsSync(reqModel) ? ArtifactModifiedAt.of(statSync(reqModel).mtimeMs) : null,
+        });
+        if (observation.ok) out.push(observation.value);
+        else {
+          const detail = ErrorMessage.parse(`functional observation is unusable: ${observation.error.kind}`);
+          if (!detail.ok)
+            throw new Error(`defect: observation diagnostic could not be represented (${detail.error.kind})`);
+          return UnitCoverage.unavailable(scopes, detail.value);
+        }
       }
     }
-    return UnitCoverage.of(out, scopes);
+    const coverage = UnitCoverage.parse(out, scopes, invalidUnits);
+    if (coverage.ok) return coverage.value;
+    const detail = ErrorMessage.parse(`functional coverage is unusable: ${coverage.error.kind}`);
+    if (!detail.ok) throw new Error(`defect: coverage diagnostic could not be represented (${detail.error.kind})`);
+    return UnitCoverage.unavailable(scopes, detail.value);
   }
 }

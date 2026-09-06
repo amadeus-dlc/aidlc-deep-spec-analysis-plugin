@@ -182,12 +182,19 @@ function flatMapResult(result, next) {
   return result.ok ? next(result.value) : result;
 }
 function combineResults(fields) {
-  const values = {};
-  for (const key in fields) {
+  const values = Array.isArray(fields) ? new Array(fields.length) : {};
+  for (const key of Reflect.ownKeys(fields)) {
+    if (Array.isArray(fields) && key === "length")
+      continue;
     const field = fields[key];
     if (!field.ok)
       return err(field.error);
-    values[key] = field.value;
+    Object.defineProperty(values, key, {
+      configurable: true,
+      enumerable: true,
+      value: field.value,
+      writable: true
+    });
   }
   return ok(values);
 }
@@ -2391,6 +2398,155 @@ function smtIntOf(raw) {
   const m = raw.match(/^\(-\s*(\d+)\)$/);
   return m ? -Number.parseInt(m[1] ?? "0", 10) : Number.parseInt(raw, 10);
 }
+// src/kernel/adapter/solver-child-results-parser.ts
+var MAX_RESULTS = 65536;
+var MAX_QUERY_ID_LENGTH = 2048;
+var MAX_VALUE_NODES = 65536;
+var MAX_VALUE_STRING = 65536;
+var MAX_VALUE_TOTAL_TEXT = 16777216;
+function consumeNode(budget, field) {
+  budget.nodes++;
+  return budget.nodes > MAX_VALUE_NODES ? `solver child ${field} exceeds the value node budget` : null;
+}
+function consumeText(budget, field, value) {
+  if (value.length > MAX_VALUE_STRING)
+    return `solver child ${field} contains an oversized string`;
+  budget.totalText += value.length;
+  return budget.totalText > MAX_VALUE_TOTAL_TEXT ? `solver child ${field} exceeds the total text budget` : null;
+}
+function consumeString(budget, field, value) {
+  return consumeNode(budget, field) ?? consumeText(budget, field, value);
+}
+function copyModel(raw, budget) {
+  const nodeError = consumeNode(budget, "model");
+  if (nodeError !== null)
+    return err(nodeError);
+  const entries = [];
+  for (const name in raw) {
+    if (!Object.hasOwn(raw, name))
+      continue;
+    const keyError = consumeText(budget, "model key", name);
+    if (keyError !== null)
+      return err(keyError);
+    const value = raw[name];
+    if (typeof value !== "string")
+      return err("solver child returned an invalid model");
+    const valueError = consumeString(budget, "model value", value);
+    if (valueError !== null)
+      return err(valueError);
+    entries.push([name, value]);
+  }
+  return ok(Object.fromEntries(entries));
+}
+function copyCore(raw, budget) {
+  if (raw.length > MAX_VALUE_NODES)
+    return err("solver child core exceeds the value node budget");
+  const nodeError = consumeNode(budget, "core");
+  if (nodeError !== null)
+    return err(nodeError);
+  const core = [];
+  for (let index = 0;index < raw.length; index++) {
+    const value = raw[index];
+    if (typeof value !== "string")
+      return err("solver child returned an invalid core");
+    const valueError = consumeString(budget, "core value", value);
+    if (valueError !== null)
+      return err(valueError);
+    core.push(value);
+  }
+  return ok(core);
+}
+function parseSolverChildResults(raw, expectedIds) {
+  if (!isObject(raw))
+    return err("solver child response lacks a results array");
+  const resultItems = raw.results;
+  if (!Array.isArray(resultItems))
+    return err("solver child response lacks a results array");
+  if (expectedIds.length > MAX_RESULTS)
+    return err("solver child expected query set exceeds 65,536 entries");
+  if (resultItems.length > MAX_RESULTS)
+    return err("solver child response has too-many-results");
+  const expectedIdsSnapshot = [];
+  let expectedInspected = 0;
+  for (const id of expectedIds) {
+    if (++expectedInspected > MAX_RESULTS)
+      return err("solver child expected query set exceeds 65,536 entries");
+    if (id.length > MAX_QUERY_ID_LENGTH)
+      return err("solver child expected query id is too long");
+    expectedIdsSnapshot.push(id);
+  }
+  if (expectedInspected !== expectedIds.length)
+    return err("solver child expected query set length does not match its iteration");
+  const expected = new Set(expectedIdsSnapshot);
+  if (expected.size !== expectedIdsSnapshot.length)
+    return err("solver query ids are not unique");
+  const items = [];
+  const resultIds = new Set;
+  for (let index = 0;index < resultItems.length; index++) {
+    const item = resultItems[index];
+    if (!isObject(item))
+      return err("solver child result lacks a query id");
+    const id = item.id;
+    if (typeof id !== "string")
+      return err("solver child result lacks a query id");
+    if (id.length > MAX_QUERY_ID_LENGTH)
+      return err("solver child returned an oversized query id");
+    if (!expected.has(id))
+      return err(`solver child returned unexpected query ${id}`);
+    if (resultIds.has(id))
+      return err(`solver child returned duplicate query ${id}`);
+    resultIds.add(id);
+    items.push({ item, id });
+  }
+  const missing = expectedIdsSnapshot.filter((id) => !resultIds.has(id));
+  if (missing.length > 0)
+    return err(`solver child omitted query results: ${missing.join(", ")}`);
+  if (resultIds.size !== expectedIdsSnapshot.length)
+    return err("solver query ids are not unique");
+  const results = new Map;
+  for (const { item, id } of items) {
+    const status = item.status;
+    if (status !== "sat" && status !== "unsat" && status !== "unknown" && status !== "budget" && status !== "error")
+      return err(`solver child returned an invalid status for query ${id}`);
+    const budget = { nodes: 0, totalText: 0 };
+    let model;
+    const rawModel = item.model;
+    if (rawModel !== undefined) {
+      if (!isObject(rawModel))
+        return err(`solver child returned an invalid model for query ${id}`);
+      const copied = copyModel(rawModel, budget);
+      if (!copied.ok)
+        return err(`${copied.error} for query ${id}`);
+      model = copied.value;
+    }
+    let core;
+    const rawCore = item.core;
+    if (rawCore !== undefined) {
+      if (!Array.isArray(rawCore))
+        return err(`solver child returned an invalid core for query ${id}`);
+      const copied = copyCore(rawCore, budget);
+      if (!copied.ok)
+        return err(`${copied.error} for query ${id}`);
+      core = copied.value;
+    }
+    const rawError = item.error;
+    if (rawError !== undefined) {
+      if (typeof rawError !== "string")
+        return err(`solver child returned an invalid error for query ${id}`);
+      const error = consumeString(budget, "error", rawError);
+      if (error !== null)
+        return err(`${error} for query ${id}`);
+    }
+    results.set(id, {
+      id,
+      status,
+      ...model === undefined ? {} : { model },
+      ...core === undefined ? {} : { core },
+      ...rawError === undefined ? {} : { error: rawError }
+    });
+  }
+  return ok(results);
+}
 // src/kernel/adapter/system-clock.ts
 class SystemClock {
   now() {
@@ -2561,6 +2717,9 @@ class FunctionalRequirementReferenceClaim {
   ownerDescription() {
     return this.#owner;
   }
+  referenceCount() {
+    return this.#functionalRequirementReferences.toArray().length;
+  }
   equals(other) {
     const refs = this.#functionalRequirementReferences.toArray();
     const otherRefs = other.#functionalRequirementReferences.toArray();
@@ -2613,12 +2772,23 @@ class FunctionalRequirementReferenceClaims extends FirstClassCollectionBase {
   }
 }
 // src/requirements/domain/functional-requirement-reference-index.ts
+var MAX_REFERENCE_EXPANSIONS = 65536;
+
 class FunctionalRequirementReferenceIndex extends FirstClassCollectionBase {
   #claims;
   #ownersByRef;
   constructor(claims) {
     super();
     this.#claims = boundedCollectionSnapshot(claims, 65536, "too-many-functional-requirement-reference-claims");
+    let referenceExpansions = 0;
+    for (const claim of this.#claims) {
+      referenceExpansions += claim.referenceCount();
+      if (referenceExpansions > MAX_REFERENCE_EXPANSIONS)
+        throw new IllegalArgumentException({
+          kind: "too-many-functional-requirement-reference-index-entries",
+          raw: referenceExpansions
+        });
+    }
     const ownersByRef = new Map;
     for (const claim of this.#claims)
       claim.claimIntoKeyed(ownersByRef);
@@ -3689,7 +3859,12 @@ class IntermediateRepresentationValidationMaterials {
     const errors = ErrorMessages.collect(this.#initialDiagnostics());
     if (!errors.isEmpty())
       return cases.complete(ValidationAssessment.of(errors));
-    return cases.sourceRequired(this.#sourceId, RequirementsSourceValidation.of(this.#view, FunctionalRequirementReferenceIndex.of(this.#functionalRequirementReferenceClaims.toArray()), this.#declaredDigest));
+    const references = FunctionalRequirementReferenceIndex.parse(this.#functionalRequirementReferenceClaims.toArray());
+    if (!references.ok)
+      return cases.complete(ValidationAssessment.of(ErrorMessages.collect([
+        ErrorMessage.parse(`functional requirement reference index is unusable: ${references.error.kind}`)
+      ])));
+    return cases.sourceRequired(this.#sourceId, RequirementsSourceValidation.of(this.#view, references.value, this.#declaredDigest));
   }
   *#initialDiagnostics() {
     if (!this.#irVersion.supportsMajor(SUPPORTED_IR_MAJOR)) {
@@ -4620,7 +4795,7 @@ class RequirementAttributeDeclarations extends FirstClassCollectionBase {
   constructor(values) {
     super();
     this.#values = boundedCollectionSnapshot(values, 65536, "too-many-requirement-attribute-declarations");
-    this.#byPath = KeyedIndex.of(values.map((a) => [a.path(), a]));
+    this.#byPath = KeyedIndex.of(this.#values.map((a) => [a.path(), a]));
   }
   rebuild(values) {
     return new RequirementAttributeDeclarations(values);
@@ -4888,9 +5063,10 @@ class SatisfiabilityModuloTheoriesQueryVerdict {
   #decodedModel;
   #core;
   constructor(props) {
-    this.#status = props.status;
-    this.#decodedModel = props.decodedModel === undefined ? undefined : { ...props.decodedModel };
-    this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.of(label));
+    const snapshot = boundedValueSnapshot(props, { string: 65536, nodes: 65536, depth: 4, total: 16777216 });
+    this.#status = snapshot.status;
+    this.#decodedModel = snapshot.decodedModel;
+    this.#core = snapshot.core === undefined ? undefined : snapshot.core.map((label) => QueryLabel.of(label));
   }
   static parse(props) {
     return parseConstruction(() => new SatisfiabilityModuloTheoriesQueryVerdict(props));
@@ -6485,25 +6661,25 @@ function smtOf(model, e) {
   }
 }
 function decodeSolverModel(model, values) {
-  const out = {};
+  const entries = [];
   for (const attr of model.attributes().sortedByPath()) {
     const raw = values[smtVar(attr.path().asString(), false)];
     if (raw === undefined)
       continue;
     if (attr.isBool()) {
-      out[attr.path().asString()] = raw === "true";
+      entries.push([attr.path().asString(), raw === "true"]);
     } else {
       const n = smtIntOf(raw);
       if (!Number.isSafeInteger(n)) {
         const m = raw.match(/^\(-\s*(\d+)\)$/);
-        out[attr.path().asString()] = m ? `-${m[1]}` : raw;
+        entries.push([attr.path().asString(), m ? `-${m[1]}` : raw]);
       } else if (attr.isEnum() && attr.declaredValues())
-        out[attr.path().asString()] = attr.declaredValues()?.valueAt(n)?.asString() ?? n;
+        entries.push([attr.path().asString(), attr.declaredValues()?.valueAt(n)?.asString() ?? n]);
       else
-        out[attr.path().asString()] = n;
+        entries.push([attr.path().asString(), n]);
     }
   }
-  return out;
+  return Object.fromEntries(entries);
 }
 function buildSmtPlan(model) {
   const skipped = [];
@@ -6805,46 +6981,6 @@ function buildSmtPlan(model) {
     })
   };
 }
-// src/requirements/adapter/smt-child-results-parser.ts
-function parseSmtChildResults(raw, expectedIds) {
-  if (!isObject(raw) || !Array.isArray(raw.results))
-    return err("solver child response lacks a results array");
-  const expected = new Set(expectedIds);
-  const results = new Map;
-  for (const item of raw.results) {
-    if (!isObject(item) || typeof item.id !== "string")
-      return err("solver child result lacks a query id");
-    if (!expected.has(item.id))
-      return err(`solver child returned unexpected query ${item.id}`);
-    if (results.has(item.id))
-      return err(`solver child returned duplicate query ${item.id}`);
-    const status = item.status;
-    if (status !== "sat" && status !== "unsat" && status !== "unknown" && status !== "budget" && status !== "error") {
-      return err(`solver child returned an invalid status for query ${item.id}`);
-    }
-    if (item.model !== undefined && (!isObject(item.model) || !Object.values(item.model).every((value) => typeof value === "string"))) {
-      return err(`solver child returned an invalid model for query ${item.id}`);
-    }
-    if (item.core !== undefined && (!Array.isArray(item.core) || !item.core.every((value) => typeof value === "string"))) {
-      return err(`solver child returned an invalid core for query ${item.id}`);
-    }
-    if (item.error !== undefined && typeof item.error !== "string")
-      return err(`solver child returned an invalid error for query ${item.id}`);
-    results.set(item.id, {
-      id: item.id,
-      status,
-      ...item.model !== undefined ? { model: item.model } : {},
-      ...item.core !== undefined ? { core: item.core } : {},
-      ...item.error !== undefined ? { error: item.error } : {}
-    });
-  }
-  const missing = expectedIds.filter((id) => !results.has(id));
-  if (missing.length > 0)
-    return err(`solver child omitted query results: ${missing.join(", ")}`);
-  if (results.size !== expectedIds.length)
-    return err("solver query ids are not unique");
-  return ok(results);
-}
 // src/requirements/adapter/verification-directory-repository-implementation.ts
 import { existsSync as existsSync4, mkdirSync as mkdirSync3, readdirSync as readdirSync3, readFileSync as readFileSync6, renameSync as renameSync3, rmSync as rmSync4 } from "fs";
 import { join as join5 } from "path";
@@ -7094,32 +7230,44 @@ class Z3SolverClientImplementation {
     }
     const verdicts = [];
     for (const [id, r] of outcome.results) {
-      const parsed = combineResults({
-        label: QueryLabel.parse(id),
-        core: r.core === undefined ? ok(undefined) : traverseResult(r.core, QueryLabel.parse)
-      });
-      if (!parsed.ok)
+      const label = QueryLabel.parse(id);
+      if (!label.ok)
         return SatisfiabilityModuloTheoriesCheck.of({
           plan: plan.plan,
           result: {
             kind: "unavailable",
-            reason: ErrorMessage.of(`invalid solver query label: ${JSON.stringify(parsed.error)}`)
+            reason: ErrorMessage.of(`invalid solver query label: ${JSON.stringify(label.error)}`)
           }
         });
-      verdicts.push([
-        parsed.value.label,
-        SatisfiabilityModuloTheoriesQueryVerdict.of({
-          status: r.status,
-          decodedModel: r.status === "sat" ? decodeSolverModel(model, r.model ?? {}) : undefined,
-          core: parsed.value.core?.map((label) => label.asString())
-        })
-      ]);
+      const verdict = SatisfiabilityModuloTheoriesQueryVerdict.parse({
+        status: r.status,
+        decodedModel: r.status === "sat" ? decodeSolverModel(model, r.model ?? {}) : undefined,
+        core: r.core
+      });
+      if (!verdict.ok)
+        return SatisfiabilityModuloTheoriesCheck.of({
+          plan: plan.plan,
+          result: {
+            kind: "unavailable",
+            reason: ErrorMessage.of(`invalid solver verdict: ${JSON.stringify(verdict.error)}`)
+          }
+        });
+      verdicts.push([label.value, verdict.value]);
     }
+    const collected = SatisfiabilityModuloTheoriesQueryVerdicts.parse(verdicts.map(([query, verdict]) => SatisfiabilityModuloTheoriesQueryVerdictEntry.of(query, verdict)));
+    if (!collected.ok)
+      return SatisfiabilityModuloTheoriesCheck.of({
+        plan: plan.plan,
+        result: {
+          kind: "unavailable",
+          reason: ErrorMessage.of(`invalid solver verdict collection: ${JSON.stringify(collected.error)}`)
+        }
+      });
     return SatisfiabilityModuloTheoriesCheck.of({
       plan: plan.plan,
       result: {
         kind: "solved",
-        verdicts: SatisfiabilityModuloTheoriesQueryVerdicts.of(verdicts.map(([query, verdict]) => SatisfiabilityModuloTheoriesQueryVerdictEntry.of(query, verdict)))
+        verdicts: collected.value
       }
     });
   }
@@ -7154,7 +7302,7 @@ class Z3SolverClientImplementation {
       }
       if (isObject(raw) && typeof raw.unavailable === "string")
         return { unavailable: raw.unavailable };
-      const parsed = parseSmtChildResults(raw, queries.map((query) => query.id));
+      const parsed = parseSolverChildResults(raw, queries.map((query) => query.id));
       if (!parsed.ok) {
         attempts.push(`${runtime}: ${parsed.error}`);
         continue;

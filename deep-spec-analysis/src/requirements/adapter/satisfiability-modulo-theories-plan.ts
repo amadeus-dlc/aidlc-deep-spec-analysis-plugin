@@ -124,25 +124,25 @@ export function decodeSolverModel(
   model: RequirementsModel,
   values: { [name: string]: string },
 ): { [path: string]: boolean | number | string } {
-  const out: { [path: string]: boolean | number | string } = {};
+  const entries: [string, boolean | number | string][] = [];
   for (const attr of model.attributes().sortedByPath()) {
     const raw = values[smtVar(attr.path().asString(), false)];
     if (raw === undefined) continue;
     if (attr.isBool()) {
-      out[attr.path().asString()] = raw === "true";
+      entries.push([attr.path().asString(), raw === "true"]);
     } else {
       const n = smtIntOf(raw);
       if (!Number.isSafeInteger(n)) {
         // 安全整数範囲外は number で正確に持てない——正確な十進文字列で運ぶ
         //（凍結解除 #34 項 4。読めない生値はそのまま生値）。
         const m = raw.match(/^\(-\s*(\d+)\)$/);
-        out[attr.path().asString()] = m ? `-${m[1]}` : raw;
+        entries.push([attr.path().asString(), m ? `-${m[1]}` : raw]);
       } else if (attr.isEnum() && attr.declaredValues())
-        out[attr.path().asString()] = attr.declaredValues()?.valueAt(n)?.asString() ?? n;
-      else out[attr.path().asString()] = n;
+        entries.push([attr.path().asString(), attr.declaredValues()?.valueAt(n)?.asString() ?? n]);
+      else entries.push([attr.path().asString(), n]);
     }
   }
-  return out;
+  return Object.fromEntries(entries);
 }
 
 export function buildSmtPlan(model: RequirementsModel): SatisfiabilityModuloTheoriesPlan {

@@ -1,5 +1,5 @@
 import {
-  IllegalArgumentException,
+  boundedCollectionSnapshot,
   type ParseError,
   parseConstruction,
   type Result,
@@ -18,9 +18,7 @@ export class RefinementPreparation {
 
   /** 1実行の準備台帳は他の走査集合と同じ65,536ユニット。コピーより先に確認する。 */
   private constructor(plans: readonly UnitRefinementPlan[], skipped: DesignSkips, inputs: DesignInputAnchors | null) {
-    if (plans.length > 65_536)
-      throw new IllegalArgumentException({ kind: "too-many-refinement-plans", raw: plans.length });
-    this.#plans = [...plans];
+    this.#plans = boundedCollectionSnapshot(plans, 65_536, "too-many-refinement-plans");
     this.#skipped = skipped;
     this.#inputs = inputs;
   }

@@ -164,12 +164,19 @@ function flatMapResult(result, next) {
   return result.ok ? next(result.value) : result;
 }
 function combineResults(fields) {
-  const values = {};
-  for (const key in fields) {
+  const values = Array.isArray(fields) ? new Array(fields.length) : {};
+  for (const key of Reflect.ownKeys(fields)) {
+    if (Array.isArray(fields) && key === "length")
+      continue;
     const field = fields[key];
     if (!field.ok)
       return err(field.error);
-    values[key] = field.value;
+    Object.defineProperty(values, key, {
+      configurable: true,
+      enumerable: true,
+      value: field.value,
+      writable: true
+    });
   }
   return ok(values);
 }
@@ -2186,6 +2193,9 @@ class FunctionalRequirementReferenceClaim {
   ownerDescription() {
     return this.#owner;
   }
+  referenceCount() {
+    return this.#functionalRequirementReferences.toArray().length;
+  }
   equals(other) {
     const refs = this.#functionalRequirementReferences.toArray();
     const otherRefs = other.#functionalRequirementReferences.toArray();
@@ -2238,12 +2248,23 @@ class FunctionalRequirementReferenceClaims extends FirstClassCollectionBase {
   }
 }
 // src/requirements/domain/functional-requirement-reference-index.ts
+var MAX_REFERENCE_EXPANSIONS = 65536;
+
 class FunctionalRequirementReferenceIndex extends FirstClassCollectionBase {
   #claims;
   #ownersByRef;
   constructor(claims) {
     super();
     this.#claims = boundedCollectionSnapshot(claims, 65536, "too-many-functional-requirement-reference-claims");
+    let referenceExpansions = 0;
+    for (const claim of this.#claims) {
+      referenceExpansions += claim.referenceCount();
+      if (referenceExpansions > MAX_REFERENCE_EXPANSIONS)
+        throw new IllegalArgumentException({
+          kind: "too-many-functional-requirement-reference-index-entries",
+          raw: referenceExpansions
+        });
+    }
     const ownersByRef = new Map;
     for (const claim of this.#claims)
       claim.claimIntoKeyed(ownersByRef);
@@ -3314,7 +3335,12 @@ class IntermediateRepresentationValidationMaterials {
     const errors = ErrorMessages.collect(this.#initialDiagnostics());
     if (!errors.isEmpty())
       return cases.complete(ValidationAssessment.of(errors));
-    return cases.sourceRequired(this.#sourceId, RequirementsSourceValidation.of(this.#view, FunctionalRequirementReferenceIndex.of(this.#functionalRequirementReferenceClaims.toArray()), this.#declaredDigest));
+    const references = FunctionalRequirementReferenceIndex.parse(this.#functionalRequirementReferenceClaims.toArray());
+    if (!references.ok)
+      return cases.complete(ValidationAssessment.of(ErrorMessages.collect([
+        ErrorMessage.parse(`functional requirement reference index is unusable: ${references.error.kind}`)
+      ])));
+    return cases.sourceRequired(this.#sourceId, RequirementsSourceValidation.of(this.#view, references.value, this.#declaredDigest));
   }
   *#initialDiagnostics() {
     if (!this.#irVersion.supportsMajor(SUPPORTED_IR_MAJOR)) {
@@ -4245,7 +4271,7 @@ class RequirementAttributeDeclarations extends FirstClassCollectionBase {
   constructor(values) {
     super();
     this.#values = boundedCollectionSnapshot(values, 65536, "too-many-requirement-attribute-declarations");
-    this.#byPath = KeyedIndex.of(values.map((a) => [a.path(), a]));
+    this.#byPath = KeyedIndex.of(this.#values.map((a) => [a.path(), a]));
   }
   rebuild(values) {
     return new RequirementAttributeDeclarations(values);
@@ -4513,9 +4539,10 @@ class SatisfiabilityModuloTheoriesQueryVerdict {
   #decodedModel;
   #core;
   constructor(props) {
-    this.#status = props.status;
-    this.#decodedModel = props.decodedModel === undefined ? undefined : { ...props.decodedModel };
-    this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.of(label));
+    const snapshot = boundedValueSnapshot(props, { string: 65536, nodes: 65536, depth: 4, total: 16777216 });
+    this.#status = snapshot.status;
+    this.#decodedModel = snapshot.decodedModel;
+    this.#core = snapshot.core === undefined ? undefined : snapshot.core.map((label) => QueryLabel.of(label));
   }
   static parse(props) {
     return parseConstruction(() => new SatisfiabilityModuloTheoriesQueryVerdict(props));
@@ -7266,6 +7293,21 @@ class DesignSkips extends FirstClassCollectionBase {
 }
 
 // src/design/domain/machine-reachability.ts
+var MAX_REACHABILITY_ENTRIES = 65536;
+function boundedObservationSnapshot(observations) {
+  if (observations.size > MAX_REACHABILITY_ENTRIES)
+    throw new IllegalArgumentException({ kind: "too-many-reachability-probes" });
+  const snapshot = new Map;
+  let inspected = 0;
+  for (const [probe, verdict] of observations) {
+    if (inspected >= MAX_REACHABILITY_ENTRIES)
+      throw new IllegalArgumentException({ kind: "too-many-reachability-probes", raw: inspected + 1 });
+    inspected++;
+    snapshot.set(probe, verdict);
+  }
+  return snapshot;
+}
+
 class MachineReachability {
   #unit;
   #machine;
@@ -7273,11 +7315,8 @@ class MachineReachability {
   #bounded;
   #observations;
   constructor(input) {
-    if (input.probes.length > 65536 || input.observations.size > 65536) {
-      throw new IllegalArgumentException({ kind: "too-many-reachability-probes" });
-    }
-    const probes = [...input.probes];
-    const observations = new Map(input.observations);
+    const probes = boundedCollectionSnapshot(input.probes, MAX_REACHABILITY_ENTRIES, "too-many-reachability-probes");
+    const observations = boundedObservationSnapshot(input.observations);
     const included = new Set(probes);
     for (const probe of observations.keys()) {
       if (!included.has(probe))
@@ -10066,9 +10105,7 @@ class RefinementPreparation {
   #skipped;
   #inputs;
   constructor(plans, skipped, inputs) {
-    if (plans.length > 65536)
-      throw new IllegalArgumentException({ kind: "too-many-refinement-plans", raw: plans.length });
-    this.#plans = [...plans];
+    this.#plans = boundedCollectionSnapshot(plans, 65536, "too-many-refinement-plans");
     this.#skipped = skipped;
     this.#inputs = inputs;
   }
@@ -10694,10 +10731,11 @@ class RefinementQueryVerdict {
   #decodedPostModel;
   #core;
   constructor(props) {
-    this.#status = props.status;
-    this.#decodedModel = props.decodedModel === undefined ? undefined : { ...props.decodedModel };
-    this.#decodedPostModel = props.decodedPostModel === undefined ? undefined : { ...props.decodedPostModel };
-    this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.of(label));
+    const snapshot = boundedValueSnapshot(props, { string: 65536, nodes: 65536, depth: 4, total: 16777216 });
+    this.#status = snapshot.status;
+    this.#decodedModel = snapshot.decodedModel;
+    this.#decodedPostModel = snapshot.decodedPostModel;
+    this.#core = snapshot.core === undefined ? undefined : snapshot.core.map((label) => QueryLabel.of(label));
   }
   static parse(props) {
     return parseConstruction(() => new RefinementQueryVerdict(props));
@@ -12137,6 +12175,155 @@ function smtIntOf(raw) {
   const m = raw.match(/^\(-\s*(\d+)\)$/);
   return m ? -Number.parseInt(m[1] ?? "0", 10) : Number.parseInt(raw, 10);
 }
+// src/kernel/adapter/solver-child-results-parser.ts
+var MAX_RESULTS = 65536;
+var MAX_QUERY_ID_LENGTH = 2048;
+var MAX_VALUE_NODES = 65536;
+var MAX_VALUE_STRING = 65536;
+var MAX_VALUE_TOTAL_TEXT = 16777216;
+function consumeNode(budget, field) {
+  budget.nodes++;
+  return budget.nodes > MAX_VALUE_NODES ? `solver child ${field} exceeds the value node budget` : null;
+}
+function consumeText(budget, field, value) {
+  if (value.length > MAX_VALUE_STRING)
+    return `solver child ${field} contains an oversized string`;
+  budget.totalText += value.length;
+  return budget.totalText > MAX_VALUE_TOTAL_TEXT ? `solver child ${field} exceeds the total text budget` : null;
+}
+function consumeString(budget, field, value) {
+  return consumeNode(budget, field) ?? consumeText(budget, field, value);
+}
+function copyModel(raw, budget) {
+  const nodeError = consumeNode(budget, "model");
+  if (nodeError !== null)
+    return err(nodeError);
+  const entries = [];
+  for (const name in raw) {
+    if (!Object.hasOwn(raw, name))
+      continue;
+    const keyError = consumeText(budget, "model key", name);
+    if (keyError !== null)
+      return err(keyError);
+    const value = raw[name];
+    if (typeof value !== "string")
+      return err("solver child returned an invalid model");
+    const valueError = consumeString(budget, "model value", value);
+    if (valueError !== null)
+      return err(valueError);
+    entries.push([name, value]);
+  }
+  return ok(Object.fromEntries(entries));
+}
+function copyCore(raw, budget) {
+  if (raw.length > MAX_VALUE_NODES)
+    return err("solver child core exceeds the value node budget");
+  const nodeError = consumeNode(budget, "core");
+  if (nodeError !== null)
+    return err(nodeError);
+  const core = [];
+  for (let index = 0;index < raw.length; index++) {
+    const value = raw[index];
+    if (typeof value !== "string")
+      return err("solver child returned an invalid core");
+    const valueError = consumeString(budget, "core value", value);
+    if (valueError !== null)
+      return err(valueError);
+    core.push(value);
+  }
+  return ok(core);
+}
+function parseSolverChildResults(raw, expectedIds) {
+  if (!isObject(raw))
+    return err("solver child response lacks a results array");
+  const resultItems = raw.results;
+  if (!Array.isArray(resultItems))
+    return err("solver child response lacks a results array");
+  if (expectedIds.length > MAX_RESULTS)
+    return err("solver child expected query set exceeds 65,536 entries");
+  if (resultItems.length > MAX_RESULTS)
+    return err("solver child response has too-many-results");
+  const expectedIdsSnapshot = [];
+  let expectedInspected = 0;
+  for (const id of expectedIds) {
+    if (++expectedInspected > MAX_RESULTS)
+      return err("solver child expected query set exceeds 65,536 entries");
+    if (id.length > MAX_QUERY_ID_LENGTH)
+      return err("solver child expected query id is too long");
+    expectedIdsSnapshot.push(id);
+  }
+  if (expectedInspected !== expectedIds.length)
+    return err("solver child expected query set length does not match its iteration");
+  const expected = new Set(expectedIdsSnapshot);
+  if (expected.size !== expectedIdsSnapshot.length)
+    return err("solver query ids are not unique");
+  const items = [];
+  const resultIds = new Set;
+  for (let index = 0;index < resultItems.length; index++) {
+    const item = resultItems[index];
+    if (!isObject(item))
+      return err("solver child result lacks a query id");
+    const id = item.id;
+    if (typeof id !== "string")
+      return err("solver child result lacks a query id");
+    if (id.length > MAX_QUERY_ID_LENGTH)
+      return err("solver child returned an oversized query id");
+    if (!expected.has(id))
+      return err(`solver child returned unexpected query ${id}`);
+    if (resultIds.has(id))
+      return err(`solver child returned duplicate query ${id}`);
+    resultIds.add(id);
+    items.push({ item, id });
+  }
+  const missing = expectedIdsSnapshot.filter((id) => !resultIds.has(id));
+  if (missing.length > 0)
+    return err(`solver child omitted query results: ${missing.join(", ")}`);
+  if (resultIds.size !== expectedIdsSnapshot.length)
+    return err("solver query ids are not unique");
+  const results = new Map;
+  for (const { item, id } of items) {
+    const status = item.status;
+    if (status !== "sat" && status !== "unsat" && status !== "unknown" && status !== "budget" && status !== "error")
+      return err(`solver child returned an invalid status for query ${id}`);
+    const budget = { nodes: 0, totalText: 0 };
+    let model;
+    const rawModel = item.model;
+    if (rawModel !== undefined) {
+      if (!isObject(rawModel))
+        return err(`solver child returned an invalid model for query ${id}`);
+      const copied = copyModel(rawModel, budget);
+      if (!copied.ok)
+        return err(`${copied.error} for query ${id}`);
+      model = copied.value;
+    }
+    let core;
+    const rawCore = item.core;
+    if (rawCore !== undefined) {
+      if (!Array.isArray(rawCore))
+        return err(`solver child returned an invalid core for query ${id}`);
+      const copied = copyCore(rawCore, budget);
+      if (!copied.ok)
+        return err(`${copied.error} for query ${id}`);
+      core = copied.value;
+    }
+    const rawError = item.error;
+    if (rawError !== undefined) {
+      if (typeof rawError !== "string")
+        return err(`solver child returned an invalid error for query ${id}`);
+      const error = consumeString(budget, "error", rawError);
+      if (error !== null)
+        return err(`${error} for query ${id}`);
+    }
+    results.set(id, {
+      id,
+      status,
+      ...model === undefined ? {} : { model },
+      ...core === undefined ? {} : { core },
+      ...rawError === undefined ? {} : { error: rawError }
+    });
+  }
+  return ok(results);
+}
 // src/kernel/adapter/system-clock.ts
 class SystemClock {
   now() {
@@ -12462,7 +12649,7 @@ function parseDesignModel(raw) {
       });
       if (!parsed.ok)
         return err(JSON.stringify(parsed.error));
-      const constructed = DesignObligation.parse({
+      const constructed2 = DesignObligation.parse({
         id: parsed.value.id,
         nature: parsed.value.nature,
         origin: parsed.value.origin,
@@ -12474,9 +12661,9 @@ function parseDesignModel(raw) {
         effect: isObject(ob.effect) ? ob.effect : undefined,
         temporal: isObject(ob.temporal) ? ob.temporal : undefined
       });
-      if (!constructed.ok)
-        return err(JSON.stringify(constructed.error));
-      obligations.push(constructed.value);
+      if (!constructed2.ok)
+        return err(JSON.stringify(constructed2.error));
+      obligations.push(constructed2.value);
     }
     const machines = [];
     for (const sm of Array.isArray(rawUnit.stateMachines) ? rawUnit.stateMachines : []) {
@@ -12495,7 +12682,7 @@ function parseDesignModel(raw) {
         });
         if (!parsed2.ok)
           return err(JSON.stringify(parsed2.error));
-        const constructed = DesignTransition.parse({
+        const constructed2 = DesignTransition.parse({
           id: parsed2.value.id,
           from: tr.from,
           to: tr.to,
@@ -12504,9 +12691,9 @@ function parseDesignModel(raw) {
           effect: isObject(tr.effect) ? tr.effect : undefined,
           businessRuleReferences: parsed2.value.brRefs
         });
-        if (!constructed.ok)
-          return err(JSON.stringify(constructed.error));
-        transitions.push(constructed.value);
+        if (!constructed2.ok)
+          return err(JSON.stringify(constructed2.error));
+        transitions.push(constructed2.value);
       }
       const ignores = [];
       for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
@@ -12554,7 +12741,7 @@ function parseDesignModel(raw) {
       });
       if (!parsed.ok)
         return err(JSON.stringify(parsed.error));
-      const constructed = DesignScenario.parse({
+      const constructed2 = DesignScenario.parse({
         id: parsed.value.id,
         expectation: parsed.value.expectation,
         businessRuleReferences: parsed.value.brRefs,
@@ -12563,9 +12750,9 @@ function parseDesignModel(raw) {
         event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger },
         expect: isObject(sc.expect) ? sc.expect : undefined
       });
-      if (!constructed.ok)
-        return err(JSON.stringify(constructed.error));
-      scenarios.push(constructed.value);
+      if (!constructed2.ok)
+        return err(JSON.stringify(constructed2.error));
+      scenarios.push(constructed2.value);
     }
     const background = [];
     for (const bg of Array.isArray(rawUnit.background) ? rawUnit.background : []) {
@@ -12574,13 +12761,13 @@ function parseDesignModel(raw) {
       const id = DesignBackgroundIdentifier.parse(bg.id);
       if (!id.ok)
         return err(JSON.stringify(id.error));
-      const constructed = DesignBackgroundAssumption.parse({
+      const constructed2 = DesignBackgroundAssumption.parse({
         id: id.value,
         assert: bg.assert
       });
-      if (!constructed.ok)
-        return err(JSON.stringify(constructed.error));
-      background.push(constructed.value);
+      if (!constructed2.ok)
+        return err(JSON.stringify(constructed2.error));
+      background.push(constructed2.value);
     }
     const collections = combineResults({
       obligations: DesignObligations.parse(obligations),
@@ -12590,11 +12777,14 @@ function parseDesignModel(raw) {
     });
     if (!collections.ok)
       return err(JSON.stringify(collections.error));
-    units.push(DesignUnit.of({
+    const constructed = DesignUnit.parse({
       unit: unit.value,
       catalog: catalog.value,
       ...collections.value
-    }));
+    });
+    if (!constructed.ok)
+      return err(JSON.stringify(constructed.error));
+    units.push(constructed.value);
   }
   if (units.length === 0)
     return err("design IR carries no parseable units");
@@ -13451,25 +13641,25 @@ function assembleQuery(id, decls, constraints, modelVars) {
   return { id, script, assumptions: constraints.map((c) => c.name), model: modelVars };
 }
 function decodeDesignModel(ctx, model, primed) {
-  const out = {};
+  const entries = [];
   for (const attr of [...ctx.attrs].sort((a, b) => a.path < b.path ? -1 : 1)) {
     const raw = model[smtVar(attr.path, primed)];
     if (raw === undefined)
       continue;
     if (attr.kind === "bool")
-      out[attr.path] = raw === "true";
+      entries.push([attr.path, raw === "true"]);
     else {
       const n = smtIntOf(raw);
       if (!Number.isSafeInteger(n)) {
         const m = raw.match(/^\(-\s*(\d+)\)$/);
-        out[attr.path] = m ? `-${m[1]}` : raw;
+        entries.push([attr.path, m ? `-${m[1]}` : raw]);
       } else if (attr.kind === "enum" && attr.values)
-        out[attr.path] = attr.values[n] ?? n;
+        entries.push([attr.path, attr.values[n] ?? n]);
       else
-        out[attr.path] = n;
+        entries.push([attr.path, n]);
     }
   }
-  return out;
+  return Object.fromEntries(entries);
 }
 function buildRefinementQueries(plan) {
   const u = plan.unit();
@@ -13671,18 +13861,18 @@ class RefinementSolverClientImplementation {
     }
     const verdicts = [];
     for (const [queryId, r] of child.results) {
-      const parsed = combineResults({
-        label: QueryLabel.parse(queryId),
-        core: r.core === undefined ? ok(undefined) : traverseResult(r.core, QueryLabel.parse)
-      });
-      if (!parsed.ok)
-        return RefinementCheck.unavailable(built.plan, ErrorMessage.of(`invalid solver query label: ${JSON.stringify(parsed.error)}`));
-      verdicts.push(RefinementQueryVerdictEntry.of(parsed.value.label, RefinementQueryVerdict.of({
+      const label = QueryLabel.parse(queryId);
+      if (!label.ok)
+        return RefinementCheck.unavailable(built.plan, ErrorMessage.of(`invalid solver query label: ${JSON.stringify(label.error)}`));
+      const verdict = RefinementQueryVerdict.parse({
         status: r.status,
         decodedModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, false) : undefined,
         decodedPostModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, true) : undefined,
-        core: parsed.value.core?.map((label) => label.asString())
-      })));
+        core: r.core
+      });
+      if (!verdict.ok)
+        return RefinementCheck.unavailable(built.plan, ErrorMessage.of(`invalid solver verdict: ${JSON.stringify(verdict.error)}`));
+      verdicts.push(RefinementQueryVerdictEntry.of(label.value, verdict.value));
     }
     const collected = RefinementQueryVerdicts.parse(verdicts);
     if (!collected.ok)
@@ -13712,18 +13902,22 @@ class RefinementSolverClientImplementation {
         attempts.push(`${runtime}: ${res.error ? String(res.error) : `exit ${res.status}`}`);
         continue;
       }
+      let parsed;
       try {
-        const parsed = JSON.parse((res.stdout ?? "").trim().split(`
+        parsed = JSON.parse((res.stdout ?? "").trim().split(`
 `).pop() ?? "");
-        if (typeof parsed.unavailable === "string")
-          return { results: null, unavailable: parsed.unavailable };
-        const map = new Map;
-        for (const r of parsed.results ?? [])
-          map.set(r.id, r);
-        return { results: map, unavailable: null };
       } catch {
         attempts.push(`${runtime}: solver child produced unreadable output`);
+        continue;
       }
+      if (isObject(parsed) && typeof parsed.unavailable === "string")
+        return { results: null, unavailable: parsed.unavailable };
+      const validated = parseSolverChildResults(parsed, queries.map((query) => query.id));
+      if (!validated.ok) {
+        attempts.push(`${runtime}: ${validated.error}`);
+        continue;
+      }
+      return { results: validated.value, unavailable: null };
     }
     return { results: null, unavailable: `no runtime could execute the z3 child process (${attempts.join("; ")})` };
   }

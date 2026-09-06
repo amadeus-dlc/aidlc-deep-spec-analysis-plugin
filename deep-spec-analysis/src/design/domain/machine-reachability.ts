@@ -1,5 +1,6 @@
 import { SkipReason, UnitName } from "@deep-spec-analysis/kernel-domain";
 import {
+  boundedCollectionSnapshot,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -22,6 +23,24 @@ type MachineReachabilityParam = {
   observations: ReadonlyMap<ReachabilityProbe, ReachabilityVerdict>;
 };
 
+const MAX_REACHABILITY_ENTRIES = 65_536;
+
+function boundedObservationSnapshot(
+  observations: ReadonlyMap<ReachabilityProbe, ReachabilityVerdict>,
+): ReadonlyMap<ReachabilityProbe, ReachabilityVerdict> {
+  if (observations.size > MAX_REACHABILITY_ENTRIES)
+    throw new IllegalArgumentException({ kind: "too-many-reachability-probes" });
+  const snapshot = new Map<ReachabilityProbe, ReachabilityVerdict>();
+  let inspected = 0;
+  for (const [probe, verdict] of observations) {
+    if (inspected >= MAX_REACHABILITY_ENTRIES)
+      throw new IllegalArgumentException({ kind: "too-many-reachability-probes", raw: inspected + 1 });
+    inspected++;
+    snapshot.set(probe, verdict);
+  }
+  return snapshot;
+}
+
 export class MachineReachability {
   readonly #unit: DesignUnit;
   readonly #machine: DesignMachine;
@@ -31,11 +50,8 @@ export class MachineReachability {
 
   /** 機械一つの候補・観測は各65,536件。全体の合計予算はReachabilityPlanが守る。 */
   private constructor(input: MachineReachabilityParam) {
-    if (input.probes.length > 65_536 || input.observations.size > 65_536) {
-      throw new IllegalArgumentException({ kind: "too-many-reachability-probes" });
-    }
-    const probes = [...input.probes];
-    const observations = new Map(input.observations);
+    const probes = boundedCollectionSnapshot(input.probes, MAX_REACHABILITY_ENTRIES, "too-many-reachability-probes");
+    const observations = boundedObservationSnapshot(input.observations);
     const included = new Set(probes);
     for (const probe of observations.keys()) {
       if (!included.has(probe)) throw new IllegalArgumentException({ kind: "reachability-observation-outside-plan" });
