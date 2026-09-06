@@ -32,6 +32,20 @@ class IllegalArgumentException extends Error {
   }
 }
 
+// src/kernel/infrastructure/bounded-collection-snapshot.ts
+function boundedCollectionSnapshot(values, maximum, problemKind) {
+  if (values.length > maximum)
+    throw new IllegalArgumentException({ kind: problemKind, raw: values.length });
+  const snapshot = [];
+  let inspected = 0;
+  for (const value of values) {
+    if (inspected >= maximum)
+      throw new IllegalArgumentException({ kind: problemKind, raw: inspected + 1 });
+    inspected++;
+    snapshot.push(value);
+  }
+  return Object.freeze(snapshot);
+}
 // src/kernel/infrastructure/bounded-value-snapshot.ts
 function boundedValueSnapshot(value, limits) {
   let nodes = 0;
@@ -84,6 +98,32 @@ function canonicalStringify(value) {
     return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(record[k] ?? null)}`).join(",")}}`;
   }
   return JSON.stringify(value) ?? "null";
+}
+function jsonEquals(left, right) {
+  if (Object.is(left, right))
+    return true;
+  if (left === null || right === null || typeof left !== typeof right)
+    return false;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length)
+      return false;
+    for (let index = 0;index < left.length; index++) {
+      if (!jsonEquals(left[index], right[index]))
+        return false;
+    }
+    return true;
+  }
+  if (typeof left !== "object" || typeof right !== "object")
+    return false;
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length)
+    return false;
+  for (const key of leftKeys) {
+    if (!Object.hasOwn(right, key) || !jsonEquals(left[key], right[key]))
+      return false;
+  }
+  return true;
 }
 // src/kernel/infrastructure/canonical-order.ts
 function numSegments(id) {
@@ -452,6 +492,9 @@ class BindingDeclaration {
   value() {
     return this.#value;
   }
+  equals(other) {
+    return this.#path.equals(other.#path) && this.#value.equals(other.#value);
+  }
 }
 // src/kernel/domain/binding-value.ts
 class BindingValue {
@@ -563,7 +606,7 @@ class Declaration {
     return cases.nonLiteral();
   }
   equals(other) {
-    return canonicalStringify(this.#value) === canonicalStringify(other.#value);
+    return jsonEquals(this.#value, other.#value);
   }
   describe() {
     return JSON.stringify(this.#value);
@@ -590,14 +633,184 @@ class DeclaredBindingValue {
   describe() {
     return this.#value.describe();
   }
+  equals(other) {
+    return this.#value.equals(other.#value);
+  }
 }
-// src/kernel/domain/declared-bindings.ts
-class DeclaredBindings {
+// src/kernel/domain/collection-operations.ts
+var MAX_COLLECTION_ELEMENTS = 65536;
+function invalidIndex(index) {
+  return new IllegalArgumentException({ kind: "invalid-collection-index", raw: index });
+}
+function checkReadBudget(operation, inspected) {
+  if (inspected >= MAX_COLLECTION_ELEMENTS)
+    throw new IllegalArgumentException({ kind: `${operation}-too-large`, raw: inspected + 1 });
+}
+function collectionAt(source, index) {
+  if (!Number.isSafeInteger(index) || index < 0 || index >= MAX_COLLECTION_ELEMENTS)
+    throw invalidIndex(index);
+  let position = 0;
+  for (const element of source) {
+    if (position === index)
+      return element;
+    position++;
+  }
+  throw invalidIndex(index);
+}
+function collectionHead(source) {
+  for (const element of source)
+    return element;
+  throw new IllegalArgumentException({ kind: "empty-collection-head" });
+}
+function collectionTail(source) {
+  const tail = [];
+  let inspected = 0;
+  let foundHead = false;
+  for (const element of source) {
+    checkReadBudget("collection-tail", inspected);
+    inspected++;
+    if (!foundHead) {
+      foundHead = true;
+      continue;
+    }
+    tail.push(element);
+  }
+  if (!foundHead)
+    throw new IllegalArgumentException({ kind: "empty-collection-tail" });
+  return tail;
+}
+function collectionInclude(source, target) {
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-include", inspected);
+    inspected++;
+    if (element.equals(target))
+      return true;
+  }
+  return false;
+}
+function collectionExists(source, predicate) {
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-exists", inspected);
+    inspected++;
+    if (predicate(element))
+      return true;
+  }
+  return false;
+}
+function collectionFilter(source, predicate) {
+  const values = [];
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-filter", inspected);
+    inspected++;
+    if (predicate(element))
+      values.push(element);
+  }
+  return values;
+}
+function collectionMap(source, transform) {
+  const values = [];
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-map", inspected);
+    inspected++;
+    values.push(transform(element));
+  }
+  return values;
+}
+
+// src/kernel/domain/immutable-first-class-collection.ts
+class ImmutableFirstClassCollection {
   #values;
   constructor(values) {
-    if (values.length > 1e4)
-      throw new IllegalArgumentException({ kind: "too-many-binding-declarations", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-immutable-collection-elements");
+  }
+  static of(values) {
+    return new ImmutableFirstClassCollection(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ImmutableFirstClassCollection(values));
+  }
+  [Symbol.iterator]() {
+    return this.#values[Symbol.iterator]();
+  }
+  at(index) {
+    return collectionAt(this, index);
+  }
+  head() {
+    return collectionHead(this);
+  }
+  tail() {
+    return ImmutableFirstClassCollection.of(collectionTail(this));
+  }
+  include(element) {
+    return collectionInclude(this, element);
+  }
+  exists(predicate) {
+    return collectionExists(this, predicate);
+  }
+  filter(predicate) {
+    return ImmutableFirstClassCollection.of(collectionFilter(this, predicate));
+  }
+  map(transform) {
+    return ImmutableFirstClassCollection.of(collectionMap(this, transform));
+  }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
+}
+
+// src/kernel/domain/non-empty-first-class-collection-base.ts
+class NonEmptyFirstClassCollectionBase {
+  constructor() {}
+  at(index) {
+    return collectionAt(this, index);
+  }
+  head() {
+    return collectionHead(this);
+  }
+  tail() {
+    return this.rebuild(collectionTail(this));
+  }
+  include(element) {
+    return collectionInclude(this, element);
+  }
+  exists(predicate) {
+    return collectionExists(this, predicate);
+  }
+  filter(predicate) {
+    return this.rebuild(collectionFilter(this, predicate));
+  }
+  map(transform) {
+    return ImmutableFirstClassCollection.of(collectionMap(this, transform));
+  }
+}
+
+// src/kernel/domain/first-class-collection-base.ts
+class FirstClassCollectionBase extends NonEmptyFirstClassCollectionBase {
+  constructor() {
+    super();
+  }
+  isEmpty() {
+    for (const _element of this)
+      return false;
+    return true;
+  }
+}
+
+// src/kernel/domain/declared-bindings.ts
+var MAX_DECLARED_BINDINGS = 1e4;
+
+class DeclaredBindings extends FirstClassCollectionBase {
+  #values;
+  constructor(values) {
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_DECLARED_BINDINGS, "too-many-binding-declarations");
+  }
+  rebuild(values) {
+    return new DeclaredBindings(values);
   }
   static parse(values) {
     return parseConstruction(() => new DeclaredBindings(values));
@@ -689,12 +902,16 @@ class EnumerationMember {
   }
 }
 // src/kernel/domain/enumeration-members.ts
-class EnumerationMembers {
+var MAX_ENUMERATION_MEMBERS = 1e4;
+
+class EnumerationMembers extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > 1e4)
-      throw new IllegalArgumentException({ kind: "too-many-enum-members", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_ENUMERATION_MEMBERS, "too-many-enum-members");
+  }
+  rebuild(values) {
+    return new EnumerationMembers(values);
   }
   static parse(values) {
     return parseConstruction(() => new EnumerationMembers(values));
@@ -750,16 +967,21 @@ class ErrorMessage {
   asString() {
     return this.#value;
   }
+  equals(other) {
+    return this.#value === other.#value;
+  }
 }
 // src/kernel/domain/error-messages.ts
 var MAX_MESSAGES = 65536;
 
-class ErrorMessages {
+class ErrorMessages extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > MAX_MESSAGES)
-      throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_MESSAGES, "too-many-error-messages");
+  }
+  rebuild(values) {
+    return new ErrorMessages(values);
   }
   static parse(values) {
     return parseConstruction(() => new ErrorMessages(values));
@@ -884,6 +1106,9 @@ class ExpressionTree {
   isCanonicallyEqual(other) {
     return canonicalStringify(this.#root) === canonicalStringify(other.#root);
   }
+  equals(other) {
+    return this.isCanonicallyEqual(other);
+  }
 }
 // src/kernel/domain/finding-kind.ts
 var KIND_RANK = {
@@ -964,12 +1189,104 @@ class FindingKind {
     return this.#value;
   }
 }
+// src/kernel/domain/target-identifier.ts
+var TARGET_ID_PATTERNS = [
+  /^(OB|SC)-[0-9]+$/,
+  /^BR[0-9]+\.[0-9]+$/,
+  /^(DOB|DSC|DBG|SM|TR)-[0-9]+$/,
+  /^(component|entity|attr|unit|contract|state|check):[A-Za-z0-9_./-]+$/
+];
+
+class TargetIdentifier {
+  #value;
+  constructor(raw) {
+    if (raw.length > 1024)
+      throw new IllegalArgumentException({ kind: "target-id-too-long", raw: raw.length });
+    if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
+      throw new IllegalArgumentException({ kind: "malformed-target-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new TargetIdentifier(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new TargetIdentifier(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  compareTo(other) {
+    return compareCanonically(this.#value, other.#value);
+  }
+  isRequirementObligation() {
+    return this.#value.startsWith("OB-");
+  }
+  asString() {
+    return this.#value;
+  }
+}
+
+// src/kernel/domain/target-identifiers.ts
+var MAX_TARGET_IDENTIFIERS = 65536;
+
+class TargetIdentifiers extends FirstClassCollectionBase {
+  #values;
+  constructor(values) {
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_TARGET_IDENTIFIERS, "too-many-target-identifiers");
+  }
+  rebuild(values) {
+    return new TargetIdentifiers(values);
+  }
+  static of(values) {
+    return new TargetIdentifiers(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new TargetIdentifiers(values));
+  }
+  static safe(prefix, raw) {
+    const token = raw.replace(/[^A-Za-z0-9_./-]/g, "-");
+    return `${prefix}:${token === "" ? "unknown" : token}`;
+  }
+  add(value) {
+    return new TargetIdentifiers([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  count() {
+    return this.#values.length;
+  }
+  excluding(value) {
+    return new TargetIdentifiers(this.#values.filter((v) => !v.equals(value)));
+  }
+  sortedCanonically() {
+    return new TargetIdentifiers([...this.#values].sort((a, b) => a.compareTo(b)));
+  }
+  sortedUniqueCanonically() {
+    return TargetIdentifiers.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetIdentifier.of(raw)));
+  }
+  joined(separator) {
+    return this.toStrings().join(separator);
+  }
+  toArray() {
+    return this.#values;
+  }
+  toStrings() {
+    return this.#values.map((v) => v.asString());
+  }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
+}
+
 // src/kernel/domain/finding-targets.ts
 var MAX_FINDING_TARGETS = 65536;
 
-class FindingTargets {
+class FindingTargets extends NonEmptyFirstClassCollectionBase {
   #values;
   constructor(head, tail) {
+    super();
     if (tail.length >= MAX_FINDING_TARGETS)
       throw new IllegalArgumentException({ kind: "too-many-finding-targets", raw: tail.length + 1 });
     const snapshot = [head];
@@ -979,6 +1296,9 @@ class FindingTargets {
       snapshot.push(value);
     }
     this.#values = Object.freeze(snapshot);
+  }
+  rebuild(values) {
+    return TargetIdentifiers.of(values);
   }
   static of(head, tail) {
     return new FindingTargets(head, tail);
@@ -991,9 +1311,6 @@ class FindingTargets {
   }
   count() {
     return this.#values.length;
-  }
-  includes(value) {
-    return this.#values.some((target) => target.equals(value));
   }
   sortedCanonically() {
     const [head, ...tail] = [...this.#values].sort((a, b) => a.compareTo(b));
@@ -1047,12 +1364,16 @@ class FindingsSchema {
   }
 }
 // src/kernel/domain/functional-requirement-references.ts
-class FunctionalRequirementReferences {
+var MAX_FUNCTIONAL_REQUIREMENT_REFERENCES = 1e4;
+
+class FunctionalRequirementReferences extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > 1e4)
-      throw new IllegalArgumentException({ kind: "too-many-functional-requirement-references", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_FUNCTIONAL_REQUIREMENT_REFERENCES, "too-many-functional-requirement-references");
+  }
+  rebuild(values) {
+    return new FunctionalRequirementReferences(values);
   }
   static parse(values) {
     return parseConstruction(() => new FunctionalRequirementReferences(values));
@@ -1299,23 +1620,28 @@ class RequirementIdentifier {
   }
 }
 // src/kernel/domain/requirement-identifiers.ts
-class RequirementIdentifiers {
+var MAX_REQUIREMENT_IDENTIFIERS = 65536;
+
+class RequirementIdentifiers extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = values;
+    super();
+    const snapshot = boundedCollectionSnapshot(values, MAX_REQUIREMENT_IDENTIFIERS, "too-many-requirement-identifiers");
+    this.#values = KeySet.of(snapshot);
   }
-  static extractFrom(text) {
-    const ids = [];
-    for (const m of text.matchAll(/\b(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*\b/g)) {
-      ids.push(RequirementIdentifier.of(m[0]));
-    }
-    return new RequirementIdentifiers(KeySet.of(ids));
+  rebuild(values) {
+    return new RequirementIdentifiers(values);
   }
   static of(values) {
-    return new RequirementIdentifiers(KeySet.of(values));
+    return new RequirementIdentifiers(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new RequirementIdentifiers(values));
   }
   add(value) {
-    return new RequirementIdentifiers(this.#values.with(value));
+    if (this.#values.has(value))
+      return this;
+    return new RequirementIdentifiers([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -1353,21 +1679,30 @@ class ScenarioBinding {
   isFor(path) {
     return this.#path.equals(path);
   }
+  equals(other) {
+    return this.#path.equals(other.#path) && this.#value.equals(other.#value);
+  }
 }
 // src/kernel/domain/scenario-bindings.ts
-class ScenarioBindings {
+class ScenarioBindings extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > 1e4)
-      throw new IllegalArgumentException({ kind: "too-many-scenario-bindings", raw: values.length });
+    super();
+    const snapshot = boundedCollectionSnapshot(values, 1e4, "too-many-scenario-bindings");
     const paths = new Set;
-    for (const binding of values) {
+    for (const binding of snapshot) {
       const path = binding.path().asString();
       if (paths.has(path))
         throw new IllegalArgumentException({ kind: "duplicate-scenario-binding", raw: path });
       paths.add(path);
     }
-    this.#values = Object.freeze([...values]);
+    this.#values = snapshot;
+  }
+  rebuild(values) {
+    return new ScenarioBindings(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
   }
   static parse(values) {
     return parseConstruction(() => new ScenarioBindings(values));
@@ -1506,6 +1841,9 @@ class ScenarioVerdict {
   agreesWith(other) {
     return this.#state === other.#state;
   }
+  equals(other) {
+    return this.#backend.equals(other.#backend) && this.#modelHash.equals(other.#modelHash) && this.#state === other.#state && this.#target.equals(other.#target) && (this.#unit === null ? other.#unit === null : other.#unit !== null && this.#unit.equals(other.#unit));
+  }
   verdictLabel() {
     if (this.#state !== "clean" && this.#state !== "violated")
       throw new Error("defect: an unverified scenario has no verdict label");
@@ -1513,23 +1851,23 @@ class ScenarioVerdict {
   }
 }
 // src/kernel/domain/scenario-verdicts.ts
-class ScenarioVerdicts {
+class ScenarioVerdicts extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > 128)
-      throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: values.length });
-    const snapshot = [];
-    for (const value of values) {
-      if (snapshot.length === 128)
-        throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: snapshot.length + 1 });
-      snapshot.push(value);
-    }
+    super();
+    const snapshot = boundedCollectionSnapshot(values, 128, "too-many-scenario-verdicts");
     const comparable = snapshot.filter((value) => value.isComparable());
     if (comparable.some((value) => !value.sameSubjectAs(comparable[0])))
       throw new IllegalArgumentException({ kind: "different-scenario-subjects" });
     if (KeySet.of(comparable.map((value) => value.backend())).size() !== comparable.length)
       throw new IllegalArgumentException({ kind: "duplicate-scenario-backend" });
     this.#values = [...comparable];
+  }
+  rebuild(values) {
+    return new ScenarioVerdicts(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
   }
   static of(values) {
     return new ScenarioVerdicts(values);
@@ -1610,89 +1948,6 @@ class SkipReason {
   }
   compareTo(other) {
     return this.#value < other.#value ? -1 : this.#value > other.#value ? 1 : 0;
-  }
-}
-// src/kernel/domain/target-identifier.ts
-var TARGET_ID_PATTERNS = [
-  /^(OB|SC)-[0-9]+$/,
-  /^BR[0-9]+\.[0-9]+$/,
-  /^(DOB|DSC|DBG|SM|TR)-[0-9]+$/,
-  /^(component|entity|attr|unit|contract|state|check):[A-Za-z0-9_./-]+$/
-];
-
-class TargetIdentifier {
-  #value;
-  constructor(raw) {
-    if (raw.length > 1024)
-      throw new IllegalArgumentException({ kind: "target-id-too-long", raw: raw.length });
-    if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
-      throw new IllegalArgumentException({ kind: "malformed-target-id", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new TargetIdentifier(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new TargetIdentifier(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  compareTo(other) {
-    return compareCanonically(this.#value, other.#value);
-  }
-  isRequirementObligation() {
-    return this.#value.startsWith("OB-");
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/kernel/domain/target-identifiers.ts
-class TargetIdentifiers {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new TargetIdentifiers(values);
-  }
-  static safe(prefix, raw) {
-    const token = raw.replace(/[^A-Za-z0-9_./-]/g, "-");
-    return `${prefix}:${token === "" ? "unknown" : token}`;
-  }
-  add(value) {
-    return new TargetIdentifiers([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  count() {
-    return this.#values.length;
-  }
-  includes(value) {
-    return this.#values.some((v) => v.equals(value));
-  }
-  excluding(value) {
-    return new TargetIdentifiers(this.#values.filter((v) => !v.equals(value)));
-  }
-  sortedCanonically() {
-    return new TargetIdentifiers([...this.#values].sort((a, b) => a.compareTo(b)));
-  }
-  sortedUniqueCanonically() {
-    return TargetIdentifiers.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetIdentifier.of(raw)));
-  }
-  joined(separator) {
-    return this.toStrings().join(separator);
-  }
-  toArray() {
-    return this.#values;
-  }
-  toStrings() {
-    return this.#values.map((v) => v.asString());
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/kernel/domain/trigger-name.ts
@@ -2079,20 +2334,31 @@ function parseFindingsValues(raw) {
       const fields = combineResults({
         backend: BackendName.parse(entry.backend),
         unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit),
-        targets: traverseResult(entry.targets, TargetIdentifier.parse)
+        targets: flatMapResult(traverseResult(entry.targets, TargetIdentifier.parse), TargetIdentifiers.parse)
       });
       if (!fields.ok)
         return fields;
       return ok({
         backend: fields.value.backend,
         unit: fields.value.unit,
-        targets: TargetIdentifiers.of(fields.value.targets)
+        targets: fields.value.targets
       });
     })
   });
   if (!parsed.ok)
     return err(JSON.stringify(parsed.error));
   return ok({ ...parsed.value, checked: doc.checked, unavailable: doc.unavailable });
+}
+// src/kernel/adapter/requirement-identifiers-parser.ts
+function parseRequirementIdentifiers(text) {
+  const values = [];
+  for (const match of text.matchAll(/\b(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*\b/g)) {
+    const parsed = RequirementIdentifier.parse(match[0]);
+    if (!parsed.ok)
+      return parsed;
+    values.push(parsed.value);
+  }
+  return RequirementIdentifiers.parse(values);
 }
 // src/kernel/adapter/sensor-flags.ts
 function parseFlags(argv) {
@@ -2148,6 +2414,10 @@ class BackgroundAssumption {
   id() {
     return this.#id;
   }
+  equals(other) {
+    const assertionsEqual = this.#assert === undefined ? other.#assert === undefined : other.#assert !== undefined && ExpressionTree.of(this.#assert).isCanonicallyEqual(ExpressionTree.of(other.#assert));
+    return this.#id.equals(other.#id) && assertionsEqual;
+  }
   assertion() {
     return this.#assert;
   }
@@ -2176,10 +2446,17 @@ class BackgroundAssumptionIdentifier {
   }
 }
 // src/requirements/domain/background-assumptions.ts
-class BackgroundAssumptions {
+class BackgroundAssumptions extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-background-assumptions");
+  }
+  rebuild(values) {
+    return new BackgroundAssumptions(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new BackgroundAssumptions(values));
   }
   static of(values) {
     return new BackgroundAssumptions(values);
@@ -2193,15 +2470,19 @@ class BackgroundAssumptions {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/requirements/domain/cross-checked-entries.ts
-class CrossCheckedEntries {
+class CrossCheckedEntries extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-cross-checked-entries");
+  }
+  rebuild(values) {
+    return new CrossCheckedEntries(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new CrossCheckedEntries(values));
   }
   static of(values) {
     return new CrossCheckedEntries(values);
@@ -2214,9 +2495,6 @@ class CrossCheckedEntries {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/cross-checked-entry.ts
@@ -2241,6 +2519,11 @@ class CrossCheckedEntry {
   }
   targets() {
     return this.#targets;
+  }
+  equals(other) {
+    const targets = this.#targets.toArray();
+    const otherTargets = other.#targets.toArray();
+    return this.#backend.equals(other.#backend) && targets.length === otherTargets.length && targets.every((target, index) => target.equals(otherTargets[index]));
   }
   compareByBackend(other) {
     const a = this.#backend.asString();
@@ -2278,6 +2561,11 @@ class FunctionalRequirementReferenceClaim {
   ownerDescription() {
     return this.#owner;
   }
+  equals(other) {
+    const refs = this.#functionalRequirementReferences.toArray();
+    const otherRefs = other.#functionalRequirementReferences.toArray();
+    return this.#owner === other.#owner && refs.length === otherRefs.length && refs.every((ref, index) => ref.equals(otherRefs[index]));
+  }
   claimInto(ownersByRef) {
     for (const ref of this.#functionalRequirementReferences) {
       const owners = ownersByRef.get(ref.asString()) ?? [];
@@ -2285,15 +2573,31 @@ class FunctionalRequirementReferenceClaim {
       ownersByRef.set(ref.asString(), owners);
     }
   }
+  claimIntoKeyed(ownersByRef) {
+    for (const ref of this.#functionalRequirementReferences) {
+      const existing = ownersByRef.get(ref.asString());
+      if (existing === undefined)
+        ownersByRef.set(ref.asString(), { key: ref, owners: [this] });
+      else
+        existing.owners.push(this);
+    }
+  }
 }
 // src/requirements/domain/functional-requirement-reference-claims.ts
-class FunctionalRequirementReferenceClaims {
+class FunctionalRequirementReferenceClaims extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-functional-requirement-reference-claims");
+  }
+  rebuild(values) {
+    return new FunctionalRequirementReferenceClaims(values);
   }
   static of(values) {
     return new FunctionalRequirementReferenceClaims(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new FunctionalRequirementReferenceClaims(values));
   }
   add(value) {
     return new FunctionalRequirementReferenceClaims([...this.#values, value]);
@@ -2307,21 +2611,33 @@ class FunctionalRequirementReferenceClaims {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/requirements/domain/functional-requirement-reference-index.ts
-class FunctionalRequirementReferenceIndex {
+class FunctionalRequirementReferenceIndex extends FirstClassCollectionBase {
+  #claims;
   #ownersByRef;
-  constructor(ownersByRef) {
-    this.#ownersByRef = ownersByRef;
+  constructor(claims) {
+    super();
+    this.#claims = boundedCollectionSnapshot(claims, 65536, "too-many-functional-requirement-reference-claims");
+    const ownersByRef = new Map;
+    for (const claim of this.#claims)
+      claim.claimIntoKeyed(ownersByRef);
+    this.#ownersByRef = KeyedIndex.of([...ownersByRef.values()].map(({ key, owners }) => [key, FunctionalRequirementReferenceClaims.of(owners)]));
   }
   static of(claims) {
-    const ownersByRef = new Map;
-    for (const claim of claims)
-      claim.claimInto(ownersByRef);
-    return new FunctionalRequirementReferenceIndex(KeyedIndex.of([...ownersByRef].map(([ref, owners]) => [RequirementIdentifier.of(ref), FunctionalRequirementReferenceClaims.of(owners)])));
+    return new FunctionalRequirementReferenceIndex(claims);
+  }
+  static parse(claims) {
+    return parseConstruction(() => new FunctionalRequirementReferenceIndex(claims));
+  }
+  rebuild(values) {
+    return new FunctionalRequirementReferenceIndex(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#claims;
+  }
+  toArray() {
+    return this.#claims;
   }
   referencedIds() {
     return [...this.#ownersByRef.keys()].map((ref) => ref.asString());
@@ -2329,35 +2645,75 @@ class FunctionalRequirementReferenceIndex {
   missingErrors(known) {
     const missing = [...this.#ownersByRef.keys()].filter((ref) => !known.has(ref)).map((ref) => ref.asString()).sort();
     return missing.map((id) => {
-      const owners = [...this.#ownersByRef.get(RequirementIdentifier.of(id))?.ownerDescriptions() ?? []].sort().join(", ");
+      const owners = [...[...this.#ownersByRef].find(([ref]) => ref.asString() === id)?.[1].ownerDescriptions() ?? []].sort().join(", ");
       return `frRef "${id}" (used by ${owners}) does not exist in requirements.md`;
     });
   }
-  isEmpty() {
-    return this.#ownersByRef.isEmpty();
+}
+// src/requirements/domain/intermediate-representation-attribute-entry.ts
+class IntermediateRepresentationAttributeEntry {
+  #owner;
+  #path;
+  #attribute;
+  constructor(owner, attribute) {
+    this.#owner = owner;
+    this.#path = AttributePath.of(`${owner.asString()}.${attribute.name().asString()}`);
+    this.#attribute = attribute;
+  }
+  static of(owner, attribute) {
+    return new IntermediateRepresentationAttributeEntry(owner, attribute);
+  }
+  static parse(owner, attribute) {
+    return parseConstruction(() => new IntermediateRepresentationAttributeEntry(owner, attribute));
+  }
+  path() {
+    return this.#path;
+  }
+  owner() {
+    return this.#owner;
+  }
+  attribute() {
+    return this.#attribute;
+  }
+  equals(other) {
+    return this.#owner.equals(other.#owner) && this.#path.equals(other.#path) && this.#attribute.equals(other.#attribute);
   }
 }
+
 // src/requirements/domain/intermediate-representation-attribute-catalog.ts
-class IntermediateRepresentationAttributeCatalog {
+class IntermediateRepresentationAttributeCatalog extends FirstClassCollectionBase {
+  #declarations;
+  #entries;
   #byPath;
-  constructor(declarations) {
-    let count = 0;
-    for (const entity of declarations) {
-      if (++count > 65536)
-        throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
-      entity.inspectAttributes(() => {
+  constructor(declarations, entries) {
+    super();
+    this.#declarations = declarations;
+    const derived = [];
+    if (entries === undefined) {
+      let count = 0;
+      for (const entity of declarations) {
         if (++count > 65536)
           throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
-      });
+        entity.inspectAttributes((_path, attribute) => {
+          if (++count > 65536)
+            throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
+          derived.push(IntermediateRepresentationAttributeEntry.of(entity.name(), attribute));
+        });
+      }
+      if (declarations.hasAmbiguousAttributes())
+        throw new IllegalArgumentException({ kind: "ambiguous-requirement-attributes" });
     }
-    if (declarations.hasAmbiguousAttributes())
-      throw new IllegalArgumentException({ kind: "ambiguous-requirement-attributes" });
-    const attributes = new Map;
-    for (const entity of declarations)
-      entity.inspectAttributes((path, attribute) => {
-        attributes.set(path, attribute);
-      });
-    this.#byPath = KeyedIndex.of([...attributes].map(([path, attribute]) => [AttributePath.of(path), attribute]));
+    this.#entries = boundedCollectionSnapshot(entries ?? derived, 65536, "attribute-catalog-too-large");
+    this.#byPath = KeyedIndex.of(this.#entries.map((entry) => [entry.path(), entry.attribute()]));
+  }
+  rebuild(values) {
+    return new IntermediateRepresentationAttributeCatalog(this.#declarations, values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#entries;
+  }
+  toArray() {
+    return this.#entries;
   }
   #attributeAt(path) {
     const parsed = AttributePath.parse(path);
@@ -2412,9 +2768,6 @@ class IntermediateRepresentationAttributeCatalog {
     }
     return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
-  isEmpty() {
-    return this.#byPath.isEmpty();
-  }
 }
 // src/requirements/domain/intermediate-representation-attribute-declaration.ts
 class IntermediateRepresentationAttributeDeclaration {
@@ -2451,12 +2804,25 @@ class IntermediateRepresentationAttributeDeclaration {
   kindLabel() {
     return this.#kind.asString();
   }
+  equals(other) {
+    const values = this.#values?.toArray();
+    const otherValues = other.#values?.toArray();
+    const valuesEqual = values === undefined ? otherValues === undefined : otherValues !== undefined && values.length === otherValues.length && values.every((value, index) => value.equals(otherValues[index]));
+    return this.#name.equals(other.#name) && this.#kind.equals(other.#kind) && valuesEqual && this.#min?.asNumber() === other.#min?.asNumber() && this.#max?.asNumber() === other.#max?.asNumber();
+  }
 }
 // src/requirements/domain/intermediate-representation-attribute-declarations.ts
-class IntermediateRepresentationAttributeDeclarations {
+class IntermediateRepresentationAttributeDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-intermediate-representation-attribute-declarations");
+  }
+  rebuild(values) {
+    return new IntermediateRepresentationAttributeDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new IntermediateRepresentationAttributeDeclarations(values));
   }
   static of(values) {
     return new IntermediateRepresentationAttributeDeclarations(values);
@@ -2469,9 +2835,6 @@ class IntermediateRepresentationAttributeDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-attribute-name.ts
@@ -2522,12 +2885,23 @@ class IntermediateRepresentationBackgroundDeclaration {
   id() {
     return this.#id;
   }
+  equals(other) {
+    const assertionsEqual = this.#assert === undefined ? other.#assert === undefined : other.#assert !== undefined && ExpressionTree.of(this.#assert).isCanonicallyEqual(ExpressionTree.of(other.#assert));
+    return this.#id.equals(other.#id) && assertionsEqual;
+  }
 }
 // src/requirements/domain/intermediate-representation-background-declarations.ts
-class IntermediateRepresentationBackgroundDeclarations {
+class IntermediateRepresentationBackgroundDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-intermediate-representation-background-declarations");
+  }
+  rebuild(values) {
+    return new IntermediateRepresentationBackgroundDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new IntermediateRepresentationBackgroundDeclarations(values));
   }
   static of(values) {
     return new IntermediateRepresentationBackgroundDeclarations(values);
@@ -2540,9 +2914,6 @@ class IntermediateRepresentationBackgroundDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-entity-declaration.ts
@@ -2559,6 +2930,11 @@ class IntermediateRepresentationEntityDeclaration {
   name() {
     return this.#name;
   }
+  equals(other) {
+    const attributes = this.#attributes.toArray();
+    const otherAttributes = other.#attributes.toArray();
+    return this.#name.equals(other.#name) && attributes.length === otherAttributes.length && attributes.every((attribute, index) => attribute.equals(otherAttributes[index]));
+  }
   attributes() {
     return this.#attributes;
   }
@@ -2572,10 +2948,17 @@ class IntermediateRepresentationEntityDeclaration {
   }
 }
 // src/requirements/domain/intermediate-representation-entity-declarations.ts
-class IntermediateRepresentationEntityDeclarations {
+class IntermediateRepresentationEntityDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-intermediate-representation-entity-declarations");
+  }
+  rebuild(values) {
+    return new IntermediateRepresentationEntityDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new IntermediateRepresentationEntityDeclarations(values));
   }
   static of(values) {
     return new IntermediateRepresentationEntityDeclarations(values);
@@ -2621,9 +3004,6 @@ class IntermediateRepresentationEntityDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-entity-name.ts
@@ -2737,6 +3117,10 @@ class IntermediateRepresentationObligationDeclaration {
   id() {
     return this.#id;
   }
+  equals(other) {
+    const expressionEqual = (left, right) => left === undefined ? right === undefined : right !== undefined && ExpressionTree.of(left).isCanonicallyEqual(ExpressionTree.of(right));
+    return this.#id.equals(other.#id) && expressionEqual(this.#assert, other.#assert) && expressionEqual(this.#guard, other.#guard) && expressionEqual(this.#effect, other.#effect) && (this.#temporal === undefined ? other.#temporal === undefined : other.#temporal !== undefined && this.#temporal.equals(other.#temporal));
+  }
   #inspectExpressions(visitor) {
     if (this.#assert !== undefined)
       visitor(this.#assert, false);
@@ -2748,10 +3132,17 @@ class IntermediateRepresentationObligationDeclaration {
   }
 }
 // src/requirements/domain/intermediate-representation-obligation-declarations.ts
-class IntermediateRepresentationObligationDeclarations {
+class IntermediateRepresentationObligationDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-intermediate-representation-obligation-declarations");
+  }
+  rebuild(values) {
+    return new IntermediateRepresentationObligationDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new IntermediateRepresentationObligationDeclarations(values));
   }
   static of(values) {
     return new IntermediateRepresentationObligationDeclarations(values);
@@ -2764,9 +3155,6 @@ class IntermediateRepresentationObligationDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-scenario-declaration.ts
@@ -2800,15 +3188,32 @@ class IntermediateRepresentationScenarioDeclaration {
   id() {
     return this.#id;
   }
+  equals(other) {
+    const expressionEqual = this.#expect === undefined ? other.#expect === undefined : other.#expect !== undefined && ExpressionTree.of(this.#expect).isCanonicallyEqual(ExpressionTree.of(other.#expect));
+    const bindings = this.#bindings.toArray();
+    const otherBindings = other.#bindings.toArray();
+    const bindingsEqual = bindings.length === otherBindings.length && bindings.every((binding, index) => {
+      const otherBinding = otherBindings[index];
+      return otherBinding !== undefined && binding.path().equals(otherBinding.path()) && binding.value().describe() === otherBinding.value().describe();
+    });
+    return this.#id.equals(other.#id) && this.#hasEvent === other.#hasEvent && bindingsEqual && expressionEqual;
+  }
 }
 // src/requirements/domain/intermediate-representation-scenario-declarations.ts
-class IntermediateRepresentationScenarioDeclarations {
+class IntermediateRepresentationScenarioDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-intermediate-representation-scenario-declarations");
+  }
+  rebuild(values) {
+    return new IntermediateRepresentationScenarioDeclarations(values);
   }
   static of(values) {
     return new IntermediateRepresentationScenarioDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new IntermediateRepresentationScenarioDeclarations(values));
   }
   add(value) {
     return new IntermediateRepresentationScenarioDeclarations([...this.#values, value]);
@@ -2818,9 +3223,6 @@ class IntermediateRepresentationScenarioDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-temporal-declaration.ts
@@ -2838,6 +3240,10 @@ class IntermediateRepresentationTemporalDeclaration {
   }
   static of(props) {
     return new IntermediateRepresentationTemporalDeclaration(props);
+  }
+  equals(other) {
+    const expressionEqual = (left, right) => left === undefined ? right === undefined : right !== undefined && ExpressionTree.of(left).isCanonicallyEqual(ExpressionTree.of(right));
+    return expressionEqual(this.#assert, other.#assert) && expressionEqual(this.#from, other.#from) && expressionEqual(this.#to, other.#to);
   }
   inspectExpressions(visitor) {
     if (this.#assert !== undefined)
@@ -2909,10 +3315,17 @@ function sortVerificationFindings(findings) {
   return [...findings].sort((a, b) => a.compareTo(b));
 }
 
-class VerificationFindings {
+class VerificationFindings extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-verification-findings");
+  }
+  rebuild(values) {
+    return new VerificationFindings(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new VerificationFindings(values));
   }
   static of(values) {
     return new VerificationFindings(values);
@@ -2928,9 +3341,6 @@ class VerificationFindings {
   }
   count() {
     return this.#values.length;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
   distinctConflicts() {
     const seen = new Set;
@@ -2971,6 +3381,9 @@ class VerificationSkipped {
   detail() {
     return this.#detail;
   }
+  equals(other) {
+    return this.#target.equals(other.#target) && this.#reason.asString() === other.#reason.asString() && this.#detail === other.#detail;
+  }
   isFor(target) {
     return this.#target.equals(target);
   }
@@ -2987,10 +3400,17 @@ function sortVerificationSkipped(skipped) {
   return [...skipped].sort((a, b) => a.compareTo(b));
 }
 
-class VerificationSkips {
+class VerificationSkips extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-verification-skips");
+  }
+  rebuild(values) {
+    return new VerificationSkips(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new VerificationSkips(values));
   }
   static of(values) {
     return new VerificationSkips(values);
@@ -3012,9 +3432,6 @@ class VerificationSkips {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 
@@ -3186,6 +3603,11 @@ class VerificationReport {
   crossChecked() {
     return this.#crossChecked;
   }
+  equals(other) {
+    const sameValues = (left, right) => left.length === right.length && left.every((value, index) => value.equals(right[index]));
+    const crossCheckedEqual = this.#crossChecked === null ? other.#crossChecked === null : other.#crossChecked !== null && sameValues(this.#crossChecked.toArray(), other.#crossChecked.toArray());
+    return this.#id.equals(other.#id) && this.#irVersion.equals(other.#irVersion) && this.#irHash.equals(other.#irHash) && this.#method.equals(other.#method) && sameValues(this.#findings.toArray(), other.#findings.toArray()) && sameValues(this.#skipped.toArray(), other.#skipped.toArray()) && crossCheckedEqual && this.#unavailableReason === other.#unavailableReason;
+  }
   unavailableReason() {
     return this.#unavailableReason;
   }
@@ -3334,12 +3756,16 @@ class VerificationFinding {
   detail() {
     return this.#detail;
   }
+  equals(other) {
+    const sameValues = (left, right) => left.length === right.length && left.every((value, index) => value.equals(right[index]));
+    return this.#kind.equals(other.#kind) && sameValues(this.#functionalRequirementReferences.toArray(), other.#functionalRequirementReferences.toArray()) && sameValues(this.#targets.toArray(), other.#targets.toArray()) && this.#witness.equals(other.#witness) && this.#detail === other.#detail;
+  }
   isKind(kind) {
     const parsed = FindingKind.parse(kind);
     return parsed.ok && this.#kind.equals(parsed.value);
   }
   implicates(target) {
-    return this.#targets.includes(target);
+    return this.#targets.include(target);
   }
   compareTo(other) {
     const kr = this.#kind.compareTo(other.#kind);
@@ -3421,6 +3847,17 @@ class Obligation {
   }
   id() {
     return this.#id;
+  }
+  equals(other) {
+    const expressionEqual = (left, right) => left === undefined ? right === undefined : right !== undefined && ExpressionTree.of(left).isCanonicallyEqual(ExpressionTree.of(right));
+    const refs = this.#functionalRequirementReferences.toArray();
+    const otherRefs = other.#functionalRequirementReferences.toArray();
+    const temporalEqual = (left, right) => {
+      if (left === undefined || right === undefined)
+        return left === right;
+      return left.pattern === right.pattern && expressionEqual(left.assert, right.assert) && expressionEqual(left.from, right.from) && expressionEqual(left.to, right.to);
+    };
+    return this.#id.equals(other.#id) && this.#nature.equals(other.#nature) && refs.length === otherRefs.length && refs.every((ref, index) => ref.equals(otherRefs[index])) && this.#ears === other.#ears && expressionEqual(this.#assert, other.#assert) && (this.#trigger === undefined ? other.#trigger === undefined : other.#trigger !== undefined && this.#trigger.equals(other.#trigger)) && expressionEqual(this.#guard, other.#guard) && expressionEqual(this.#effect, other.#effect) && temporalEqual(this.#temporal, other.#temporal);
   }
   nature() {
     return this.#nature;
@@ -3508,10 +3945,17 @@ class ObligationIdentifier {
   }
 }
 // src/requirements/domain/obligation-identifiers.ts
-class ObligationIdentifiers {
+class ObligationIdentifiers extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-obligation-identifiers");
+  }
+  rebuild(values) {
+    return new ObligationIdentifiers(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ObligationIdentifiers(values));
   }
   static of(values) {
     return new ObligationIdentifiers(values);
@@ -3522,9 +3966,6 @@ class ObligationIdentifiers {
   *[Symbol.iterator]() {
     yield* this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
   toStrings() {
     return this.#values.map((v) => v.asString());
   }
@@ -3533,10 +3974,17 @@ class ObligationIdentifiers {
   }
 }
 // src/requirements/domain/obligations.ts
-class Obligations {
+class Obligations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-obligations");
+  }
+  rebuild(values) {
+    return new Obligations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new Obligations(values));
   }
   static of(values) {
     return new Obligations(values);
@@ -3558,9 +4006,6 @@ class Obligations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/quint-check-result.ts
@@ -3693,15 +4138,25 @@ class QuintMachineComponent {
   id() {
     return this.#id;
   }
+  equals(other) {
+    return this.#id.equals(other.#id) && ExpressionTree.of(this.#expression).isCanonicallyEqual(ExpressionTree.of(other.#expression));
+  }
   isViolatedIn(state) {
     return !evaluate(this.#expression, state).isTrue();
   }
 }
 // src/requirements/domain/quint-machine-components.ts
-class QuintMachineComponents {
+class QuintMachineComponents extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-quint-machine-components");
+  }
+  rebuild(values) {
+    return new QuintMachineComponents(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new QuintMachineComponents(values));
   }
   static of(values) {
     return new QuintMachineComponents(values);
@@ -3711,9 +4166,6 @@ class QuintMachineComponents {
   }
   *[Symbol.iterator]() {
     yield* this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
   ids() {
     return ObligationIdentifiers.of(this.#values.map((c) => c.id()));
@@ -3779,20 +4231,58 @@ class QuintMachinePlan {
     return ok({ findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) });
   }
 }
+// src/requirements/domain/trace-state-entry.ts
+class TraceStateEntry {
+  #path;
+  #value;
+  constructor(path, value) {
+    this.#path = path;
+    this.#value = value;
+  }
+  static of(path, value) {
+    return new TraceStateEntry(path, value);
+  }
+  path() {
+    return this.#path;
+  }
+  value() {
+    return this.#value;
+  }
+  equals(other) {
+    return this.#path.equals(other.#path) && this.#value.equals(other.#value);
+  }
+}
+
 // src/requirements/domain/trace-state.ts
-class TraceState {
+class TraceState extends FirstClassCollectionBase {
   #values;
-  constructor(values) {
-    this.#values = values;
+  #entries;
+  constructor(entries) {
+    super();
+    const snapshot = boundedCollectionSnapshot(entries, 65536, "too-many-trace-state-entries");
+    const byPath = new Map;
+    for (const entry of snapshot)
+      byPath.set(entry.path().asString(), entry);
+    this.#entries = Object.freeze([...byPath.values()]);
+    this.#values = KeyedIndex.of(this.#entries.map((entry) => [entry.path(), entry.value()]));
+  }
+  rebuild(values) {
+    return TraceState.of(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#entries;
   }
   static empty() {
-    return new TraceState(KeyedIndex.empty());
+    return new TraceState([]);
   }
   static fromBindings(bindings) {
-    return TraceState.of(bindings.entriesCanonically().map((binding) => [binding.path(), TraceValue.of(binding.value().toDocument())]));
+    return TraceState.of(bindings.entriesCanonically().map((binding) => TraceStateEntry.of(binding.path(), TraceValue.of(binding.value().toDocument()))));
+  }
+  static parse(entries) {
+    return parseConstruction(() => new TraceState(entries));
   }
   static of(entries) {
-    return new TraceState(KeyedIndex.of(entries));
+    return new TraceState(entries);
   }
   valueAt(path) {
     return this.#values.get(path) ?? TraceValue.absent();
@@ -3803,8 +4293,13 @@ class TraceState {
       out[path.asString()] = value.toDocument();
     return out;
   }
-  isEmpty() {
-    return this.#values.isEmpty();
+  equals(other) {
+    const entries = this.toArray();
+    const otherEntries = other.toArray();
+    return entries.length === otherEntries.length && entries.every((entry, index) => entry.equals(otherEntries[index]));
+  }
+  toArray() {
+    return [...this];
   }
 }
 
@@ -3834,6 +4329,9 @@ class VerificationWitness {
   }
   toDocument() {
     return structuredClone(this.#document);
+  }
+  equals(other) {
+    return canonicalStringify(this.#document) === canonicalStringify(other.#document);
   }
 }
 
@@ -4103,6 +4601,13 @@ class RequirementAttributeDeclaration {
   maxBound() {
     return this.#max;
   }
+  equals(other) {
+    const values = this.#values?.toArray();
+    const otherValues = other.#values?.toArray();
+    const valuesEqual = values === undefined ? otherValues === undefined : otherValues !== undefined && values.length === otherValues.length && values.every((value, index) => value.equals(otherValues[index]));
+    const boundsEqual = (left, right) => left === undefined ? right === undefined : right !== undefined && left.equals(right);
+    return this.#path.equals(other.#path) && this.#kind === other.#kind && boundsEqual(this.#min, other.#min) && boundsEqual(this.#max, other.#max) && valuesEqual;
+  }
   match(handlers) {
     if (this.#kind === "bool")
       return handlers.bool();
@@ -4112,12 +4617,19 @@ class RequirementAttributeDeclaration {
   }
 }
 // src/requirements/domain/requirement-attribute-declarations.ts
-class RequirementAttributeDeclarations {
+class RequirementAttributeDeclarations extends FirstClassCollectionBase {
   #values;
   #byPath;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-requirement-attribute-declarations");
     this.#byPath = KeyedIndex.of(values.map((a) => [a.path(), a]));
+  }
+  rebuild(values) {
+    return new RequirementAttributeDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new RequirementAttributeDeclarations(values));
   }
   static of(values) {
     return new RequirementAttributeDeclarations(values);
@@ -4136,9 +4648,6 @@ class RequirementAttributeDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/requirements-model.ts
@@ -4340,6 +4849,9 @@ class SatisfiabilityModuloTheoriesEventPairProbe {
   targets() {
     return TargetIdentifiers.of([this.#a.asTargetId(), this.#b.asTargetId()]);
   }
+  equals(other) {
+    return this.#qOverlap.equals(other.#qOverlap) && this.#qJoint.equals(other.#qJoint) && this.#a.equals(other.#a) && this.#b.equals(other.#b) && this.#trigger.equals(other.#trigger);
+  }
   #overlapVerdictIn(results) {
     return results.verdictOf(this.#qOverlap);
   }
@@ -4348,10 +4860,17 @@ class SatisfiabilityModuloTheoriesEventPairProbe {
   }
 }
 // src/requirements/domain/satisfiability-modulo-theories-event-pair-probes.ts
-class SatisfiabilityModuloTheoriesEventPairProbes {
+class SatisfiabilityModuloTheoriesEventPairProbes extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-satisfiability-event-pair-probes");
+  }
+  rebuild(values) {
+    return new SatisfiabilityModuloTheoriesEventPairProbes(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new SatisfiabilityModuloTheoriesEventPairProbes(values));
   }
   static of(values) {
     return new SatisfiabilityModuloTheoriesEventPairProbes(values);
@@ -4364,9 +4883,6 @@ class SatisfiabilityModuloTheoriesEventPairProbes {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/satisfiability-modulo-theories-query-verdict.ts
@@ -4416,21 +4932,63 @@ class SatisfiabilityModuloTheoriesQueryVerdict {
   witnessModel() {
     return { ...this.#decodedModel ?? {} };
   }
+  equals(other) {
+    const leftModel = this.#decodedModel ?? {};
+    const rightModel = other.#decodedModel ?? {};
+    const leftKeys = Object.keys(leftModel).sort();
+    const rightKeys = Object.keys(rightModel).sort();
+    const modelsEqual = leftKeys.length === rightKeys.length && leftKeys.every((key, index) => key === rightKeys[index] && leftModel[key] === rightModel[key]);
+    const leftCore = this.#core ?? [];
+    const rightCore = other.#core ?? [];
+    return this.#status === other.#status && modelsEqual && leftCore.length === rightCore.length && leftCore.every((label, index) => label.equals(rightCore[index]));
+  }
+}
+// src/requirements/domain/satisfiability-modulo-theories-query-verdict-entry.ts
+class SatisfiabilityModuloTheoriesQueryVerdictEntry {
+  #query;
+  #verdict;
+  constructor(query, verdict) {
+    this.#query = query;
+    this.#verdict = verdict;
+  }
+  static of(query, verdict) {
+    return new SatisfiabilityModuloTheoriesQueryVerdictEntry(query, verdict);
+  }
+  query() {
+    return this.#query;
+  }
+  verdict() {
+    return this.#verdict;
+  }
+  equals(other) {
+    return this.#query.equals(other.#query) && this.#verdict.equals(other.#verdict);
+  }
 }
 // src/requirements/domain/satisfiability-modulo-theories-query-verdicts.ts
-class SatisfiabilityModuloTheoriesQueryVerdicts {
+class SatisfiabilityModuloTheoriesQueryVerdicts extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = values;
+    super();
+    const snapshot = boundedCollectionSnapshot(values, 65536, "too-many-satisfiability-query-verdicts");
+    this.#values = KeyedIndex.of(snapshot.map((entry) => [entry.query(), entry]));
+  }
+  rebuild(values) {
+    return new SatisfiabilityModuloTheoriesQueryVerdicts(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values.values();
+  }
+  toArray() {
+    return [...this];
+  }
+  static parse(values) {
+    return parseConstruction(() => new SatisfiabilityModuloTheoriesQueryVerdicts(values));
   }
   static of(values) {
     return new SatisfiabilityModuloTheoriesQueryVerdicts(values);
   }
   verdictOf(queryId) {
-    return this.#values.get(queryId) ?? SatisfiabilityModuloTheoriesQueryVerdict.missing();
-  }
-  isEmpty() {
-    return this.#values.isEmpty();
+    return this.#values.get(queryId)?.verdict() ?? SatisfiabilityModuloTheoriesQueryVerdict.missing();
   }
 }
 // src/requirements/domain/satisfiability-modulo-theories-probe.ts
@@ -4611,6 +5169,14 @@ class Scenario {
   id() {
     return this.#id;
   }
+  equals(other) {
+    const expressionEqual = (left, right) => left === undefined ? right === undefined : right !== undefined && ExpressionTree.of(left).isCanonicallyEqual(ExpressionTree.of(right));
+    const refs = this.#functionalRequirementReferences.toArray();
+    const otherRefs = other.#functionalRequirementReferences.toArray();
+    const bindings = [...this.#bindings];
+    const otherBindings = [...other.#bindings];
+    return this.#id.equals(other.#id) && this.#expectation.asString() === other.#expectation.asString() && refs.length === otherRefs.length && refs.every((ref, index) => ref.equals(otherRefs[index])) && bindings.length === otherBindings.length && bindings.every((binding, index) => binding.equals(otherBindings[index])) && (this.#eventTrigger === undefined ? other.#eventTrigger === undefined : other.#eventTrigger !== undefined && this.#eventTrigger.equals(other.#eventTrigger)) && expressionEqual(this.#expect, other.#expect);
+  }
   kind() {
     return this.#expectation.asString();
   }
@@ -4735,10 +5301,17 @@ class ScenarioIdentifier {
   }
 }
 // src/requirements/domain/scenarios.ts
-class Scenarios {
+class Scenarios extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-scenarios");
+  }
+  rebuild(values) {
+    return new Scenarios(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new Scenarios(values));
   }
   static of(values) {
     return new Scenarios(values);
@@ -4758,15 +5331,19 @@ class Scenarios {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/requirements/domain/trace-states.ts
-class TraceStates {
+class TraceStates extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-trace-states");
+  }
+  rebuild(values) {
+    return new TraceStates(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new TraceStates(values));
   }
   static of(values) {
     return new TraceStates(values);
@@ -4782,9 +5359,6 @@ class TraceStates {
   }
   toArray() {
     return [...this.#values];
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/verification-report-identifier.ts
@@ -4813,10 +5387,17 @@ class VerificationReportIdentifier {
 }
 
 // src/requirements/domain/verification-reports.ts
-class VerificationReports {
+class VerificationReports extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-verification-reports");
+  }
+  rebuild(values) {
+    return new VerificationReports(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new VerificationReports(values));
   }
   static of(values) {
     return new VerificationReports(values);
@@ -4868,9 +5449,6 @@ class VerificationReports {
       crossChecked: CrossCheckedEntries.of(crossChecked)
     });
     return failure === null ? report : report.degraded(`scenario cross-check could not be constructed: ${failure.kind}`);
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 
@@ -4994,9 +5572,12 @@ function buildView(ir) {
         max: typeof t.max === "number" ? DeclaredBound.of(t.max) : undefined
       }));
     }
+    const parsedAttributes = IntermediateRepresentationAttributeDeclarations.parse(attributes);
+    if (!parsedAttributes.ok)
+      return err(JSON.stringify(parsedAttributes.error));
     entities.push(IntermediateRepresentationEntityDeclaration.of({
       name: name.value,
-      attributes: IntermediateRepresentationAttributeDeclarations.of(attributes)
+      attributes: parsedAttributes.value
     }));
   }
   const obligations = [];
@@ -5057,11 +5638,19 @@ function buildView(ir) {
       return err(JSON.stringify(constructed.error));
     background.push(constructed.value);
   }
+  const collections = combineResults({
+    entities: IntermediateRepresentationEntityDeclarations.parse(entities),
+    obligations: IntermediateRepresentationObligationDeclarations.parse(obligations),
+    scenarios: IntermediateRepresentationScenarioDeclarations.parse(scenarios),
+    background: IntermediateRepresentationBackgroundDeclarations.parse(background)
+  });
+  if (!collections.ok)
+    return err(JSON.stringify(collections.error));
   return ok(IntermediateRepresentationModelDeclaration.of({
-    entities: IntermediateRepresentationEntityDeclarations.of(entities),
-    obligations: IntermediateRepresentationObligationDeclarations.of(obligations),
-    scenarios: IntermediateRepresentationScenarioDeclarations.of(scenarios),
-    background: IntermediateRepresentationBackgroundDeclarations.of(background)
+    entities: collections.value.entities,
+    obligations: collections.value.obligations,
+    scenarios: collections.value.scenarios,
+    background: collections.value.background
   }));
 }
 function collectFunctionalRequirementReferenceClaims(ir) {
@@ -5145,12 +5734,15 @@ class IntermediateRepresentationValidationMaterialsRepositoryImplementation {
     const claims = collectFunctionalRequirementReferenceClaims(ir);
     if (!claims.ok)
       return corrupt(claims.error);
+    const claimsCollection = FunctionalRequirementReferenceClaims.parse(claims.value);
+    if (!claimsCollection.ok)
+      return corrupt(JSON.stringify(claimsCollection.error));
     return ok(IntermediateRepresentationValidationMaterials.of({
       id,
       irVersion: parsed.value.irVersion,
       schemaErrors: messages.value,
       view: view.value,
-      functionalRequirementReferenceClaims: FunctionalRequirementReferenceClaims.of(claims.value),
+      functionalRequirementReferenceClaims: claimsCollection.value,
       declaredDigest: parsed.value.declaredDigest,
       sourceId: RequirementsSourceIdentifier.of(recordRoot),
       sourceDocument: new Uint8Array(bytes)
@@ -5206,7 +5798,7 @@ function decodeItfTrace(itfText, varToPath) {
       const value = TraceValue.parse(decodeItfValue(state[key] ?? null));
       if (!value.ok)
         return err(JSON.stringify(value.error));
-      entries.push([attributePath.value, value.value]);
+      entries.push(TraceStateEntry.of(attributePath.value, value.value));
     }
     trace.push(TraceState.of(entries));
   }
@@ -5792,10 +6384,13 @@ class RequirementsSourceRepositoryImplementation {
         cause: e instanceof Error ? e.message : String(e)
       });
     }
+    const knownIds = parseRequirementIdentifiers(bytes.toString("utf-8"));
+    if (!knownIds.ok)
+      return err({ kind: "corrupt", path: search.path, cause: JSON.stringify(knownIds.error) });
     return ok(RequirementsSource.of({
       id,
       sourcePath: ArtifactPath.of(search.path),
-      knownIds: RequirementIdentifiers.extractFrom(bytes.toString("utf-8")),
+      knownIds: knownIds.value,
       digest: ContentHash.ofBytes(bytes),
       sourceDocument: new Uint8Array(bytes)
     }));
@@ -6287,14 +6882,21 @@ function parseSiblingReportDocument(directory, fileName, raw) {
   });
   if (!comparisons.ok)
     return comparisons;
+  const collections = combineResults({
+    findings: VerificationFindings.parse(findings),
+    skipped: VerificationSkips.parse(doc.skipped.map((entry) => VerificationSkipped.of(entry))),
+    crossChecked: comparisons.value === null ? ok(null) : CrossCheckedEntries.parse(comparisons.value)
+  });
+  if (!collections.ok)
+    return err(JSON.stringify(collections.error));
   return ok(VerificationReport.of({
     id: VerificationReportIdentifier.of(directory, doc.backend.asString()),
     irVersion: doc.irVersion,
     irHash: doc.irHash,
     method: doc.method,
-    findings: VerificationFindings.of(findings),
-    skipped: VerificationSkips.of(doc.skipped.map((entry) => VerificationSkipped.of(entry))),
-    crossChecked: comparisons.value === null ? null : CrossCheckedEntries.of(comparisons.value),
+    findings: collections.value.findings,
+    skipped: collections.value.skipped,
+    crossChecked: collections.value.crossChecked,
     unavailableReason: doc.unavailable?.reason ?? null
   }));
 }
@@ -6515,7 +7117,10 @@ class Z3SolverClientImplementation {
     }
     return SatisfiabilityModuloTheoriesCheck.of({
       plan: plan.plan,
-      result: { kind: "solved", verdicts: SatisfiabilityModuloTheoriesQueryVerdicts.of(KeyedIndex.of(verdicts)) }
+      result: {
+        kind: "solved",
+        verdicts: SatisfiabilityModuloTheoriesQueryVerdicts.of(verdicts.map(([query, verdict]) => SatisfiabilityModuloTheoriesQueryVerdictEntry.of(query, verdict)))
+      }
     });
   }
   #runChild(queries) {

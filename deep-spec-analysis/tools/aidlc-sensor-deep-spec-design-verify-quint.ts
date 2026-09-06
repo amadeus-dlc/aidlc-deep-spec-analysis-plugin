@@ -13,6 +13,20 @@ class IllegalArgumentException extends Error {
   }
 }
 
+// src/kernel/infrastructure/bounded-collection-snapshot.ts
+function boundedCollectionSnapshot(values, maximum, problemKind) {
+  if (values.length > maximum)
+    throw new IllegalArgumentException({ kind: problemKind, raw: values.length });
+  const snapshot = [];
+  let inspected = 0;
+  for (const value of values) {
+    if (inspected >= maximum)
+      throw new IllegalArgumentException({ kind: problemKind, raw: inspected + 1 });
+    inspected++;
+    snapshot.push(value);
+  }
+  return Object.freeze(snapshot);
+}
 // src/kernel/infrastructure/bounded-value-snapshot.ts
 function boundedValueSnapshot(value, limits) {
   let nodes = 0;
@@ -65,6 +79,32 @@ function canonicalStringify(value) {
     return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(record[k] ?? null)}`).join(",")}}`;
   }
   return JSON.stringify(value) ?? "null";
+}
+function jsonEquals(left, right) {
+  if (Object.is(left, right))
+    return true;
+  if (left === null || right === null || typeof left !== typeof right)
+    return false;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length)
+      return false;
+    for (let index = 0;index < left.length; index++) {
+      if (!jsonEquals(left[index], right[index]))
+        return false;
+    }
+    return true;
+  }
+  if (typeof left !== "object" || typeof right !== "object")
+    return false;
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length)
+    return false;
+  for (const key of leftKeys) {
+    if (!Object.hasOwn(right, key) || !jsonEquals(left[key], right[key]))
+      return false;
+  }
+  return true;
 }
 // src/kernel/infrastructure/canonical-order.ts
 function numSegments(id) {
@@ -434,6 +474,9 @@ class BindingDeclaration {
   value() {
     return this.#value;
   }
+  equals(other) {
+    return this.#path.equals(other.#path) && this.#value.equals(other.#value);
+  }
 }
 // src/kernel/domain/binding-value.ts
 class BindingValue {
@@ -545,7 +588,7 @@ class Declaration {
     return cases.nonLiteral();
   }
   equals(other) {
-    return canonicalStringify(this.#value) === canonicalStringify(other.#value);
+    return jsonEquals(this.#value, other.#value);
   }
   describe() {
     return JSON.stringify(this.#value);
@@ -572,14 +615,184 @@ class DeclaredBindingValue {
   describe() {
     return this.#value.describe();
   }
+  equals(other) {
+    return this.#value.equals(other.#value);
+  }
 }
-// src/kernel/domain/declared-bindings.ts
-class DeclaredBindings {
+// src/kernel/domain/collection-operations.ts
+var MAX_COLLECTION_ELEMENTS = 65536;
+function invalidIndex(index) {
+  return new IllegalArgumentException({ kind: "invalid-collection-index", raw: index });
+}
+function checkReadBudget(operation, inspected) {
+  if (inspected >= MAX_COLLECTION_ELEMENTS)
+    throw new IllegalArgumentException({ kind: `${operation}-too-large`, raw: inspected + 1 });
+}
+function collectionAt(source, index) {
+  if (!Number.isSafeInteger(index) || index < 0 || index >= MAX_COLLECTION_ELEMENTS)
+    throw invalidIndex(index);
+  let position = 0;
+  for (const element of source) {
+    if (position === index)
+      return element;
+    position++;
+  }
+  throw invalidIndex(index);
+}
+function collectionHead(source) {
+  for (const element of source)
+    return element;
+  throw new IllegalArgumentException({ kind: "empty-collection-head" });
+}
+function collectionTail(source) {
+  const tail = [];
+  let inspected = 0;
+  let foundHead = false;
+  for (const element of source) {
+    checkReadBudget("collection-tail", inspected);
+    inspected++;
+    if (!foundHead) {
+      foundHead = true;
+      continue;
+    }
+    tail.push(element);
+  }
+  if (!foundHead)
+    throw new IllegalArgumentException({ kind: "empty-collection-tail" });
+  return tail;
+}
+function collectionInclude(source, target) {
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-include", inspected);
+    inspected++;
+    if (element.equals(target))
+      return true;
+  }
+  return false;
+}
+function collectionExists(source, predicate) {
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-exists", inspected);
+    inspected++;
+    if (predicate(element))
+      return true;
+  }
+  return false;
+}
+function collectionFilter(source, predicate) {
+  const values = [];
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-filter", inspected);
+    inspected++;
+    if (predicate(element))
+      values.push(element);
+  }
+  return values;
+}
+function collectionMap(source, transform) {
+  const values = [];
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-map", inspected);
+    inspected++;
+    values.push(transform(element));
+  }
+  return values;
+}
+
+// src/kernel/domain/immutable-first-class-collection.ts
+class ImmutableFirstClassCollection {
   #values;
   constructor(values) {
-    if (values.length > 1e4)
-      throw new IllegalArgumentException({ kind: "too-many-binding-declarations", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-immutable-collection-elements");
+  }
+  static of(values) {
+    return new ImmutableFirstClassCollection(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ImmutableFirstClassCollection(values));
+  }
+  [Symbol.iterator]() {
+    return this.#values[Symbol.iterator]();
+  }
+  at(index) {
+    return collectionAt(this, index);
+  }
+  head() {
+    return collectionHead(this);
+  }
+  tail() {
+    return ImmutableFirstClassCollection.of(collectionTail(this));
+  }
+  include(element) {
+    return collectionInclude(this, element);
+  }
+  exists(predicate) {
+    return collectionExists(this, predicate);
+  }
+  filter(predicate) {
+    return ImmutableFirstClassCollection.of(collectionFilter(this, predicate));
+  }
+  map(transform) {
+    return ImmutableFirstClassCollection.of(collectionMap(this, transform));
+  }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
+}
+
+// src/kernel/domain/non-empty-first-class-collection-base.ts
+class NonEmptyFirstClassCollectionBase {
+  constructor() {}
+  at(index) {
+    return collectionAt(this, index);
+  }
+  head() {
+    return collectionHead(this);
+  }
+  tail() {
+    return this.rebuild(collectionTail(this));
+  }
+  include(element) {
+    return collectionInclude(this, element);
+  }
+  exists(predicate) {
+    return collectionExists(this, predicate);
+  }
+  filter(predicate) {
+    return this.rebuild(collectionFilter(this, predicate));
+  }
+  map(transform) {
+    return ImmutableFirstClassCollection.of(collectionMap(this, transform));
+  }
+}
+
+// src/kernel/domain/first-class-collection-base.ts
+class FirstClassCollectionBase extends NonEmptyFirstClassCollectionBase {
+  constructor() {
+    super();
+  }
+  isEmpty() {
+    for (const _element of this)
+      return false;
+    return true;
+  }
+}
+
+// src/kernel/domain/declared-bindings.ts
+var MAX_DECLARED_BINDINGS = 1e4;
+
+class DeclaredBindings extends FirstClassCollectionBase {
+  #values;
+  constructor(values) {
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_DECLARED_BINDINGS, "too-many-binding-declarations");
+  }
+  rebuild(values) {
+    return new DeclaredBindings(values);
   }
   static parse(values) {
     return parseConstruction(() => new DeclaredBindings(values));
@@ -671,12 +884,16 @@ class EnumerationMember {
   }
 }
 // src/kernel/domain/enumeration-members.ts
-class EnumerationMembers {
+var MAX_ENUMERATION_MEMBERS = 1e4;
+
+class EnumerationMembers extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > 1e4)
-      throw new IllegalArgumentException({ kind: "too-many-enum-members", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_ENUMERATION_MEMBERS, "too-many-enum-members");
+  }
+  rebuild(values) {
+    return new EnumerationMembers(values);
   }
   static parse(values) {
     return parseConstruction(() => new EnumerationMembers(values));
@@ -732,16 +949,21 @@ class ErrorMessage {
   asString() {
     return this.#value;
   }
+  equals(other) {
+    return this.#value === other.#value;
+  }
 }
 // src/kernel/domain/error-messages.ts
 var MAX_MESSAGES = 65536;
 
-class ErrorMessages {
+class ErrorMessages extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > MAX_MESSAGES)
-      throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_MESSAGES, "too-many-error-messages");
+  }
+  rebuild(values) {
+    return new ErrorMessages(values);
   }
   static parse(values) {
     return parseConstruction(() => new ErrorMessages(values));
@@ -866,6 +1088,9 @@ class ExpressionTree {
   isCanonicallyEqual(other) {
     return canonicalStringify(this.#root) === canonicalStringify(other.#root);
   }
+  equals(other) {
+    return this.isCanonicallyEqual(other);
+  }
 }
 // src/kernel/domain/finding-kind.ts
 var KIND_RANK = {
@@ -946,12 +1171,104 @@ class FindingKind {
     return this.#value;
   }
 }
+// src/kernel/domain/target-identifier.ts
+var TARGET_ID_PATTERNS = [
+  /^(OB|SC)-[0-9]+$/,
+  /^BR[0-9]+\.[0-9]+$/,
+  /^(DOB|DSC|DBG|SM|TR)-[0-9]+$/,
+  /^(component|entity|attr|unit|contract|state|check):[A-Za-z0-9_./-]+$/
+];
+
+class TargetIdentifier {
+  #value;
+  constructor(raw) {
+    if (raw.length > 1024)
+      throw new IllegalArgumentException({ kind: "target-id-too-long", raw: raw.length });
+    if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
+      throw new IllegalArgumentException({ kind: "malformed-target-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new TargetIdentifier(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new TargetIdentifier(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  compareTo(other) {
+    return compareCanonically(this.#value, other.#value);
+  }
+  isRequirementObligation() {
+    return this.#value.startsWith("OB-");
+  }
+  asString() {
+    return this.#value;
+  }
+}
+
+// src/kernel/domain/target-identifiers.ts
+var MAX_TARGET_IDENTIFIERS = 65536;
+
+class TargetIdentifiers extends FirstClassCollectionBase {
+  #values;
+  constructor(values) {
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_TARGET_IDENTIFIERS, "too-many-target-identifiers");
+  }
+  rebuild(values) {
+    return new TargetIdentifiers(values);
+  }
+  static of(values) {
+    return new TargetIdentifiers(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new TargetIdentifiers(values));
+  }
+  static safe(prefix, raw) {
+    const token = raw.replace(/[^A-Za-z0-9_./-]/g, "-");
+    return `${prefix}:${token === "" ? "unknown" : token}`;
+  }
+  add(value) {
+    return new TargetIdentifiers([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  count() {
+    return this.#values.length;
+  }
+  excluding(value) {
+    return new TargetIdentifiers(this.#values.filter((v) => !v.equals(value)));
+  }
+  sortedCanonically() {
+    return new TargetIdentifiers([...this.#values].sort((a, b) => a.compareTo(b)));
+  }
+  sortedUniqueCanonically() {
+    return TargetIdentifiers.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetIdentifier.of(raw)));
+  }
+  joined(separator) {
+    return this.toStrings().join(separator);
+  }
+  toArray() {
+    return this.#values;
+  }
+  toStrings() {
+    return this.#values.map((v) => v.asString());
+  }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
+}
+
 // src/kernel/domain/finding-targets.ts
 var MAX_FINDING_TARGETS = 65536;
 
-class FindingTargets {
+class FindingTargets extends NonEmptyFirstClassCollectionBase {
   #values;
   constructor(head, tail) {
+    super();
     if (tail.length >= MAX_FINDING_TARGETS)
       throw new IllegalArgumentException({ kind: "too-many-finding-targets", raw: tail.length + 1 });
     const snapshot = [head];
@@ -961,6 +1278,9 @@ class FindingTargets {
       snapshot.push(value);
     }
     this.#values = Object.freeze(snapshot);
+  }
+  rebuild(values) {
+    return TargetIdentifiers.of(values);
   }
   static of(head, tail) {
     return new FindingTargets(head, tail);
@@ -973,9 +1293,6 @@ class FindingTargets {
   }
   count() {
     return this.#values.length;
-  }
-  includes(value) {
-    return this.#values.some((target) => target.equals(value));
   }
   sortedCanonically() {
     const [head, ...tail] = [...this.#values].sort((a, b) => a.compareTo(b));
@@ -1029,12 +1346,16 @@ class FindingsSchema {
   }
 }
 // src/kernel/domain/functional-requirement-references.ts
-class FunctionalRequirementReferences {
+var MAX_FUNCTIONAL_REQUIREMENT_REFERENCES = 1e4;
+
+class FunctionalRequirementReferences extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > 1e4)
-      throw new IllegalArgumentException({ kind: "too-many-functional-requirement-references", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_FUNCTIONAL_REQUIREMENT_REFERENCES, "too-many-functional-requirement-references");
+  }
+  rebuild(values) {
+    return new FunctionalRequirementReferences(values);
   }
   static parse(values) {
     return parseConstruction(() => new FunctionalRequirementReferences(values));
@@ -1281,23 +1602,28 @@ class RequirementIdentifier {
   }
 }
 // src/kernel/domain/requirement-identifiers.ts
-class RequirementIdentifiers {
+var MAX_REQUIREMENT_IDENTIFIERS = 65536;
+
+class RequirementIdentifiers extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = values;
+    super();
+    const snapshot = boundedCollectionSnapshot(values, MAX_REQUIREMENT_IDENTIFIERS, "too-many-requirement-identifiers");
+    this.#values = KeySet.of(snapshot);
   }
-  static extractFrom(text) {
-    const ids = [];
-    for (const m of text.matchAll(/\b(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*\b/g)) {
-      ids.push(RequirementIdentifier.of(m[0]));
-    }
-    return new RequirementIdentifiers(KeySet.of(ids));
+  rebuild(values) {
+    return new RequirementIdentifiers(values);
   }
   static of(values) {
-    return new RequirementIdentifiers(KeySet.of(values));
+    return new RequirementIdentifiers(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new RequirementIdentifiers(values));
   }
   add(value) {
-    return new RequirementIdentifiers(this.#values.with(value));
+    if (this.#values.has(value))
+      return this;
+    return new RequirementIdentifiers([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -1335,21 +1661,30 @@ class ScenarioBinding {
   isFor(path) {
     return this.#path.equals(path);
   }
+  equals(other) {
+    return this.#path.equals(other.#path) && this.#value.equals(other.#value);
+  }
 }
 // src/kernel/domain/scenario-bindings.ts
-class ScenarioBindings {
+class ScenarioBindings extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > 1e4)
-      throw new IllegalArgumentException({ kind: "too-many-scenario-bindings", raw: values.length });
+    super();
+    const snapshot = boundedCollectionSnapshot(values, 1e4, "too-many-scenario-bindings");
     const paths = new Set;
-    for (const binding of values) {
+    for (const binding of snapshot) {
       const path = binding.path().asString();
       if (paths.has(path))
         throw new IllegalArgumentException({ kind: "duplicate-scenario-binding", raw: path });
       paths.add(path);
     }
-    this.#values = Object.freeze([...values]);
+    this.#values = snapshot;
+  }
+  rebuild(values) {
+    return new ScenarioBindings(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
   }
   static parse(values) {
     return parseConstruction(() => new ScenarioBindings(values));
@@ -1488,6 +1823,9 @@ class ScenarioVerdict {
   agreesWith(other) {
     return this.#state === other.#state;
   }
+  equals(other) {
+    return this.#backend.equals(other.#backend) && this.#modelHash.equals(other.#modelHash) && this.#state === other.#state && this.#target.equals(other.#target) && (this.#unit === null ? other.#unit === null : other.#unit !== null && this.#unit.equals(other.#unit));
+  }
   verdictLabel() {
     if (this.#state !== "clean" && this.#state !== "violated")
       throw new Error("defect: an unverified scenario has no verdict label");
@@ -1495,23 +1833,23 @@ class ScenarioVerdict {
   }
 }
 // src/kernel/domain/scenario-verdicts.ts
-class ScenarioVerdicts {
+class ScenarioVerdicts extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > 128)
-      throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: values.length });
-    const snapshot = [];
-    for (const value of values) {
-      if (snapshot.length === 128)
-        throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: snapshot.length + 1 });
-      snapshot.push(value);
-    }
+    super();
+    const snapshot = boundedCollectionSnapshot(values, 128, "too-many-scenario-verdicts");
     const comparable = snapshot.filter((value) => value.isComparable());
     if (comparable.some((value) => !value.sameSubjectAs(comparable[0])))
       throw new IllegalArgumentException({ kind: "different-scenario-subjects" });
     if (KeySet.of(comparable.map((value) => value.backend())).size() !== comparable.length)
       throw new IllegalArgumentException({ kind: "duplicate-scenario-backend" });
     this.#values = [...comparable];
+  }
+  rebuild(values) {
+    return new ScenarioVerdicts(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
   }
   static of(values) {
     return new ScenarioVerdicts(values);
@@ -1592,89 +1930,6 @@ class SkipReason {
   }
   compareTo(other) {
     return this.#value < other.#value ? -1 : this.#value > other.#value ? 1 : 0;
-  }
-}
-// src/kernel/domain/target-identifier.ts
-var TARGET_ID_PATTERNS = [
-  /^(OB|SC)-[0-9]+$/,
-  /^BR[0-9]+\.[0-9]+$/,
-  /^(DOB|DSC|DBG|SM|TR)-[0-9]+$/,
-  /^(component|entity|attr|unit|contract|state|check):[A-Za-z0-9_./-]+$/
-];
-
-class TargetIdentifier {
-  #value;
-  constructor(raw) {
-    if (raw.length > 1024)
-      throw new IllegalArgumentException({ kind: "target-id-too-long", raw: raw.length });
-    if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
-      throw new IllegalArgumentException({ kind: "malformed-target-id", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new TargetIdentifier(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new TargetIdentifier(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  compareTo(other) {
-    return compareCanonically(this.#value, other.#value);
-  }
-  isRequirementObligation() {
-    return this.#value.startsWith("OB-");
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/kernel/domain/target-identifiers.ts
-class TargetIdentifiers {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new TargetIdentifiers(values);
-  }
-  static safe(prefix, raw) {
-    const token = raw.replace(/[^A-Za-z0-9_./-]/g, "-");
-    return `${prefix}:${token === "" ? "unknown" : token}`;
-  }
-  add(value) {
-    return new TargetIdentifiers([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  count() {
-    return this.#values.length;
-  }
-  includes(value) {
-    return this.#values.some((v) => v.equals(value));
-  }
-  excluding(value) {
-    return new TargetIdentifiers(this.#values.filter((v) => !v.equals(value)));
-  }
-  sortedCanonically() {
-    return new TargetIdentifiers([...this.#values].sort((a, b) => a.compareTo(b)));
-  }
-  sortedUniqueCanonically() {
-    return TargetIdentifiers.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetIdentifier.of(raw)));
-  }
-  joined(separator) {
-    return this.toStrings().join(separator);
-  }
-  toArray() {
-    return this.#values;
-  }
-  toStrings() {
-    return this.#values.map((v) => v.asString());
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/kernel/domain/trigger-name.ts
@@ -1784,6 +2039,10 @@ class BackgroundAssumption {
   id() {
     return this.#id;
   }
+  equals(other) {
+    const assertionsEqual = this.#assert === undefined ? other.#assert === undefined : other.#assert !== undefined && ExpressionTree.of(this.#assert).isCanonicallyEqual(ExpressionTree.of(other.#assert));
+    return this.#id.equals(other.#id) && assertionsEqual;
+  }
   assertion() {
     return this.#assert;
   }
@@ -1812,10 +2071,17 @@ class BackgroundAssumptionIdentifier {
   }
 }
 // src/requirements/domain/background-assumptions.ts
-class BackgroundAssumptions {
+class BackgroundAssumptions extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-background-assumptions");
+  }
+  rebuild(values) {
+    return new BackgroundAssumptions(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new BackgroundAssumptions(values));
   }
   static of(values) {
     return new BackgroundAssumptions(values);
@@ -1829,15 +2095,19 @@ class BackgroundAssumptions {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/requirements/domain/cross-checked-entries.ts
-class CrossCheckedEntries {
+class CrossCheckedEntries extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-cross-checked-entries");
+  }
+  rebuild(values) {
+    return new CrossCheckedEntries(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new CrossCheckedEntries(values));
   }
   static of(values) {
     return new CrossCheckedEntries(values);
@@ -1850,9 +2120,6 @@ class CrossCheckedEntries {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/cross-checked-entry.ts
@@ -1877,6 +2144,11 @@ class CrossCheckedEntry {
   }
   targets() {
     return this.#targets;
+  }
+  equals(other) {
+    const targets = this.#targets.toArray();
+    const otherTargets = other.#targets.toArray();
+    return this.#backend.equals(other.#backend) && targets.length === otherTargets.length && targets.every((target, index) => target.equals(otherTargets[index]));
   }
   compareByBackend(other) {
     const a = this.#backend.asString();
@@ -1914,6 +2186,11 @@ class FunctionalRequirementReferenceClaim {
   ownerDescription() {
     return this.#owner;
   }
+  equals(other) {
+    const refs = this.#functionalRequirementReferences.toArray();
+    const otherRefs = other.#functionalRequirementReferences.toArray();
+    return this.#owner === other.#owner && refs.length === otherRefs.length && refs.every((ref, index) => ref.equals(otherRefs[index]));
+  }
   claimInto(ownersByRef) {
     for (const ref of this.#functionalRequirementReferences) {
       const owners = ownersByRef.get(ref.asString()) ?? [];
@@ -1921,15 +2198,31 @@ class FunctionalRequirementReferenceClaim {
       ownersByRef.set(ref.asString(), owners);
     }
   }
+  claimIntoKeyed(ownersByRef) {
+    for (const ref of this.#functionalRequirementReferences) {
+      const existing = ownersByRef.get(ref.asString());
+      if (existing === undefined)
+        ownersByRef.set(ref.asString(), { key: ref, owners: [this] });
+      else
+        existing.owners.push(this);
+    }
+  }
 }
 // src/requirements/domain/functional-requirement-reference-claims.ts
-class FunctionalRequirementReferenceClaims {
+class FunctionalRequirementReferenceClaims extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-functional-requirement-reference-claims");
+  }
+  rebuild(values) {
+    return new FunctionalRequirementReferenceClaims(values);
   }
   static of(values) {
     return new FunctionalRequirementReferenceClaims(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new FunctionalRequirementReferenceClaims(values));
   }
   add(value) {
     return new FunctionalRequirementReferenceClaims([...this.#values, value]);
@@ -1943,21 +2236,33 @@ class FunctionalRequirementReferenceClaims {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/requirements/domain/functional-requirement-reference-index.ts
-class FunctionalRequirementReferenceIndex {
+class FunctionalRequirementReferenceIndex extends FirstClassCollectionBase {
+  #claims;
   #ownersByRef;
-  constructor(ownersByRef) {
-    this.#ownersByRef = ownersByRef;
+  constructor(claims) {
+    super();
+    this.#claims = boundedCollectionSnapshot(claims, 65536, "too-many-functional-requirement-reference-claims");
+    const ownersByRef = new Map;
+    for (const claim of this.#claims)
+      claim.claimIntoKeyed(ownersByRef);
+    this.#ownersByRef = KeyedIndex.of([...ownersByRef.values()].map(({ key, owners }) => [key, FunctionalRequirementReferenceClaims.of(owners)]));
   }
   static of(claims) {
-    const ownersByRef = new Map;
-    for (const claim of claims)
-      claim.claimInto(ownersByRef);
-    return new FunctionalRequirementReferenceIndex(KeyedIndex.of([...ownersByRef].map(([ref, owners]) => [RequirementIdentifier.of(ref), FunctionalRequirementReferenceClaims.of(owners)])));
+    return new FunctionalRequirementReferenceIndex(claims);
+  }
+  static parse(claims) {
+    return parseConstruction(() => new FunctionalRequirementReferenceIndex(claims));
+  }
+  rebuild(values) {
+    return new FunctionalRequirementReferenceIndex(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#claims;
+  }
+  toArray() {
+    return this.#claims;
   }
   referencedIds() {
     return [...this.#ownersByRef.keys()].map((ref) => ref.asString());
@@ -1965,35 +2270,75 @@ class FunctionalRequirementReferenceIndex {
   missingErrors(known) {
     const missing = [...this.#ownersByRef.keys()].filter((ref) => !known.has(ref)).map((ref) => ref.asString()).sort();
     return missing.map((id) => {
-      const owners = [...this.#ownersByRef.get(RequirementIdentifier.of(id))?.ownerDescriptions() ?? []].sort().join(", ");
+      const owners = [...[...this.#ownersByRef].find(([ref]) => ref.asString() === id)?.[1].ownerDescriptions() ?? []].sort().join(", ");
       return `frRef "${id}" (used by ${owners}) does not exist in requirements.md`;
     });
   }
-  isEmpty() {
-    return this.#ownersByRef.isEmpty();
+}
+// src/requirements/domain/intermediate-representation-attribute-entry.ts
+class IntermediateRepresentationAttributeEntry {
+  #owner;
+  #path;
+  #attribute;
+  constructor(owner, attribute) {
+    this.#owner = owner;
+    this.#path = AttributePath.of(`${owner.asString()}.${attribute.name().asString()}`);
+    this.#attribute = attribute;
+  }
+  static of(owner, attribute) {
+    return new IntermediateRepresentationAttributeEntry(owner, attribute);
+  }
+  static parse(owner, attribute) {
+    return parseConstruction(() => new IntermediateRepresentationAttributeEntry(owner, attribute));
+  }
+  path() {
+    return this.#path;
+  }
+  owner() {
+    return this.#owner;
+  }
+  attribute() {
+    return this.#attribute;
+  }
+  equals(other) {
+    return this.#owner.equals(other.#owner) && this.#path.equals(other.#path) && this.#attribute.equals(other.#attribute);
   }
 }
+
 // src/requirements/domain/intermediate-representation-attribute-catalog.ts
-class IntermediateRepresentationAttributeCatalog {
+class IntermediateRepresentationAttributeCatalog extends FirstClassCollectionBase {
+  #declarations;
+  #entries;
   #byPath;
-  constructor(declarations) {
-    let count = 0;
-    for (const entity of declarations) {
-      if (++count > 65536)
-        throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
-      entity.inspectAttributes(() => {
+  constructor(declarations, entries) {
+    super();
+    this.#declarations = declarations;
+    const derived = [];
+    if (entries === undefined) {
+      let count = 0;
+      for (const entity of declarations) {
         if (++count > 65536)
           throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
-      });
+        entity.inspectAttributes((_path, attribute) => {
+          if (++count > 65536)
+            throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
+          derived.push(IntermediateRepresentationAttributeEntry.of(entity.name(), attribute));
+        });
+      }
+      if (declarations.hasAmbiguousAttributes())
+        throw new IllegalArgumentException({ kind: "ambiguous-requirement-attributes" });
     }
-    if (declarations.hasAmbiguousAttributes())
-      throw new IllegalArgumentException({ kind: "ambiguous-requirement-attributes" });
-    const attributes = new Map;
-    for (const entity of declarations)
-      entity.inspectAttributes((path, attribute) => {
-        attributes.set(path, attribute);
-      });
-    this.#byPath = KeyedIndex.of([...attributes].map(([path, attribute]) => [AttributePath.of(path), attribute]));
+    this.#entries = boundedCollectionSnapshot(entries ?? derived, 65536, "attribute-catalog-too-large");
+    this.#byPath = KeyedIndex.of(this.#entries.map((entry) => [entry.path(), entry.attribute()]));
+  }
+  rebuild(values) {
+    return new IntermediateRepresentationAttributeCatalog(this.#declarations, values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#entries;
+  }
+  toArray() {
+    return this.#entries;
   }
   #attributeAt(path) {
     const parsed = AttributePath.parse(path);
@@ -2048,9 +2393,6 @@ class IntermediateRepresentationAttributeCatalog {
     }
     return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
-  isEmpty() {
-    return this.#byPath.isEmpty();
-  }
 }
 // src/requirements/domain/intermediate-representation-attribute-declaration.ts
 class IntermediateRepresentationAttributeDeclaration {
@@ -2087,12 +2429,25 @@ class IntermediateRepresentationAttributeDeclaration {
   kindLabel() {
     return this.#kind.asString();
   }
+  equals(other) {
+    const values = this.#values?.toArray();
+    const otherValues = other.#values?.toArray();
+    const valuesEqual = values === undefined ? otherValues === undefined : otherValues !== undefined && values.length === otherValues.length && values.every((value, index) => value.equals(otherValues[index]));
+    return this.#name.equals(other.#name) && this.#kind.equals(other.#kind) && valuesEqual && this.#min?.asNumber() === other.#min?.asNumber() && this.#max?.asNumber() === other.#max?.asNumber();
+  }
 }
 // src/requirements/domain/intermediate-representation-attribute-declarations.ts
-class IntermediateRepresentationAttributeDeclarations {
+class IntermediateRepresentationAttributeDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-intermediate-representation-attribute-declarations");
+  }
+  rebuild(values) {
+    return new IntermediateRepresentationAttributeDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new IntermediateRepresentationAttributeDeclarations(values));
   }
   static of(values) {
     return new IntermediateRepresentationAttributeDeclarations(values);
@@ -2105,9 +2460,6 @@ class IntermediateRepresentationAttributeDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-attribute-name.ts
@@ -2158,12 +2510,23 @@ class IntermediateRepresentationBackgroundDeclaration {
   id() {
     return this.#id;
   }
+  equals(other) {
+    const assertionsEqual = this.#assert === undefined ? other.#assert === undefined : other.#assert !== undefined && ExpressionTree.of(this.#assert).isCanonicallyEqual(ExpressionTree.of(other.#assert));
+    return this.#id.equals(other.#id) && assertionsEqual;
+  }
 }
 // src/requirements/domain/intermediate-representation-background-declarations.ts
-class IntermediateRepresentationBackgroundDeclarations {
+class IntermediateRepresentationBackgroundDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-intermediate-representation-background-declarations");
+  }
+  rebuild(values) {
+    return new IntermediateRepresentationBackgroundDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new IntermediateRepresentationBackgroundDeclarations(values));
   }
   static of(values) {
     return new IntermediateRepresentationBackgroundDeclarations(values);
@@ -2176,9 +2539,6 @@ class IntermediateRepresentationBackgroundDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-entity-declaration.ts
@@ -2195,6 +2555,11 @@ class IntermediateRepresentationEntityDeclaration {
   name() {
     return this.#name;
   }
+  equals(other) {
+    const attributes = this.#attributes.toArray();
+    const otherAttributes = other.#attributes.toArray();
+    return this.#name.equals(other.#name) && attributes.length === otherAttributes.length && attributes.every((attribute, index) => attribute.equals(otherAttributes[index]));
+  }
   attributes() {
     return this.#attributes;
   }
@@ -2208,10 +2573,17 @@ class IntermediateRepresentationEntityDeclaration {
   }
 }
 // src/requirements/domain/intermediate-representation-entity-declarations.ts
-class IntermediateRepresentationEntityDeclarations {
+class IntermediateRepresentationEntityDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-intermediate-representation-entity-declarations");
+  }
+  rebuild(values) {
+    return new IntermediateRepresentationEntityDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new IntermediateRepresentationEntityDeclarations(values));
   }
   static of(values) {
     return new IntermediateRepresentationEntityDeclarations(values);
@@ -2257,9 +2629,6 @@ class IntermediateRepresentationEntityDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-entity-name.ts
@@ -2373,6 +2742,10 @@ class IntermediateRepresentationObligationDeclaration {
   id() {
     return this.#id;
   }
+  equals(other) {
+    const expressionEqual = (left, right) => left === undefined ? right === undefined : right !== undefined && ExpressionTree.of(left).isCanonicallyEqual(ExpressionTree.of(right));
+    return this.#id.equals(other.#id) && expressionEqual(this.#assert, other.#assert) && expressionEqual(this.#guard, other.#guard) && expressionEqual(this.#effect, other.#effect) && (this.#temporal === undefined ? other.#temporal === undefined : other.#temporal !== undefined && this.#temporal.equals(other.#temporal));
+  }
   #inspectExpressions(visitor) {
     if (this.#assert !== undefined)
       visitor(this.#assert, false);
@@ -2384,10 +2757,17 @@ class IntermediateRepresentationObligationDeclaration {
   }
 }
 // src/requirements/domain/intermediate-representation-obligation-declarations.ts
-class IntermediateRepresentationObligationDeclarations {
+class IntermediateRepresentationObligationDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-intermediate-representation-obligation-declarations");
+  }
+  rebuild(values) {
+    return new IntermediateRepresentationObligationDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new IntermediateRepresentationObligationDeclarations(values));
   }
   static of(values) {
     return new IntermediateRepresentationObligationDeclarations(values);
@@ -2400,9 +2780,6 @@ class IntermediateRepresentationObligationDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-scenario-declaration.ts
@@ -2436,15 +2813,32 @@ class IntermediateRepresentationScenarioDeclaration {
   id() {
     return this.#id;
   }
+  equals(other) {
+    const expressionEqual = this.#expect === undefined ? other.#expect === undefined : other.#expect !== undefined && ExpressionTree.of(this.#expect).isCanonicallyEqual(ExpressionTree.of(other.#expect));
+    const bindings = this.#bindings.toArray();
+    const otherBindings = other.#bindings.toArray();
+    const bindingsEqual = bindings.length === otherBindings.length && bindings.every((binding, index) => {
+      const otherBinding = otherBindings[index];
+      return otherBinding !== undefined && binding.path().equals(otherBinding.path()) && binding.value().describe() === otherBinding.value().describe();
+    });
+    return this.#id.equals(other.#id) && this.#hasEvent === other.#hasEvent && bindingsEqual && expressionEqual;
+  }
 }
 // src/requirements/domain/intermediate-representation-scenario-declarations.ts
-class IntermediateRepresentationScenarioDeclarations {
+class IntermediateRepresentationScenarioDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-intermediate-representation-scenario-declarations");
+  }
+  rebuild(values) {
+    return new IntermediateRepresentationScenarioDeclarations(values);
   }
   static of(values) {
     return new IntermediateRepresentationScenarioDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new IntermediateRepresentationScenarioDeclarations(values));
   }
   add(value) {
     return new IntermediateRepresentationScenarioDeclarations([...this.#values, value]);
@@ -2454,9 +2848,6 @@ class IntermediateRepresentationScenarioDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-temporal-declaration.ts
@@ -2474,6 +2865,10 @@ class IntermediateRepresentationTemporalDeclaration {
   }
   static of(props) {
     return new IntermediateRepresentationTemporalDeclaration(props);
+  }
+  equals(other) {
+    const expressionEqual = (left, right) => left === undefined ? right === undefined : right !== undefined && ExpressionTree.of(left).isCanonicallyEqual(ExpressionTree.of(right));
+    return expressionEqual(this.#assert, other.#assert) && expressionEqual(this.#from, other.#from) && expressionEqual(this.#to, other.#to);
   }
   inspectExpressions(visitor) {
     if (this.#assert !== undefined)
@@ -2545,10 +2940,17 @@ function sortVerificationFindings(findings) {
   return [...findings].sort((a, b) => a.compareTo(b));
 }
 
-class VerificationFindings {
+class VerificationFindings extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-verification-findings");
+  }
+  rebuild(values) {
+    return new VerificationFindings(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new VerificationFindings(values));
   }
   static of(values) {
     return new VerificationFindings(values);
@@ -2564,9 +2966,6 @@ class VerificationFindings {
   }
   count() {
     return this.#values.length;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
   distinctConflicts() {
     const seen = new Set;
@@ -2607,6 +3006,9 @@ class VerificationSkipped {
   detail() {
     return this.#detail;
   }
+  equals(other) {
+    return this.#target.equals(other.#target) && this.#reason.asString() === other.#reason.asString() && this.#detail === other.#detail;
+  }
   isFor(target) {
     return this.#target.equals(target);
   }
@@ -2623,10 +3025,17 @@ function sortVerificationSkipped(skipped) {
   return [...skipped].sort((a, b) => a.compareTo(b));
 }
 
-class VerificationSkips {
+class VerificationSkips extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-verification-skips");
+  }
+  rebuild(values) {
+    return new VerificationSkips(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new VerificationSkips(values));
   }
   static of(values) {
     return new VerificationSkips(values);
@@ -2648,9 +3057,6 @@ class VerificationSkips {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 
@@ -2822,6 +3228,11 @@ class VerificationReport {
   crossChecked() {
     return this.#crossChecked;
   }
+  equals(other) {
+    const sameValues = (left, right) => left.length === right.length && left.every((value, index) => value.equals(right[index]));
+    const crossCheckedEqual = this.#crossChecked === null ? other.#crossChecked === null : other.#crossChecked !== null && sameValues(this.#crossChecked.toArray(), other.#crossChecked.toArray());
+    return this.#id.equals(other.#id) && this.#irVersion.equals(other.#irVersion) && this.#irHash.equals(other.#irHash) && this.#method.equals(other.#method) && sameValues(this.#findings.toArray(), other.#findings.toArray()) && sameValues(this.#skipped.toArray(), other.#skipped.toArray()) && crossCheckedEqual && this.#unavailableReason === other.#unavailableReason;
+  }
   unavailableReason() {
     return this.#unavailableReason;
   }
@@ -2970,12 +3381,16 @@ class VerificationFinding {
   detail() {
     return this.#detail;
   }
+  equals(other) {
+    const sameValues = (left, right) => left.length === right.length && left.every((value, index) => value.equals(right[index]));
+    return this.#kind.equals(other.#kind) && sameValues(this.#functionalRequirementReferences.toArray(), other.#functionalRequirementReferences.toArray()) && sameValues(this.#targets.toArray(), other.#targets.toArray()) && this.#witness.equals(other.#witness) && this.#detail === other.#detail;
+  }
   isKind(kind) {
     const parsed = FindingKind.parse(kind);
     return parsed.ok && this.#kind.equals(parsed.value);
   }
   implicates(target) {
-    return this.#targets.includes(target);
+    return this.#targets.include(target);
   }
   compareTo(other) {
     const kr = this.#kind.compareTo(other.#kind);
@@ -3057,6 +3472,17 @@ class Obligation {
   }
   id() {
     return this.#id;
+  }
+  equals(other) {
+    const expressionEqual = (left, right) => left === undefined ? right === undefined : right !== undefined && ExpressionTree.of(left).isCanonicallyEqual(ExpressionTree.of(right));
+    const refs = this.#functionalRequirementReferences.toArray();
+    const otherRefs = other.#functionalRequirementReferences.toArray();
+    const temporalEqual = (left, right) => {
+      if (left === undefined || right === undefined)
+        return left === right;
+      return left.pattern === right.pattern && expressionEqual(left.assert, right.assert) && expressionEqual(left.from, right.from) && expressionEqual(left.to, right.to);
+    };
+    return this.#id.equals(other.#id) && this.#nature.equals(other.#nature) && refs.length === otherRefs.length && refs.every((ref, index) => ref.equals(otherRefs[index])) && this.#ears === other.#ears && expressionEqual(this.#assert, other.#assert) && (this.#trigger === undefined ? other.#trigger === undefined : other.#trigger !== undefined && this.#trigger.equals(other.#trigger)) && expressionEqual(this.#guard, other.#guard) && expressionEqual(this.#effect, other.#effect) && temporalEqual(this.#temporal, other.#temporal);
   }
   nature() {
     return this.#nature;
@@ -3144,10 +3570,17 @@ class ObligationIdentifier {
   }
 }
 // src/requirements/domain/obligation-identifiers.ts
-class ObligationIdentifiers {
+class ObligationIdentifiers extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-obligation-identifiers");
+  }
+  rebuild(values) {
+    return new ObligationIdentifiers(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ObligationIdentifiers(values));
   }
   static of(values) {
     return new ObligationIdentifiers(values);
@@ -3158,9 +3591,6 @@ class ObligationIdentifiers {
   *[Symbol.iterator]() {
     yield* this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
   toStrings() {
     return this.#values.map((v) => v.asString());
   }
@@ -3169,10 +3599,17 @@ class ObligationIdentifiers {
   }
 }
 // src/requirements/domain/obligations.ts
-class Obligations {
+class Obligations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-obligations");
+  }
+  rebuild(values) {
+    return new Obligations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new Obligations(values));
   }
   static of(values) {
     return new Obligations(values);
@@ -3194,9 +3631,6 @@ class Obligations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/quint-check-result.ts
@@ -3329,15 +3763,25 @@ class QuintMachineComponent {
   id() {
     return this.#id;
   }
+  equals(other) {
+    return this.#id.equals(other.#id) && ExpressionTree.of(this.#expression).isCanonicallyEqual(ExpressionTree.of(other.#expression));
+  }
   isViolatedIn(state) {
     return !evaluate(this.#expression, state).isTrue();
   }
 }
 // src/requirements/domain/quint-machine-components.ts
-class QuintMachineComponents {
+class QuintMachineComponents extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-quint-machine-components");
+  }
+  rebuild(values) {
+    return new QuintMachineComponents(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new QuintMachineComponents(values));
   }
   static of(values) {
     return new QuintMachineComponents(values);
@@ -3347,9 +3791,6 @@ class QuintMachineComponents {
   }
   *[Symbol.iterator]() {
     yield* this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
   ids() {
     return ObligationIdentifiers.of(this.#values.map((c) => c.id()));
@@ -3415,20 +3856,58 @@ class QuintMachinePlan {
     return ok({ findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) });
   }
 }
+// src/requirements/domain/trace-state-entry.ts
+class TraceStateEntry {
+  #path;
+  #value;
+  constructor(path, value) {
+    this.#path = path;
+    this.#value = value;
+  }
+  static of(path, value) {
+    return new TraceStateEntry(path, value);
+  }
+  path() {
+    return this.#path;
+  }
+  value() {
+    return this.#value;
+  }
+  equals(other) {
+    return this.#path.equals(other.#path) && this.#value.equals(other.#value);
+  }
+}
+
 // src/requirements/domain/trace-state.ts
-class TraceState {
+class TraceState extends FirstClassCollectionBase {
   #values;
-  constructor(values) {
-    this.#values = values;
+  #entries;
+  constructor(entries) {
+    super();
+    const snapshot = boundedCollectionSnapshot(entries, 65536, "too-many-trace-state-entries");
+    const byPath = new Map;
+    for (const entry of snapshot)
+      byPath.set(entry.path().asString(), entry);
+    this.#entries = Object.freeze([...byPath.values()]);
+    this.#values = KeyedIndex.of(this.#entries.map((entry) => [entry.path(), entry.value()]));
+  }
+  rebuild(values) {
+    return TraceState.of(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#entries;
   }
   static empty() {
-    return new TraceState(KeyedIndex.empty());
+    return new TraceState([]);
   }
   static fromBindings(bindings) {
-    return TraceState.of(bindings.entriesCanonically().map((binding) => [binding.path(), TraceValue.of(binding.value().toDocument())]));
+    return TraceState.of(bindings.entriesCanonically().map((binding) => TraceStateEntry.of(binding.path(), TraceValue.of(binding.value().toDocument()))));
+  }
+  static parse(entries) {
+    return parseConstruction(() => new TraceState(entries));
   }
   static of(entries) {
-    return new TraceState(KeyedIndex.of(entries));
+    return new TraceState(entries);
   }
   valueAt(path) {
     return this.#values.get(path) ?? TraceValue.absent();
@@ -3439,8 +3918,13 @@ class TraceState {
       out[path.asString()] = value.toDocument();
     return out;
   }
-  isEmpty() {
-    return this.#values.isEmpty();
+  equals(other) {
+    const entries = this.toArray();
+    const otherEntries = other.toArray();
+    return entries.length === otherEntries.length && entries.every((entry, index) => entry.equals(otherEntries[index]));
+  }
+  toArray() {
+    return [...this];
   }
 }
 
@@ -3470,6 +3954,9 @@ class VerificationWitness {
   }
   toDocument() {
     return structuredClone(this.#document);
+  }
+  equals(other) {
+    return canonicalStringify(this.#document) === canonicalStringify(other.#document);
   }
 }
 
@@ -3739,6 +4226,13 @@ class RequirementAttributeDeclaration {
   maxBound() {
     return this.#max;
   }
+  equals(other) {
+    const values = this.#values?.toArray();
+    const otherValues = other.#values?.toArray();
+    const valuesEqual = values === undefined ? otherValues === undefined : otherValues !== undefined && values.length === otherValues.length && values.every((value, index) => value.equals(otherValues[index]));
+    const boundsEqual = (left, right) => left === undefined ? right === undefined : right !== undefined && left.equals(right);
+    return this.#path.equals(other.#path) && this.#kind === other.#kind && boundsEqual(this.#min, other.#min) && boundsEqual(this.#max, other.#max) && valuesEqual;
+  }
   match(handlers) {
     if (this.#kind === "bool")
       return handlers.bool();
@@ -3748,12 +4242,19 @@ class RequirementAttributeDeclaration {
   }
 }
 // src/requirements/domain/requirement-attribute-declarations.ts
-class RequirementAttributeDeclarations {
+class RequirementAttributeDeclarations extends FirstClassCollectionBase {
   #values;
   #byPath;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-requirement-attribute-declarations");
     this.#byPath = KeyedIndex.of(values.map((a) => [a.path(), a]));
+  }
+  rebuild(values) {
+    return new RequirementAttributeDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new RequirementAttributeDeclarations(values));
   }
   static of(values) {
     return new RequirementAttributeDeclarations(values);
@@ -3772,9 +4273,6 @@ class RequirementAttributeDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/requirements-model.ts
@@ -3976,6 +4474,9 @@ class SatisfiabilityModuloTheoriesEventPairProbe {
   targets() {
     return TargetIdentifiers.of([this.#a.asTargetId(), this.#b.asTargetId()]);
   }
+  equals(other) {
+    return this.#qOverlap.equals(other.#qOverlap) && this.#qJoint.equals(other.#qJoint) && this.#a.equals(other.#a) && this.#b.equals(other.#b) && this.#trigger.equals(other.#trigger);
+  }
   #overlapVerdictIn(results) {
     return results.verdictOf(this.#qOverlap);
   }
@@ -3984,10 +4485,17 @@ class SatisfiabilityModuloTheoriesEventPairProbe {
   }
 }
 // src/requirements/domain/satisfiability-modulo-theories-event-pair-probes.ts
-class SatisfiabilityModuloTheoriesEventPairProbes {
+class SatisfiabilityModuloTheoriesEventPairProbes extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-satisfiability-event-pair-probes");
+  }
+  rebuild(values) {
+    return new SatisfiabilityModuloTheoriesEventPairProbes(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new SatisfiabilityModuloTheoriesEventPairProbes(values));
   }
   static of(values) {
     return new SatisfiabilityModuloTheoriesEventPairProbes(values);
@@ -4000,9 +4508,6 @@ class SatisfiabilityModuloTheoriesEventPairProbes {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/satisfiability-modulo-theories-query-verdict.ts
@@ -4052,21 +4557,63 @@ class SatisfiabilityModuloTheoriesQueryVerdict {
   witnessModel() {
     return { ...this.#decodedModel ?? {} };
   }
+  equals(other) {
+    const leftModel = this.#decodedModel ?? {};
+    const rightModel = other.#decodedModel ?? {};
+    const leftKeys = Object.keys(leftModel).sort();
+    const rightKeys = Object.keys(rightModel).sort();
+    const modelsEqual = leftKeys.length === rightKeys.length && leftKeys.every((key, index) => key === rightKeys[index] && leftModel[key] === rightModel[key]);
+    const leftCore = this.#core ?? [];
+    const rightCore = other.#core ?? [];
+    return this.#status === other.#status && modelsEqual && leftCore.length === rightCore.length && leftCore.every((label, index) => label.equals(rightCore[index]));
+  }
+}
+// src/requirements/domain/satisfiability-modulo-theories-query-verdict-entry.ts
+class SatisfiabilityModuloTheoriesQueryVerdictEntry {
+  #query;
+  #verdict;
+  constructor(query, verdict) {
+    this.#query = query;
+    this.#verdict = verdict;
+  }
+  static of(query, verdict) {
+    return new SatisfiabilityModuloTheoriesQueryVerdictEntry(query, verdict);
+  }
+  query() {
+    return this.#query;
+  }
+  verdict() {
+    return this.#verdict;
+  }
+  equals(other) {
+    return this.#query.equals(other.#query) && this.#verdict.equals(other.#verdict);
+  }
 }
 // src/requirements/domain/satisfiability-modulo-theories-query-verdicts.ts
-class SatisfiabilityModuloTheoriesQueryVerdicts {
+class SatisfiabilityModuloTheoriesQueryVerdicts extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = values;
+    super();
+    const snapshot = boundedCollectionSnapshot(values, 65536, "too-many-satisfiability-query-verdicts");
+    this.#values = KeyedIndex.of(snapshot.map((entry) => [entry.query(), entry]));
+  }
+  rebuild(values) {
+    return new SatisfiabilityModuloTheoriesQueryVerdicts(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values.values();
+  }
+  toArray() {
+    return [...this];
+  }
+  static parse(values) {
+    return parseConstruction(() => new SatisfiabilityModuloTheoriesQueryVerdicts(values));
   }
   static of(values) {
     return new SatisfiabilityModuloTheoriesQueryVerdicts(values);
   }
   verdictOf(queryId) {
-    return this.#values.get(queryId) ?? SatisfiabilityModuloTheoriesQueryVerdict.missing();
-  }
-  isEmpty() {
-    return this.#values.isEmpty();
+    return this.#values.get(queryId)?.verdict() ?? SatisfiabilityModuloTheoriesQueryVerdict.missing();
   }
 }
 // src/requirements/domain/satisfiability-modulo-theories-probe.ts
@@ -4247,6 +4794,14 @@ class Scenario {
   id() {
     return this.#id;
   }
+  equals(other) {
+    const expressionEqual = (left, right) => left === undefined ? right === undefined : right !== undefined && ExpressionTree.of(left).isCanonicallyEqual(ExpressionTree.of(right));
+    const refs = this.#functionalRequirementReferences.toArray();
+    const otherRefs = other.#functionalRequirementReferences.toArray();
+    const bindings = [...this.#bindings];
+    const otherBindings = [...other.#bindings];
+    return this.#id.equals(other.#id) && this.#expectation.asString() === other.#expectation.asString() && refs.length === otherRefs.length && refs.every((ref, index) => ref.equals(otherRefs[index])) && bindings.length === otherBindings.length && bindings.every((binding, index) => binding.equals(otherBindings[index])) && (this.#eventTrigger === undefined ? other.#eventTrigger === undefined : other.#eventTrigger !== undefined && this.#eventTrigger.equals(other.#eventTrigger)) && expressionEqual(this.#expect, other.#expect);
+  }
   kind() {
     return this.#expectation.asString();
   }
@@ -4371,10 +4926,17 @@ class ScenarioIdentifier {
   }
 }
 // src/requirements/domain/scenarios.ts
-class Scenarios {
+class Scenarios extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-scenarios");
+  }
+  rebuild(values) {
+    return new Scenarios(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new Scenarios(values));
   }
   static of(values) {
     return new Scenarios(values);
@@ -4394,15 +4956,19 @@ class Scenarios {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/requirements/domain/trace-states.ts
-class TraceStates {
+class TraceStates extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-trace-states");
+  }
+  rebuild(values) {
+    return new TraceStates(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new TraceStates(values));
   }
   static of(values) {
     return new TraceStates(values);
@@ -4418,9 +4984,6 @@ class TraceStates {
   }
   toArray() {
     return [...this.#values];
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/verification-report-identifier.ts
@@ -4449,10 +5012,17 @@ class VerificationReportIdentifier {
 }
 
 // src/requirements/domain/verification-reports.ts
-class VerificationReports {
+class VerificationReports extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-verification-reports");
+  }
+  rebuild(values) {
+    return new VerificationReports(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new VerificationReports(values));
   }
   static of(values) {
     return new VerificationReports(values);
@@ -4504,9 +5074,6 @@ class VerificationReports {
       crossChecked: CrossCheckedEntries.of(crossChecked)
     });
     return failure === null ? report : report.degraded(`scenario cross-check could not be constructed: ${failure.kind}`);
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 
@@ -4607,6 +5174,9 @@ class DesignSkipped {
   static of(props) {
     return new DesignSkipped(props);
   }
+  equals(other) {
+    return this.#target.equals(other.#target) && this.#reason.asString() === other.#reason.asString() && this.#unit.equals(other.#unit) && this.#detail === other.#detail;
+  }
   target() {
     return this.#target;
   }
@@ -4681,8 +5251,6 @@ class AttributeCoverage {
   #missing;
   constructor(props) {
     const required = [...props.required];
-    if (required.length > 65536)
-      throw new IllegalArgumentException({ kind: "attribute-coverage-too-large", raw: required.length });
     for (const path of required) {
       const occurrences = [props.mapped, props.waived, props.missing].filter((part) => part.has(path)).length;
       if (occurrences !== 1)
@@ -4724,6 +5292,27 @@ class AttributeCoverage {
     return this.#status(`binds unmapped attribute(s) ${names}`, `binds attribute(s) ${names} that are neither mapped nor in unmapped[]`);
   }
 }
+// src/design/domain/value-equality.ts
+function sameArray(left, right, equals) {
+  return left.length === right.length && left.every((value, index) => equals(value, right[index]));
+}
+function sameIterable(left, right, equals) {
+  return sameArray([...left], [...right], equals);
+}
+function sameOptional(left, right, equals) {
+  if (left === undefined || right === undefined)
+    return left === right;
+  return equals(left, right);
+}
+function sameExpression(left, right) {
+  return sameOptional(left, right, (a, b) => canonicalStringify(a) === canonicalStringify(b));
+}
+function sameRecord(left, right) {
+  const keys = Object.keys(left).sort();
+  const otherKeys = Object.keys(right).sort();
+  return sameArray(keys, otherKeys, (a, b) => a === b) && keys.every((key) => Object.is(left[key], right[key]));
+}
+
 // src/design/domain/refinement-map-defect.ts
 class RefinementMapDefect {
   #state;
@@ -4793,6 +5382,23 @@ class AttributeMapping {
   }
   static parse(req, value) {
     return parseConstruction(() => new AttributeMapping(req, value));
+  }
+  equals(other) {
+    const variant = this.#variant;
+    const otherVariant = other.#variant;
+    if (!this.#req.equals(other.#req) || variant.kind !== otherVariant.kind)
+      return false;
+    if (variant.kind === "unspecified")
+      return true;
+    if (variant.kind === "expression" && otherVariant.kind === "expression")
+      return sameExpression(variant.expr, otherVariant.expr);
+    if (variant.kind !== "enum-cases" || otherVariant.kind !== "enum-cases")
+      return false;
+    if (!variant.from.equals(otherVariant.from))
+      return false;
+    const left = Object.keys(variant.cases).sort();
+    const right = Object.keys(otherVariant.cases).sort();
+    return left.length === right.length && left.every((key, index) => key === right[index] && variant.cases[key] === otherVariant.cases[key]);
   }
   diagnostics(unit, attributes) {
     const messages = [];
@@ -4892,7 +5498,7 @@ class AttributeMapping {
     const variant = this.#variant;
     if (variant.kind !== "enum-cases")
       return [];
-    return EnumerationMembers.of(Object.values(variant.cases).filter((rv) => !(reqValues?.includes(rv) ?? false)).map((value) => EnumerationMember.of(value))).sortedUniqueCanonically().toArray().map((member) => member.asString());
+    return EnumerationMembers.of(Object.values(variant.cases).filter((rv) => !(reqValues?.exists((member) => member.matchesLiteral(rv)) ?? false)).map((value) => EnumerationMember.of(value))).sortedUniqueCanonically().toArray().map((member) => member.asString());
   }
   referencedPaths() {
     const variant = this.#variant;
@@ -4902,16 +5508,25 @@ class AttributeMapping {
   }
 }
 // src/design/domain/attribute-paths.ts
-class AttributePaths {
+class AttributePaths extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = values;
+    super();
+    this.#values = KeySet.of(boundedCollectionSnapshot(values, 65536, "too-many-attribute-paths"));
+  }
+  rebuild(values) {
+    return new AttributePaths(values);
   }
   static of(values) {
-    return new AttributePaths(KeySet.of(values));
+    return new AttributePaths(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new AttributePaths(values));
   }
   add(value) {
-    return new AttributePaths(this.#values.with(value));
+    if (this.#values.has(value))
+      return this;
+    return new AttributePaths([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -4921,9 +5536,6 @@ class AttributePaths {
   }
   toArray() {
     return [...this.#values];
-  }
-  isEmpty() {
-    return this.#values.isEmpty();
   }
 }
 
@@ -4943,13 +5555,20 @@ function sortDesignFindings(findings) {
   });
 }
 
-class DesignFindings {
+class DesignFindings extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-findings");
+  }
+  rebuild(values) {
+    return new DesignFindings(values);
   }
   static of(values) {
     return new DesignFindings(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignFindings(values));
   }
   add(value) {
     return new DesignFindings([...this.#values, value]);
@@ -4963,22 +5582,26 @@ class DesignFindings {
   count() {
     return this.#values.length;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
   toArray() {
     return this.#values;
   }
 }
 
 // src/design/domain/attribute-mappings.ts
-class AttributeMappings {
+class AttributeMappings extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-attribute-mappings");
+  }
+  rebuild(values) {
+    return new AttributeMappings(values);
   }
   static of(values) {
     return new AttributeMappings(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new AttributeMappings(values));
   }
   add(value) {
     return new AttributeMappings([...this.#values, value]);
@@ -5081,9 +5704,6 @@ class AttributeMappings {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/design/domain/business-rule-reference.ts
 class BusinessRuleReference {
@@ -5112,13 +5732,23 @@ class BusinessRuleReference {
   }
 }
 // src/design/domain/business-rule-reference-index.ts
-class BusinessRuleReferenceIndex {
+class BusinessRuleReferenceIndex extends FirstClassCollectionBase {
   #ids;
   constructor(ids) {
+    super();
     this.#ids = ids;
+  }
+  rebuild(values) {
+    return new BusinessRuleReferenceIndex(KeySet.of(values));
+  }
+  *[Symbol.iterator]() {
+    yield* this.#ids;
   }
   static of(ids) {
     return new BusinessRuleReferenceIndex(KeySet.of(ids));
+  }
+  static parse(ids) {
+    return parseConstruction(() => new BusinessRuleReferenceIndex(KeySet.of(ids)));
   }
   diagnostics(used, unformalized) {
     const errors = [];
@@ -5138,17 +5768,16 @@ class BusinessRuleReferenceIndex {
   sortedIds() {
     return this.#ids.toArray().map((id) => id.asString()).sort();
   }
-  isEmpty() {
-    return this.#ids.isEmpty();
-  }
 }
 // src/design/domain/business-rule-references.ts
-class BusinessRuleReferences {
+class BusinessRuleReferences extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > 1e4)
-      throw new IllegalArgumentException({ kind: "too-many-business-rule-references", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 1e4, "too-many-business-rule-references");
+  }
+  rebuild(values) {
+    return new BusinessRuleReferences(values);
   }
   static of(values) {
     return new BusinessRuleReferences(values);
@@ -5168,18 +5797,22 @@ class BusinessRuleReferences {
   toStrings() {
     return this.#values.map((v) => v.asString());
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/design/domain/checked-units.ts
-class CheckedUnits {
+class CheckedUnits extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-checked-units");
+  }
+  rebuild(values) {
+    return new CheckedUnits(values);
   }
   static of(values) {
     return new CheckedUnits(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new CheckedUnits(values));
   }
   add(value) {
     return new CheckedUnits([...this.#values, value]);
@@ -5189,9 +5822,6 @@ class CheckedUnits {
   }
   sortedUniqueCanonically() {
     return CheckedUnits.of(Array.from(TargetIdentifiers.of(Array.from(this.toStrings(), (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically().toStrings(), (raw) => UnitName.of(raw)));
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
   toArray() {
     return this.#values;
@@ -5211,6 +5841,9 @@ class DesignAssignment {
   static of(target, rightHandSide) {
     return new DesignAssignment(target, rightHandSide);
   }
+  equals(other) {
+    return this.#target.equals(other.#target) && this.#rightHandSide.equals(other.#rightHandSide);
+  }
   target() {
     return this.#target;
   }
@@ -5219,9 +5852,10 @@ class DesignAssignment {
   }
 }
 // src/design/domain/design-assignments.ts
-class DesignAssignments {
+class DesignAssignments extends FirstClassCollectionBase {
   #values;
   constructor(values) {
+    super();
     if (values.length > 1e4)
       throw new IllegalArgumentException({ kind: "expression-too-large" });
     let nodes = 0;
@@ -5235,6 +5869,12 @@ class DesignAssignments {
     }
     this.#values = KeyedIndex.of(entries);
   }
+  rebuild(values) {
+    return new DesignAssignments(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values.values();
+  }
   static parse(values) {
     return parseConstruction(() => new DesignAssignments(values));
   }
@@ -5244,15 +5884,170 @@ class DesignAssignments {
   rhsOf(path) {
     return this.#values.get(path)?.rightHandSide().asExpression();
   }
-  isEmpty() {
-    return this.#values.isEmpty();
+}
+// src/design/domain/design-attribute-catalog-entry.ts
+class DesignAttributeCatalogEntry {
+  #path;
+  #owner;
+  #attribute;
+  constructor(owner, attribute) {
+    this.#path = AttributePath.of(`${owner.asString()}.${attribute.name().asString()}`);
+    this.#owner = owner;
+    this.#attribute = attribute;
+  }
+  static of(owner, attribute) {
+    return new DesignAttributeCatalogEntry(owner, attribute);
+  }
+  static parse(owner, attribute) {
+    return parseConstruction(() => new DesignAttributeCatalogEntry(owner, attribute));
+  }
+  path() {
+    return this.#path;
+  }
+  owner() {
+    return this.#owner;
+  }
+  attribute() {
+    return this.#attribute;
+  }
+  equals(other) {
+    return this.#path.equals(other.#path) && this.#owner.equals(other.#owner) && this.#attribute.equals(other.#attribute);
   }
 }
+
+// src/design/domain/design-attribute-declarations.ts
+class DesignAttributeDeclarations extends FirstClassCollectionBase {
+  #values;
+  constructor(values) {
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-attribute-declarations");
+  }
+  rebuild(values) {
+    return new DesignAttributeDeclarations(values);
+  }
+  static of(values) {
+    return new DesignAttributeDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignAttributeDeclarations(values));
+  }
+  add(value) {
+    return new DesignAttributeDeclarations([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/design/domain/design-entity-declaration.ts
+class DesignEntityDeclaration {
+  #name;
+  #description;
+  #attributes;
+  constructor(props) {
+    this.#name = props.name;
+    this.#description = props.description;
+    this.#attributes = props.attributes;
+  }
+  static of(props) {
+    return new DesignEntityDeclaration(props);
+  }
+  equals(other) {
+    const left = [...this.#attributes];
+    const right = [...other.#attributes];
+    return this.#name.equals(other.#name) && this.#description === other.#description && left.length === right.length && left.every((attribute, index) => attribute.equals(right[index]));
+  }
+  name() {
+    return this.#name;
+  }
+  description() {
+    return this.#description;
+  }
+  attributes() {
+    return this.#attributes;
+  }
+  inspectAttributes(visitor) {
+    const seen = new Set;
+    for (const attribute of this.#attributes) {
+      const attributeName = attribute.name().asString();
+      visitor(`${this.#name.asString()}.${attributeName}`, attribute, seen.has(attributeName));
+      seen.add(attributeName);
+    }
+  }
+}
+
+// src/design/domain/design-entity-declarations.ts
+class DesignEntityDeclarations extends FirstClassCollectionBase {
+  #values;
+  constructor(values) {
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-entity-declarations");
+  }
+  rebuild(values) {
+    return new DesignEntityDeclarations(values);
+  }
+  static of(values) {
+    return new DesignEntityDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignEntityDeclarations(values));
+  }
+  add(value) {
+    return new DesignEntityDeclarations([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  #inspect(entityFound, attributeFound) {
+    const names = new Set;
+    for (const entity of this.#values) {
+      const name = entity.name().asString();
+      entityFound(entity, names.has(name));
+      names.add(name);
+      entity.inspectAttributes(attributeFound);
+    }
+  }
+  hasAmbiguousAttributes() {
+    let ambiguous = false;
+    this.#inspect((_entity, duplicate) => {
+      ambiguous ||= duplicate;
+    }, (_path, _attribute, duplicate) => {
+      ambiguous ||= duplicate;
+    });
+    return ambiguous;
+  }
+  diagnostics() {
+    const messages = [];
+    this.#inspect((entity, duplicate) => {
+      if (duplicate)
+        messages.push(`duplicate entity "${entity.name().asString()}"`);
+    }, (coordinate, attribute, duplicate) => {
+      if (duplicate)
+        messages.push(`duplicate attribute "${coordinate}"`);
+      if (attribute.lacksIntBounds())
+        messages.push(`${coordinate}: int attributes require min and max \u2014 the Quint backend needs bounded domains`);
+      if (attribute.boundsInverted())
+        messages.push(`${coordinate}: min > max`);
+      if (attribute.boundsOutsideSafeRange())
+        messages.push(`${coordinate}: bounds must be safe integers`);
+    });
+    return ErrorMessages.collect(messages.map(ErrorMessage.parse));
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
 // src/design/domain/design-attribute-catalog.ts
-class DesignAttributeCatalog {
+class DesignAttributeCatalog extends FirstClassCollectionBase {
   #declarations;
   #byPath;
+  #entries;
   constructor(declarations) {
+    super();
     let count = 0;
     for (const entity of declarations) {
       if (++count > 65536)
@@ -5265,12 +6060,32 @@ class DesignAttributeCatalog {
     if (declarations.hasAmbiguousAttributes())
       throw new IllegalArgumentException({ kind: "ambiguous-design-attributes" });
     const attributes = new Map;
+    const entries = [];
     for (const entity of declarations)
       entity.inspectAttributes((path, attribute) => {
         attributes.set(path, attribute);
+        entries.push(DesignAttributeCatalogEntry.of(entity.name(), attribute));
       });
     this.#declarations = declarations;
+    this.#entries = Object.freeze(entries);
     this.#byPath = KeyedIndex.of([...attributes].map(([path, attribute]) => [AttributePath.of(path), attribute]));
+  }
+  rebuild(values) {
+    const selectedByOwner = new Map;
+    for (const entry of values) {
+      const selected = selectedByOwner.get(entry.owner().asString()) ?? new Set;
+      selected.add(entry.attribute());
+      selectedByOwner.set(entry.owner().asString(), selected);
+    }
+    const declarations = [...this.#declarations].map((entity) => DesignEntityDeclaration.of({
+      name: entity.name(),
+      ...entity.description() !== undefined ? { description: entity.description() } : {},
+      attributes: DesignAttributeDeclarations.of([...entity.attributes()].filter((attribute) => selectedByOwner.get(entity.name().asString())?.has(attribute)))
+    }));
+    return new DesignAttributeCatalog(DesignEntityDeclarations.of(declarations));
+  }
+  *[Symbol.iterator]() {
+    yield* this.#entries;
   }
   #attributeAt(path) {
     const parsed = AttributePath.parse(path);
@@ -5344,9 +6159,6 @@ class DesignAttributeCatalog {
     }
     return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
-  isEmpty() {
-    return this.#byPath.isEmpty();
-  }
 }
 // src/design/domain/design-attribute-declaration.ts
 class DesignAttributeDeclaration {
@@ -5367,6 +6179,12 @@ class DesignAttributeDeclaration {
   static of(props) {
     return new DesignAttributeDeclaration(props);
   }
+  equals(other) {
+    const leftValues = this.#values?.toArray().map((value) => value.asString()) ?? null;
+    const rightValues = other.#values?.toArray().map((value) => value.asString()) ?? null;
+    const sameValues = leftValues === null || rightValues === null ? leftValues === rightValues : leftValues.length === rightValues.length && leftValues.every((value, index) => value === rightValues[index]);
+    return this.#name.equals(other.#name) && this.#kind.equals(other.#kind) && this.#description === other.#description && this.#min?.asNumber() === other.#min?.asNumber() && this.#max?.asNumber() === other.#max?.asNumber() && sameValues;
+  }
   name() {
     return this.#name;
   }
@@ -5383,7 +6201,7 @@ class DesignAttributeDeclaration {
     return this.#kind.isEnum();
   }
   admitsEnumLiteral(value) {
-    return this.#kind.isEnum() && (this.#values?.includes(value) ?? false);
+    return this.#kind.isEnum() && (this.#values?.exists((member) => member.matchesLiteral(value)) ?? false);
   }
   fitsBinding(value) {
     return value.fits(this.#kind, (literal) => this.admitsEnumLiteral(literal));
@@ -5402,28 +6220,6 @@ class DesignAttributeDeclaration {
   }
   maxBound() {
     return this.#max;
-  }
-}
-// src/design/domain/design-attribute-declarations.ts
-class DesignAttributeDeclarations {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new DesignAttributeDeclarations(values);
-  }
-  add(value) {
-    return new DesignAttributeDeclarations([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  toArray() {
-    return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/design-attribute-name.ts
@@ -5463,6 +6259,9 @@ class LoweredBackground {
   static of(props) {
     return new LoweredBackground(props);
   }
+  equals(other) {
+    return this.#id.equals(other.#id) && sameExpression(this.#assert, other.#assert);
+  }
   id() {
     return this.#id;
   }
@@ -5485,6 +6284,9 @@ class DesignBackgroundAssumption {
   static of(props) {
     return new DesignBackgroundAssumption(props);
   }
+  equals(other) {
+    return this.#id.equals(other.#id) && sameExpression(this.#assert, other.#assert);
+  }
   id() {
     return this.#id;
   }
@@ -5499,13 +6301,20 @@ class DesignBackgroundAssumption {
   }
 }
 // src/design/domain/design-background-assumptions.ts
-class DesignBackgroundAssumptions {
+class DesignBackgroundAssumptions extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-background-assumptions");
+  }
+  rebuild(values) {
+    return new DesignBackgroundAssumptions(values);
   }
   static of(values) {
     return new DesignBackgroundAssumptions(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignBackgroundAssumptions(values));
   }
   add(value) {
     return new DesignBackgroundAssumptions([...this.#values, value]);
@@ -5518,9 +6327,6 @@ class DesignBackgroundAssumptions {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/design-background-declaration.ts
@@ -5537,6 +6343,9 @@ class DesignBackgroundDeclaration {
   static of(props) {
     return new DesignBackgroundDeclaration(props);
   }
+  equals(other) {
+    return this.#id.equals(other.#id) && sameExpression(this.#assert, other.#assert);
+  }
   diagnostics(catalog) {
     const context = `background ${this.#id.asString()}`;
     const errors = [];
@@ -5550,13 +6359,20 @@ class DesignBackgroundDeclaration {
   }
 }
 // src/design/domain/design-background-declarations.ts
-class DesignBackgroundDeclarations {
+class DesignBackgroundDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-background-declarations");
+  }
+  rebuild(values) {
+    return new DesignBackgroundDeclarations(values);
   }
   static of(values) {
     return new DesignBackgroundDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignBackgroundDeclarations(values));
   }
   add(value) {
     return new DesignBackgroundDeclarations([...this.#values, value]);
@@ -5566,9 +6382,6 @@ class DesignBackgroundDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/design-background-identifier.ts
@@ -5598,13 +6411,20 @@ class DesignBackgroundIdentifier {
   }
 }
 // src/design/domain/design-cross-checked-entries.ts
-class DesignCrossCheckedEntries {
+class DesignCrossCheckedEntries extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-cross-checked-entries");
+  }
+  rebuild(values) {
+    return new DesignCrossCheckedEntries(values);
   }
   static of(values) {
     return new DesignCrossCheckedEntries(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignCrossCheckedEntries(values));
   }
   add(value) {
     return new DesignCrossCheckedEntries([...this.#values, value]);
@@ -5614,9 +6434,6 @@ class DesignCrossCheckedEntries {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/design-cross-checked-entry.ts
@@ -5638,6 +6455,11 @@ class DesignCrossCheckedEntry {
   static parse(props) {
     return parseConstruction(() => new DesignCrossCheckedEntry(props));
   }
+  equals(other) {
+    const left = [...this.#targets].map((target) => target.asString());
+    const right = [...other.#targets].map((target) => target.asString());
+    return this.#backend.equals(other.#backend) && this.#unit.equals(other.#unit) && left.length === right.length && left.every((target, index) => target === right[index]);
+  }
   unit() {
     return this.#unit;
   }
@@ -5655,94 +6477,6 @@ class DesignCrossCheckedEntry {
     const unit = this.#unit.asString();
     const otherUnit = other.#unit.asString();
     return unit < otherUnit ? -1 : unit > otherUnit ? 1 : 0;
-  }
-}
-// src/design/domain/design-entity-declaration.ts
-class DesignEntityDeclaration {
-  #name;
-  #description;
-  #attributes;
-  constructor(props) {
-    this.#name = props.name;
-    this.#description = props.description;
-    this.#attributes = props.attributes;
-  }
-  static of(props) {
-    return new DesignEntityDeclaration(props);
-  }
-  name() {
-    return this.#name;
-  }
-  description() {
-    return this.#description;
-  }
-  attributes() {
-    return this.#attributes;
-  }
-  inspectAttributes(visitor) {
-    const seen = new Set;
-    for (const attribute of this.#attributes) {
-      const attributeName = attribute.name().asString();
-      visitor(`${this.#name.asString()}.${attributeName}`, attribute, seen.has(attributeName));
-      seen.add(attributeName);
-    }
-  }
-}
-// src/design/domain/design-entity-declarations.ts
-class DesignEntityDeclarations {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new DesignEntityDeclarations(values);
-  }
-  add(value) {
-    return new DesignEntityDeclarations([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  #inspect(entityFound, attributeFound) {
-    const names = new Set;
-    for (const entity of this.#values) {
-      const name = entity.name().asString();
-      entityFound(entity, names.has(name));
-      names.add(name);
-      entity.inspectAttributes(attributeFound);
-    }
-  }
-  hasAmbiguousAttributes() {
-    let ambiguous = false;
-    this.#inspect((_entity, duplicate) => {
-      ambiguous ||= duplicate;
-    }, (_path, _attribute, duplicate) => {
-      ambiguous ||= duplicate;
-    });
-    return ambiguous;
-  }
-  diagnostics() {
-    const messages = [];
-    this.#inspect((entity, duplicate) => {
-      if (duplicate)
-        messages.push(`duplicate entity "${entity.name().asString()}"`);
-    }, (coordinate, attribute, duplicate) => {
-      if (duplicate)
-        messages.push(`duplicate attribute "${coordinate}"`);
-      if (attribute.lacksIntBounds())
-        messages.push(`${coordinate}: int attributes require min and max \u2014 the Quint backend needs bounded domains`);
-      if (attribute.boundsInverted())
-        messages.push(`${coordinate}: min > max`);
-      if (attribute.boundsOutsideSafeRange())
-        messages.push(`${coordinate}: bounds must be safe integers`);
-    });
-    return ErrorMessages.collect(messages.map(ErrorMessage.parse));
-  }
-  toArray() {
-    return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/design-entity-name.ts
@@ -5795,6 +6529,9 @@ class EffectAssignment {
   static of(target, equation) {
     return new EffectAssignment(target, equation);
   }
+  equals(other) {
+    return this.#target.equals(other.#target) && this.#equation.equals(other.#equation);
+  }
   static parse(target, equation) {
     return parseConstruction(() => new EffectAssignment(target, equation));
   }
@@ -5817,9 +6554,10 @@ class EffectAssignment {
 }
 
 // src/design/domain/effect-assignments.ts
-class EffectAssignments {
+class EffectAssignments extends FirstClassCollectionBase {
   #values;
   constructor(values) {
+    super();
     if (values.length > 1e4)
       throw new IllegalArgumentException({ kind: "expression-too-large" });
     let nodes = 0;
@@ -5832,6 +6570,9 @@ class EffectAssignments {
       entries.push([assignment.target(), assignment]);
     }
     this.#values = KeyedIndex.of(entries);
+  }
+  rebuild(values) {
+    return new EffectAssignments(values);
   }
   static of(values) {
     return new EffectAssignments(values);
@@ -5863,9 +6604,6 @@ class EffectAssignments {
   }
   *[Symbol.iterator]() {
     yield* this.#values.values();
-  }
-  isEmpty() {
-    return this.#values.isEmpty();
   }
 }
 
@@ -5901,6 +6639,10 @@ class LoweredObligation {
   }
   static of(props) {
     return new LoweredObligation(props);
+  }
+  equals(other) {
+    const kinds = ["passthrough", "ignore", "vac-dead", "vac-shadow", "transition"];
+    return this.#id.equals(other.#id) && this.#origin.design().equals(other.#origin.design()) && kinds.every((kind) => this.#origin.isKind(kind) === other.#origin.isKind(kind)) && this.#nature.equals(other.#nature) && sameIterable(this.#functionalRequirementReferences, other.#functionalRequirementReferences, (left, right) => left.equals(right)) && sameExpression(this.#assert, other.#assert) && sameOptional(this.#trigger, other.#trigger, (left, right) => left.equals(right)) && sameExpression(this.#guard, other.#guard) && sameExpression(this.#effect, other.#effect) && sameOptional(this.#temporal, other.#temporal, (left, right) => left.pattern === right.pattern && sameExpression(left.assert, right.assert) && sameExpression(left.from, right.from) && sameExpression(left.to, right.to));
   }
   origin() {
     return this.#origin;
@@ -6027,6 +6769,9 @@ class DesignEventRule {
   static parse(props) {
     return parseConstruction(() => new DesignEventRule(props));
   }
+  equals(other) {
+    return this.#reference.asString() === other.#reference.asString() && this.#trigger.equals(other.#trigger) && this.#guard.equals(other.#guard) && this.#effect.equals(other.#effect);
+  }
   trigger() {
     return this.#trigger;
   }
@@ -6062,13 +6807,20 @@ class DesignEventRule {
   }
 }
 // src/design/domain/design-machines.ts
-class DesignMachines {
+class DesignMachines extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-machines");
+  }
+  rebuild(values) {
+    return new DesignMachines(values);
   }
   static of(values) {
     return new DesignMachines(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignMachines(values));
   }
   add(value) {
     return new DesignMachines([...this.#values, value]);
@@ -6090,9 +6842,6 @@ class DesignMachines {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 
@@ -6156,19 +6905,29 @@ class RuleSubsumptionProbe {
 }
 
 // src/design/domain/design-event-rule-catalog.ts
-class DesignEventRuleCatalog {
+class DesignEventRuleCatalog extends FirstClassCollectionBase {
   #events;
-  constructor(unit) {
+  #unit;
+  constructor(unit, retained) {
+    super();
+    this.#unit = unit;
     const events = [];
-    for (const obligation of unit.obligations().sortedCanonically()) {
-      const event = obligation.asEventRule();
-      if (event !== null)
-        events.push(event);
-    }
-    for (const machine of unit.machines().sortedCanonically())
-      for (const transition of machine.transitions().sortedCanonically())
-        events.push(transition.asEventRule(DesignMachines.attrPathOf(machine)));
-    this.#events = KeyedIndex.of(events.map((event) => [TargetIdentifier.of(event.reference().asString()), event]));
+    if (retained === undefined) {
+      for (const obligation of unit.obligations().sortedCanonically()) {
+        const event = obligation.asEventRule();
+        if (event !== null)
+          events.push(event);
+      }
+      for (const machine of unit.machines().sortedCanonically())
+        for (const transition of machine.transitions().sortedCanonically())
+          events.push(transition.asEventRule(DesignMachines.attrPathOf(machine)));
+    } else
+      events.push(...retained);
+    const snapshot = boundedCollectionSnapshot(events, 65536, "too-many-design-event-rules");
+    this.#events = KeyedIndex.of(snapshot.map((event) => [TargetIdentifier.of(event.reference().asString()), event]));
+  }
+  rebuild(values) {
+    return new DesignEventRuleCatalog(this.#unit, values);
   }
   static of(unit) {
     return new DesignEventRuleCatalog(unit);
@@ -6202,9 +6961,6 @@ class DesignEventRuleCatalog {
         }
     return probes;
   }
-  isEmpty() {
-    return this.#events.isEmpty();
-  }
 }
 // src/design/domain/design-finding.ts
 class DesignFinding {
@@ -6225,6 +6981,9 @@ class DesignFinding {
   static of(props) {
     return new DesignFinding(props);
   }
+  equals(other) {
+    return this.#kind.equals(other.#kind) && this.#unit.equals(other.#unit) && this.#detail === other.#detail && sameArray(this.#functionalRequirementReferences.toStrings(), other.#functionalRequirementReferences.toStrings(), (left, right) => left === right) && sameArray(this.#targets.toArray(), other.#targets.toArray(), (left, right) => left.equals(right)) && this.#witness.equals(other.#witness);
+  }
   kind() {
     return this.#kind.asString();
   }
@@ -6244,7 +7003,7 @@ class DesignFinding {
     return this.#detail;
   }
   violatesScenario(unit, target) {
-    return this.#kind.equals(FindingKind.scenarioViolation()) && this.#unit.equals(unit) && this.#targets.includes(target);
+    return this.#kind.equals(FindingKind.scenarioViolation()) && this.#unit.equals(unit) && this.#targets.include(target);
   }
   isConflict() {
     return this.#kind.isConflict();
@@ -6289,6 +7048,9 @@ class DesignIgnore {
   }
   static of(props) {
     return new DesignIgnore(props);
+  }
+  equals(other) {
+    return this.#state === other.#state && this.#trigger.equals(other.#trigger);
   }
   state() {
     return this.#state;
@@ -6337,6 +7099,9 @@ class DesignIgnoreDeclaration {
   static of(props) {
     return new DesignIgnoreDeclaration(props);
   }
+  equals(other) {
+    return this.#state === other.#state && this.#trigger.equals(other.#trigger);
+  }
   state() {
     return this.#state;
   }
@@ -6344,20 +7109,27 @@ class DesignIgnoreDeclaration {
     return this.#trigger;
   }
   isStateAmong(states) {
-    return states.includes(this.#state);
+    return states.exists((state) => state.matchesLiteral(this.#state));
   }
   cellKey() {
     return `${this.#state}|${this.#trigger.asString()}`;
   }
 }
 // src/design/domain/design-ignore-declarations.ts
-class DesignIgnoreDeclarations {
+class DesignIgnoreDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-ignore-declarations");
+  }
+  rebuild(values) {
+    return new DesignIgnoreDeclarations(values);
   }
   static of(values) {
     return new DesignIgnoreDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignIgnoreDeclarations(values));
   }
   add(value) {
     return new DesignIgnoreDeclarations([...this.#values, value]);
@@ -6368,18 +7140,22 @@ class DesignIgnoreDeclarations {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/design/domain/design-ignores.ts
-class DesignIgnores {
+class DesignIgnores extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-ignores");
+  }
+  rebuild(values) {
+    return new DesignIgnores(values);
   }
   static of(values) {
     return new DesignIgnores(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignIgnores(values));
   }
   add(value) {
     return new DesignIgnores([...this.#values, value]);
@@ -6392,9 +7168,6 @@ class DesignIgnores {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/design-input-anchor.ts
@@ -6411,6 +7184,9 @@ class DesignInputAnchor {
   static of(props) {
     return new DesignInputAnchor(props);
   }
+  equals(other) {
+    return this.#artifact.equals(other.#artifact) && this.#sha256.equals(other.#sha256);
+  }
   artifact() {
     return this.#artifact.asString();
   }
@@ -6424,13 +7200,20 @@ class DesignInputAnchor {
   }
 }
 // src/design/domain/design-input-anchors.ts
-class DesignInputAnchors {
+class DesignInputAnchors extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-input-anchors");
+  }
+  rebuild(values) {
+    return new DesignInputAnchors(values);
   }
   static of(values) {
     return new DesignInputAnchors(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignInputAnchors(values));
   }
   add(value) {
     return new DesignInputAnchors([...this.#values, value]);
@@ -6444,22 +7227,26 @@ class DesignInputAnchors {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/design/domain/design-skips.ts
 function sortDesignSkipped(skipped) {
   return [...skipped].sort((a, b) => a.compareTo(b));
 }
 
-class DesignSkips {
+class DesignSkips extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-skips");
+  }
+  rebuild(values) {
+    return new DesignSkips(values);
   }
   static of(values) {
     return new DesignSkips(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignSkips(values));
   }
   add(value) {
     return new DesignSkips([...this.#values, value]);
@@ -6478,9 +7265,6 @@ class DesignSkips {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 
@@ -6510,6 +7294,22 @@ class MachineReachability {
   }
   static of(input) {
     return new MachineReachability(input);
+  }
+  equals(other) {
+    if (!this.#unit.equals(other.#unit) || !this.#machine.equals(other.#machine) || this.#bounded !== other.#bounded || this.#probes.length !== other.#probes.length || this.#observations.size !== other.#observations.size)
+      return false;
+    const probesEqual = this.#probes.every((probe, index) => {
+      const otherProbe = other.#probes[index];
+      return otherProbe !== undefined && probe.unit().name() === otherProbe.unit().name() && probe.attributePath() === otherProbe.attributePath() && probe.state() === otherProbe.state();
+    });
+    if (!probesEqual)
+      return false;
+    return this.#probes.every((probe, index) => {
+      const otherProbe = other.#probes[index];
+      const left = this.#observations.get(probe);
+      const right = otherProbe === undefined ? undefined : other.#observations.get(otherProbe);
+      return left === undefined ? right === undefined : right !== undefined && left.equals(right);
+    });
   }
   static parse(input) {
     return parseConstruction(() => new MachineReachability(input));
@@ -6583,7 +7383,7 @@ class DesignWitness {
     this.#document = boundedValueSnapshot(document, { string: 65536, nodes: 1e5, depth: 128, total: 16777216 });
   }
   static core(labels) {
-    return new DesignWitness({ core: labels });
+    return new DesignWitness({ core: [...labels] });
   }
   static model(values) {
     return new DesignWitness({ model: values });
@@ -6592,16 +7392,19 @@ class DesignWitness {
     return new DesignWitness({ verdicts: byBackend });
   }
   static trace(states) {
-    return new DesignWitness({ trace: states });
+    return new DesignWitness({ trace: states.map((state) => ({ ...state })) });
   }
   static refs(entries) {
-    return new DesignWitness({ refs: entries });
+    return new DesignWitness({ refs: entries.map((entry) => ({ ...entry })) });
   }
   static parse(value) {
     return parseConstruction(() => new DesignWitness(value));
   }
   static of(raw) {
     return new DesignWitness(raw);
+  }
+  equals(other) {
+    return jsonEquals(this.#document, other.#document);
   }
   remapCore(rewrite) {
     const document = this.#document;
@@ -6669,12 +7472,11 @@ class ReachabilityProbe {
 }
 
 // src/design/domain/reachability-plan.ts
-class ReachabilityPlan {
+class ReachabilityPlan extends FirstClassCollectionBase {
   #machines;
   constructor(machines) {
-    if (machines.length > 65536)
-      throw new IllegalArgumentException({ kind: "too-many-reachability-machines", raw: machines.length });
-    const owned = [...machines];
+    super();
+    const owned = boundedCollectionSnapshot(machines, 65536, "too-many-reachability-machines");
     let probes = 0;
     for (const machine of owned) {
       probes += machine.probeCount();
@@ -6682,6 +7484,9 @@ class ReachabilityPlan {
         throw new IllegalArgumentException({ kind: "too-many-reachability-probes", raw: probes });
     }
     this.#machines = owned;
+  }
+  rebuild(values) {
+    return new ReachabilityPlan(values);
   }
   static of(machines) {
     return new ReachabilityPlan(machines);
@@ -6706,9 +7511,6 @@ class ReachabilityPlan {
   }
   *[Symbol.iterator]() {
     yield* this.#machines;
-  }
-  isEmpty() {
-    return this.#machines.length === 0;
   }
 }
 
@@ -6751,6 +7553,9 @@ class DesignReport {
       crossChecked: null,
       unavailableReason: null
     });
+  }
+  equals(other) {
+    return this.#id.equals(other.#id);
   }
   #revised(changes) {
     return new DesignReport({
@@ -7056,6 +7861,15 @@ class DesignMachine {
   static of(props) {
     return new DesignMachine(props);
   }
+  equals(other) {
+    const initial = [...this.#initial];
+    const otherInitial = [...other.#initial];
+    const transitions = [...this.#transitions];
+    const otherTransitions = [...other.#transitions];
+    const ignores = [...this.#ignores];
+    const otherIgnores = [...other.#ignores];
+    return this.#id.equals(other.#id) && this.#entity.equals(other.#entity) && this.#attribute.equals(other.#attribute) && this.#deterministic === other.#deterministic && initial.length === otherInitial.length && initial.every((state, index) => state.equals(otherInitial[index])) && transitions.length === otherTransitions.length && transitions.every((transition, index) => transition.equals(otherTransitions[index])) && ignores.length === otherIgnores.length && ignores.every((ignore, index) => ignore.equals(otherIgnores[index]));
+  }
   ownsTransition(reference) {
     return [...this.#transitions].some((transition) => transition.id().asString() === reference.asString());
   }
@@ -7081,7 +7895,7 @@ class DesignMachine {
     return LoweredOrigin.of({ design: LoweredOriginReference.of(this.#id.asString()), kind: "ignore" });
   }
   nonInitialCandidates(values) {
-    return values.filter((s) => !this.#initial.includes(s)).sort();
+    return values.filter((s) => !this.#initial.exists((state) => state.matchesName(s))).sort();
   }
   waivesOverlapOf(machines) {
     return machines.every((m) => m === this) && !this.#deterministic;
@@ -7103,6 +7917,9 @@ class DesignMachineDeclaration {
   }
   static of(props) {
     return new DesignMachineDeclaration(props);
+  }
+  equals(other) {
+    return this.#id.equals(other.#id) && this.#attrPath === other.#attrPath && sameIterable(this.#initial, other.#initial, (left, right) => left.equals(right)) && sameIterable(this.#transitions, other.#transitions, (left, right) => left.equals(right)) && sameIterable(this.#ignores, other.#ignores, (left, right) => left.equals(right));
   }
   id() {
     return this.#id;
@@ -7140,7 +7957,7 @@ class DesignMachineDeclaration {
     for (const tr of this.transitions()) {
       const tctx = `transition ${tr.id().asString()}`;
       for (const [k, v] of tr.stateEntries()) {
-        if (v !== undefined && !states.includes(v)) {
+        if (v !== undefined && !states.exists((state) => state.matchesLiteral(v))) {
           errors.push(`${tctx}: ${k} state "${v}" is not a value of ${attrPath}`);
         }
       }
@@ -7166,17 +7983,24 @@ class DesignMachineDeclaration {
     return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
   initialStatesOutside(states) {
-    return [...this.#initial].filter((state) => !states.includes(state.asString())).map((state) => state.asString());
+    return [...this.#initial].filter((state) => !states.exists((declared) => declared.matchesLiteral(state.asString()))).map((state) => state.asString());
   }
 }
 // src/design/domain/design-machine-declarations.ts
-class DesignMachineDeclarations {
+class DesignMachineDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-machine-declarations");
+  }
+  rebuild(values) {
+    return new DesignMachineDeclarations(values);
   }
   static of(values) {
     return new DesignMachineDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignMachineDeclarations(values));
   }
   add(value) {
     return new DesignMachineDeclarations([...this.#values, value]);
@@ -7186,9 +8010,6 @@ class DesignMachineDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/design-machine-identifier.ts
@@ -7316,6 +8137,9 @@ class DesignObligation {
   static of(props) {
     return new DesignObligation(props);
   }
+  equals(other) {
+    return this.#id.equals(other.#id) && this.#nature.equals(other.#nature) && this.#origin.equals(other.#origin) && sameIterable(this.#businessRuleReferences, other.#businessRuleReferences, (left, right) => left.equals(right)) && sameIterable(this.#functionalRequirementReferences, other.#functionalRequirementReferences, (left, right) => left.equals(right)) && sameOptional(this.#trigger, other.#trigger, (left, right) => left.equals(right)) && sameExpression(this.#assert, other.#assert) && sameExpression(this.#guard, other.#guard) && sameExpression(this.#effect, other.#effect) && sameOptional(this.#temporal, other.#temporal, (left, right) => left.pattern === right.pattern && sameExpression(left.assert, right.assert) && sameExpression(left.from, right.from) && sameExpression(left.to, right.to));
+  }
   id() {
     return this.#id;
   }
@@ -7434,6 +8258,9 @@ class DesignObligationDeclaration {
   static of(props) {
     return new DesignObligationDeclaration(props);
   }
+  equals(other) {
+    return this.#id.equals(other.#id) && sameOptional(this.#origin, other.#origin, (left, right) => left.equals(right)) && sameOptional(this.#businessRuleReferences, other.#businessRuleReferences, (left, right) => sameIterable(left, right, (a, b) => a.equals(b))) && sameExpression(this.#assert, other.#assert) && sameExpression(this.#guard, other.#guard) && sameExpression(this.#effect, other.#effect) && sameOptional(this.#temporal, other.#temporal, (left, right) => sameExpression(left.assert, right.assert) && sameExpression(left.from, right.from) && sameExpression(left.to, right.to));
+  }
   diagnostics(catalog) {
     const context = `obligation ${this.#id.asString()}`;
     const errors = [];
@@ -7468,13 +8295,20 @@ class DesignObligationDeclaration {
   }
 }
 // src/design/domain/design-obligation-declarations.ts
-class DesignObligationDeclarations {
+class DesignObligationDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-obligation-declarations");
+  }
+  rebuild(values) {
+    return new DesignObligationDeclarations(values);
   }
   static of(values) {
     return new DesignObligationDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignObligationDeclarations(values));
   }
   add(value) {
     return new DesignObligationDeclarations([...this.#values, value]);
@@ -7484,9 +8318,6 @@ class DesignObligationDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/design-obligation-identifier.ts
@@ -7540,13 +8371,20 @@ class DesignObligationOrigin {
   }
 }
 // src/design/domain/design-obligations.ts
-class DesignObligations {
+class DesignObligations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-obligations");
+  }
+  rebuild(values) {
+    return new DesignObligations(values);
   }
   static of(values) {
     return new DesignObligations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignObligations(values));
   }
   add(value) {
     return new DesignObligations([...this.#values, value]);
@@ -7562,9 +8400,6 @@ class DesignObligations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/design-report-identifier.ts
@@ -7592,13 +8427,20 @@ class DesignReportIdentifier {
   }
 }
 // src/design/domain/design-reports.ts
-class DesignReports {
+class DesignReports extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-reports");
+  }
+  rebuild(values) {
+    return new DesignReports(values);
   }
   static of(values) {
     return new DesignReports(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignReports(values));
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -7654,9 +8496,6 @@ class DesignReports {
     });
     return failure === null ? report : report.degraded(`scenario cross-check could not be constructed: ${failure.kind}`);
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/design/domain/lowered-scenario.ts
 class LoweredScenario {
@@ -7681,6 +8520,9 @@ class LoweredScenario {
   }
   static of(props) {
     return new LoweredScenario(props);
+  }
+  equals(other) {
+    return this.#id.equals(other.#id) && this.#origin.equals(other.#origin) && this.#expectation.asString() === other.#expectation.asString() && sameIterable(this.#functionalRequirementReferences, other.#functionalRequirementReferences, (left, right) => left.equals(right)) && sameIterable(this.#bindings, other.#bindings, (left, right) => left.equals(right)) && sameOptional(this.#eventTrigger, other.#eventTrigger, (left, right) => left.equals(right)) && sameExpression(this.#expect, other.#expect);
   }
   origin() {
     return this.#origin;
@@ -7731,6 +8573,9 @@ class DesignScenario {
   }
   static of(props) {
     return new DesignScenario(props);
+  }
+  equals(other) {
+    return this.#id.equals(other.#id) && this.#expectation.asString() === other.#expectation.asString() && sameIterable(this.#businessRuleReferences, other.#businessRuleReferences, (left, right) => left.equals(right)) && sameIterable(this.#functionalRequirementReferences, other.#functionalRequirementReferences, (left, right) => left.equals(right)) && sameIterable(this.#bindings, other.#bindings, (left, right) => left.equals(right)) && (this.#eventTrigger === undefined || other.#eventTrigger === undefined ? this.#eventTrigger === other.#eventTrigger : this.#eventTrigger.equals(other.#eventTrigger)) && sameExpression(this.#expect, other.#expect);
   }
   crossCheckFinding(unit, comparison) {
     if (!comparison.isFor(TargetIdentifier.of(this.#id.asString()), unit))
@@ -7811,6 +8656,9 @@ class DesignScenarioDeclaration {
   static of(props) {
     return new DesignScenarioDeclaration(props);
   }
+  equals(other) {
+    return this.#id.equals(other.#id) && this.#hasEvent === other.#hasEvent && sameExpression(this.#expect, other.#expect) && sameIterable(this.#bindings, other.#bindings, (left, right) => left.equals(right)) && sameOptional(this.#businessRuleReferences, other.#businessRuleReferences, (left, right) => sameIterable(left, right, (a, b) => a.equals(b)));
+  }
   diagnostics(catalog) {
     const context = `scenario ${this.#id.asString()}`;
     const errors = [];
@@ -7829,13 +8677,20 @@ class DesignScenarioDeclaration {
   }
 }
 // src/design/domain/design-scenario-declarations.ts
-class DesignScenarioDeclarations {
+class DesignScenarioDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-scenario-declarations");
+  }
+  rebuild(values) {
+    return new DesignScenarioDeclarations(values);
   }
   static of(values) {
     return new DesignScenarioDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignScenarioDeclarations(values));
   }
   add(value) {
     return new DesignScenarioDeclarations([...this.#values, value]);
@@ -7845,9 +8700,6 @@ class DesignScenarioDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/design-scenario-identifier.ts
@@ -7877,13 +8729,20 @@ class DesignScenarioIdentifier {
   }
 }
 // src/design/domain/design-scenarios.ts
-class DesignScenarios {
+class DesignScenarios extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-scenarios");
+  }
+  rebuild(values) {
+    return new DesignScenarios(values);
   }
   static of(values) {
     return new DesignScenarios(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignScenarios(values));
   }
   add(value) {
     return new DesignScenarios([...this.#values, value]);
@@ -7899,9 +8758,6 @@ class DesignScenarios {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/design-transition.ts
@@ -7927,6 +8783,9 @@ class DesignTransition {
   }
   static of(props) {
     return new DesignTransition(props);
+  }
+  equals(other) {
+    return this.#id.equals(other.#id) && this.#from === other.#from && this.#to === other.#to && this.#trigger.equals(other.#trigger) && sameExpression(this.#guard, other.#guard) && sameExpression(this.#effect, other.#effect);
   }
   id() {
     return this.#id;
@@ -8019,6 +8878,9 @@ class DesignTransitionDeclaration {
   static of(props) {
     return new DesignTransitionDeclaration(props);
   }
+  equals(other) {
+    return this.#id.equals(other.#id) && this.#from === other.#from && this.#to === other.#to && sameOptional(this.#trigger, other.#trigger, (left, right) => left.equals(right)) && sameOptional(this.#businessRuleReferences, other.#businessRuleReferences, (left, right) => sameIterable(left, right, (a, b) => a.equals(b))) && sameExpression(this.#guard, other.#guard) && sameExpression(this.#effect, other.#effect);
+  }
   id() {
     return this.#id;
   }
@@ -8060,13 +8922,20 @@ class DesignTransitionDeclaration {
   }
 }
 // src/design/domain/design-transition-declarations.ts
-class DesignTransitionDeclarations {
+class DesignTransitionDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-transition-declarations");
+  }
+  rebuild(values) {
+    return new DesignTransitionDeclarations(values);
   }
   static of(values) {
     return new DesignTransitionDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignTransitionDeclarations(values));
   }
   add(value) {
     return new DesignTransitionDeclarations([...this.#values, value]);
@@ -8076,9 +8945,6 @@ class DesignTransitionDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/design-transition-identifier.ts
@@ -8108,13 +8974,20 @@ class DesignTransitionIdentifier {
   }
 }
 // src/design/domain/design-transitions.ts
-class DesignTransitions {
+class DesignTransitions extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-transitions");
+  }
+  rebuild(values) {
+    return new DesignTransitions(values);
   }
   static of(values) {
     return new DesignTransitions(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignTransitions(values));
   }
   add(value) {
     return new DesignTransitions([...this.#values, value]);
@@ -8130,9 +9003,6 @@ class DesignTransitions {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/design-unit-identifier.ts
@@ -8160,13 +9030,20 @@ class DesignUnitIdentifier {
 }
 
 // src/design/domain/lowered-backgrounds.ts
-class LoweredBackgrounds {
+class LoweredBackgrounds extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-lowered-backgrounds");
+  }
+  rebuild(values) {
+    return new LoweredBackgrounds(values);
   }
   static of(values) {
     return new LoweredBackgrounds(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new LoweredBackgrounds(values));
   }
   add(value) {
     return new LoweredBackgrounds([...this.#values, value]);
@@ -8179,9 +9056,6 @@ class LoweredBackgrounds {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 
@@ -8215,13 +9089,20 @@ class LoweredIdentifier {
 }
 
 // src/design/domain/lowered-obligations.ts
-class LoweredObligations {
+class LoweredObligations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-lowered-obligations");
+  }
+  rebuild(values) {
+    return new LoweredObligations(values);
   }
   static of(values) {
     return new LoweredObligations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new LoweredObligations(values));
   }
   add(value) {
     return new LoweredObligations([...this.#values, value]);
@@ -8235,19 +9116,23 @@ class LoweredObligations {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 
 // src/design/domain/lowered-scenarios.ts
-class LoweredScenarios {
+class LoweredScenarios extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-lowered-scenarios");
+  }
+  rebuild(values) {
+    return new LoweredScenarios(values);
   }
   static of(values) {
     return new LoweredScenarios(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new LoweredScenarios(values));
   }
   add(value) {
     return new LoweredScenarios([...this.#values, value]);
@@ -8261,26 +9146,23 @@ class LoweredScenarios {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 
 // src/design/domain/issued-lowered-identifiers.ts
-class IssuedLoweredIdentifiers {
+class IssuedLoweredIdentifiers extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > 65536)
-      throw new IllegalArgumentException({ kind: "too-many-lowered-identifiers", raw: values.length });
-    const snapshot = [];
-    for (const value of values) {
-      if (snapshot.length === 65536)
-        throw new IllegalArgumentException({ kind: "too-many-lowered-identifiers", raw: snapshot.length + 1 });
-      snapshot.push(value);
-    }
+    super();
+    const snapshot = boundedCollectionSnapshot(values, 65536, "too-many-lowered-identifiers");
     this.#values = KeySet.of(snapshot);
     if (this.#values.size() !== snapshot.length)
       throw new IllegalArgumentException({ kind: "duplicate-lowered-identifier" });
+  }
+  rebuild(values) {
+    return new IssuedLoweredIdentifiers(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
   }
   static of(values) {
     return new IssuedLoweredIdentifiers(values);
@@ -8297,9 +9179,6 @@ class IssuedLoweredIdentifiers {
       remaining--;
       yield id;
     }
-  }
-  isEmpty() {
-    return this.#values.isEmpty();
   }
 }
 
@@ -8475,6 +9354,9 @@ class DesignUnit {
   static of(seed) {
     return new DesignUnit(seed);
   }
+  equals(other) {
+    return this.#unit.equals(other.#unit) && sameIterable(this.#catalog, other.#catalog, (left, right) => left.equals(right)) && sameIterable(this.#obligations, other.#obligations, (left, right) => left.equals(right)) && sameIterable(this.#machines, other.#machines, (left, right) => left.equals(right)) && sameIterable(this.#scenarios, other.#scenarios, (left, right) => left.equals(right)) && sameIterable(this.#background, other.#background, (left, right) => left.equals(right));
+  }
   id() {
     return DesignUnitIdentifier.of(this.#unit.asString());
   }
@@ -8601,6 +9483,9 @@ class DesignUnitDeclaration {
   static of(props) {
     return new DesignUnitDeclaration(props);
   }
+  equals(other) {
+    return this.#unit.equals(other.#unit) && sameIterable(this.#entities, other.#entities, (left, right) => left.equals(right)) && sameIterable(this.#obligations, other.#obligations, (left, right) => left.equals(right)) && sameIterable(this.#stateMachines, other.#stateMachines, (left, right) => left.equals(right)) && sameIterable(this.#scenarios, other.#scenarios, (left, right) => left.equals(right)) && sameIterable(this.#background, other.#background, (left, right) => left.equals(right)) && sameIterable(this.#unformalizedTargets, other.#unformalizedTargets, (left, right) => left.equals(right)) && this.#directoryExists === other.#directoryExists && (this.#rules === null || other.#rules === null ? this.#rules === other.#rules : sameIterable(this.#rules, other.#rules, (left, right) => left.equals(right)));
+  }
   unit() {
     return this.#unit;
   }
@@ -8700,13 +9585,20 @@ class DesignUnitDeclaration {
   }
 }
 // src/design/domain/design-unit-declarations.ts
-class DesignUnitDeclarations {
+class DesignUnitDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-unit-declarations");
+  }
+  rebuild(values) {
+    return new DesignUnitDeclarations(values);
   }
   static of(values) {
     return new DesignUnitDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignUnitDeclarations(values));
   }
   add(value) {
     return new DesignUnitDeclarations([...this.#values, value]);
@@ -8730,18 +9622,22 @@ class DesignUnitDeclarations {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/design/domain/design-units.ts
-class DesignUnits {
+class DesignUnits extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-design-units");
+  }
+  rebuild(values) {
+    return new DesignUnits(values);
   }
   static of(values) {
     return new DesignUnits(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignUnits(values));
   }
   add(value) {
     return new DesignUnits([...this.#values, value]);
@@ -8751,9 +9647,6 @@ class DesignUnits {
   }
   sortedByName() {
     return new DesignUnits([...this.#values].sort((a, b) => a.name() < b.name() ? -1 : a.name() > b.name() ? 1 : 0));
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
   toArray() {
     return this.#values;
@@ -8857,6 +9750,11 @@ class EventMapping {
       reason: props.waived?.reason ?? null
     });
   }
+  equals(other) {
+    const left = [...this.#transitions].map((transition) => transition.asString());
+    const right = [...other.#transitions].map((transition) => transition.asString());
+    return this.#reqTrigger.equals(other.#reqTrigger) && this.#reason === other.#reason && left.length === right.length && left.every((value, index) => value === right[index]);
+  }
   statusIn(unit) {
     if (this.#reason !== null)
       return RefinementStatus.waived(this.#reason);
@@ -8876,13 +9774,20 @@ class EventMapping {
   }
 }
 // src/design/domain/event-mappings.ts
-class EventMappings {
+class EventMappings extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-event-mappings");
+  }
+  rebuild(values) {
+    return new EventMappings(values);
   }
   static of(values) {
     return new EventMappings(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new EventMappings(values));
   }
   add(value) {
     return new EventMappings([...this.#values, value]);
@@ -8901,9 +9806,6 @@ class EventMappings {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/design/domain/initial-state.ts
 class InitialState {
@@ -8919,6 +9821,9 @@ class InitialState {
   static parse(value) {
     return parseConstruction(() => new InitialState(value));
   }
+  equals(other) {
+    return this.#value === other.#value;
+  }
   matchesName(value) {
     return this.#value === value;
   }
@@ -8927,12 +9832,14 @@ class InitialState {
   }
 }
 // src/design/domain/initial-states.ts
-class InitialStates {
+class InitialStates extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > 1e4)
-      throw new IllegalArgumentException({ kind: "too-many-initial-states", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 1e4, "too-many-initial-states");
+  }
+  rebuild(values) {
+    return new InitialStates(values);
   }
   static parse(values) {
     return parseConstruction(() => new InitialStates(values));
@@ -8946,14 +9853,8 @@ class InitialStates {
   *[Symbol.iterator]() {
     yield* this.#values;
   }
-  includes(value) {
-    return this.#values.some((state) => state.matchesName(value));
-  }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/reachability-verdict.ts
@@ -8998,6 +9899,11 @@ class RefinementAttribute {
   static of(props) {
     return new RefinementAttribute(props);
   }
+  equals(other) {
+    const left = this.#values?.toArray().map((value) => value.asString()) ?? null;
+    const right = other.#values?.toArray().map((value) => value.asString()) ?? null;
+    return this.#path.asString() === other.#path.asString() && this.#kind === other.#kind && (left === null || right === null ? left === right : left.length === right.length && left.every((value, index) => value === right[index]));
+  }
   path() {
     return this.#path;
   }
@@ -9015,13 +9921,20 @@ class RefinementAttribute {
   }
 }
 // src/design/domain/refinement-attributes.ts
-class RefinementAttributes {
+class RefinementAttributes extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-refinement-attributes");
+  }
+  rebuild(values) {
+    return new RefinementAttributes(values);
   }
   static of(values) {
     return new RefinementAttributes(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new RefinementAttributes(values));
   }
   add(value) {
     return new RefinementAttributes([...this.#values, value]);
@@ -9047,9 +9960,6 @@ class RefinementAttributes {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/refinement-check.ts
@@ -9196,6 +10106,9 @@ class RefinementQuintInvariant {
   static of(reqId, functionalRequirementReferences, expr) {
     return new RefinementQuintInvariant(reqId, functionalRequirementReferences, expr);
   }
+  equals(other) {
+    return this.#reqId.equals(other.#reqId) && sameExpression(this.#expr, other.#expr);
+  }
   reqId() {
     return this.#reqId;
   }
@@ -9214,22 +10127,26 @@ class RefinementQuintInvariant {
 }
 
 // src/design/domain/refinement-quint-invariants.ts
-class RefinementQuintInvariants {
+class RefinementQuintInvariants extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-refinement-quint-invariants");
+  }
+  rebuild(values) {
+    return new RefinementQuintInvariants(values);
   }
   static of(values) {
     return new RefinementQuintInvariants(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new RefinementQuintInvariants(values));
   }
   add(value) {
     return new RefinementQuintInvariants([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
   reqIds() {
     return new Set(this.#values.map((e) => e.reqId().asString()));
@@ -9540,22 +10457,26 @@ class RefinementMaterialsIdentifier {
   }
 }
 // src/design/domain/transition-references.ts
-class TransitionReferences {
+class TransitionReferences extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-transition-references");
+  }
+  rebuild(values) {
+    return new TransitionReferences(values);
   }
   static of(values) {
     return new TransitionReferences(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new TransitionReferences(values));
   }
   add(value) {
     return new TransitionReferences([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
   unknownAmong(declared) {
     return this.#values.map((t) => t.asString()).filter((t) => !declared.has(t)).sort();
@@ -9591,6 +10512,9 @@ class RefinementObligation {
   }
   static of(props) {
     return new RefinementObligation(props);
+  }
+  equals(other) {
+    return this.#id.equals(other.#id) && this.#nature.equals(other.#nature) && sameIterable(this.#functionalRequirementReferences, other.#functionalRequirementReferences, (left, right) => left.equals(right)) && sameExpression(this.#assert, other.#assert) && sameOptional(this.#trigger, other.#trigger, (left, right) => left.equals(right)) && sameExpression(this.#guard, other.#guard) && sameExpression(this.#effect, other.#effect);
   }
   #coverage(expressions, map) {
     const paths = [];
@@ -9653,13 +10577,20 @@ class RefinementObligation {
   }
 }
 // src/design/domain/refinement-obligations.ts
-class RefinementObligations {
+class RefinementObligations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-refinement-obligations");
+  }
+  rebuild(values) {
+    return new RefinementObligations(values);
   }
   static of(values) {
     return new RefinementObligations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new RefinementObligations(values));
   }
   add(value) {
     return new RefinementObligations([...this.#values, value]);
@@ -9680,9 +10611,6 @@ class RefinementObligations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/refinement-probe.ts
@@ -9780,6 +10708,9 @@ class RefinementQueryVerdict {
   static of(props) {
     return new RefinementQueryVerdict(props);
   }
+  equals(other) {
+    return this.#status === other.#status && sameArray(this.#core ?? [], other.#core ?? [], (left, right) => left.equals(right)) && sameRecord(this.#decodedModel ?? {}, other.#decodedModel ?? {}) && sameRecord(this.#decodedPostModel ?? {}, other.#decodedPostModel ?? {});
+  }
   isSat() {
     return this.#status === "sat";
   }
@@ -9799,20 +10730,49 @@ class RefinementQueryVerdict {
     return [{ ...this.#decodedModel ?? {} }, { ...this.#decodedPostModel ?? {} }];
   }
 }
+// src/design/domain/refinement-query-verdict-entry.ts
+class RefinementQueryVerdictEntry {
+  #query;
+  #verdict;
+  constructor(query, verdict) {
+    this.#query = query;
+    this.#verdict = verdict;
+  }
+  static of(query, verdict) {
+    return new RefinementQueryVerdictEntry(query, verdict);
+  }
+  query() {
+    return this.#query;
+  }
+  verdict() {
+    return this.#verdict;
+  }
+  equals(other) {
+    return this.#query.equals(other.#query) && this.#verdict.equals(other.#verdict);
+  }
+}
 // src/design/domain/refinement-query-verdicts.ts
-class RefinementQueryVerdicts {
+class RefinementQueryVerdicts extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = values;
+    super();
+    const snapshot = boundedCollectionSnapshot(values, 65536, "too-many-refinement-query-verdicts");
+    this.#values = KeyedIndex.of(snapshot.map((entry) => [entry.query(), entry]));
   }
   static of(values) {
     return new RefinementQueryVerdicts(values);
   }
-  verdictOf(queryId) {
-    return this.#values.get(queryId);
+  static parse(values) {
+    return parseConstruction(() => new RefinementQueryVerdicts(values));
   }
-  isEmpty() {
-    return this.#values.isEmpty();
+  rebuild(values) {
+    return new RefinementQueryVerdicts(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values.values();
+  }
+  verdictOf(queryId) {
+    return this.#values.get(queryId)?.verdict();
   }
 }
 // src/design/domain/refinement-requirements.ts
@@ -9877,6 +10837,9 @@ class RefinementScenario {
   static of(props) {
     return new RefinementScenario(props);
   }
+  equals(other) {
+    return this.#id.equals(other.#id) && this.#expectation.asString() === other.#expectation.asString() && sameIterable(this.#functionalRequirementReferences, other.#functionalRequirementReferences, (left, right) => left.equals(right)) && sameIterable(this.#bindings, other.#bindings, (left, right) => left.equals(right)) && sameOptional(this.#eventTrigger, other.#eventTrigger, (left, right) => left.equals(right));
+  }
   coverageIn(map) {
     if (map.unmapped().covers(this.#id))
       return RefinementStatus.waived(map.unmapped().reasonOf(this.#id) ?? "listed in unmapped[]");
@@ -9907,13 +10870,20 @@ class RefinementScenario {
   }
 }
 // src/design/domain/refinement-scenarios.ts
-class RefinementScenarios {
+class RefinementScenarios extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-refinement-scenarios");
+  }
+  rebuild(values) {
+    return new RefinementScenarios(values);
   }
   static of(values) {
     return new RefinementScenarios(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new RefinementScenarios(values));
   }
   add(value) {
     return new RefinementScenarios([...this.#values, value]);
@@ -9934,9 +10904,6 @@ class RefinementScenarios {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/refinement-solver-plan.ts
@@ -10004,6 +10971,9 @@ class RefinementUnitMap {
   static of(props) {
     return new RefinementUnitMap(props);
   }
+  equals(other) {
+    return this.#unit.equals(other.#unit) && sameIterable(this.#attrMap, other.#attrMap, (left, right) => left.equals(right)) && sameIterable(this.#eventMap, other.#eventMap, (left, right) => left.equals(right)) && sameIterable(this.#unmapped, other.#unmapped, (left, right) => left.equals(right));
+  }
   gapFor(targets, detail, artifact, references = FunctionalRequirementReferences.of([])) {
     return DesignFinding.of({
       kind: FindingKind.mappingGap(),
@@ -10031,13 +11001,20 @@ class RefinementUnitMap {
   }
 }
 // src/design/domain/refinement-unit-maps.ts
-class RefinementUnitMaps {
+class RefinementUnitMaps extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-refinement-unit-maps");
+  }
+  rebuild(values) {
+    return new RefinementUnitMaps(values);
   }
   static of(values) {
     return new RefinementUnitMaps(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new RefinementUnitMaps(values));
   }
   add(value) {
     return new RefinementUnitMaps([...this.#values, value]);
@@ -10050,9 +11027,6 @@ class RefinementUnitMaps {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/rule-subsumption.ts
@@ -10071,6 +11045,11 @@ class RuleSubsumption {
   }
   static parse(verdict) {
     return parseConstruction(() => new RuleSubsumption(verdict));
+  }
+  equals(other) {
+    const left = this.#probe.targets().toStrings();
+    const right = other.#probe.targets().toStrings();
+    return left.length === right.length && left.every((target, index) => target === right[index]) && this.#finding.equals(other.#finding);
   }
   isReverseOf(other) {
     return this.#probe.isReverseOf(other.#probe);
@@ -10123,12 +11102,17 @@ class RuleSubsumptionVerdict {
   }
 }
 // src/design/domain/rule-subsumptions.ts
-class RuleSubsumptions {
+class RuleSubsumptions extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > 65536)
-      throw new IllegalArgumentException({ kind: "too-many-subsumptions", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-subsumptions");
+  }
+  rebuild(values) {
+    return new RuleSubsumptions(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
   }
   static of(values) {
     return new RuleSubsumptions(values);
@@ -10154,9 +11138,6 @@ class RuleSubsumptions {
         findings.push(group.some((other) => first.isReverseOf(other)) ? first.equivalenceFinding() : first.finding());
     }
     return DesignFindings.of(findings);
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/design/domain/sibling-verdict-document.ts
@@ -10311,6 +11292,11 @@ class SiblingVerdictFinding {
   static of(props) {
     return new SiblingVerdictFinding(props);
   }
+  equals(other) {
+    const left = this.#targets.map((target) => target.asString());
+    const right = other.#targets.map((target) => target.asString());
+    return this.#kind.equals(other.#kind) && this.#detail === other.#detail && sameArray(left, right, (target, otherTarget) => target === otherTarget) && sameArray(this.#functionalRequirementReferences.toStrings(), other.#functionalRequirementReferences.toStrings(), (reference, otherReference) => reference === otherReference) && this.#witness.equals(other.#witness);
+  }
   remap(unit, index) {
     const resolved = traverseResult(this.#targets, (target) => index.resolveDesignTarget(target));
     if (!resolved.ok)
@@ -10398,22 +11384,26 @@ class SiblingVerdictFinding {
   }
 }
 // src/design/domain/sibling-verdict-findings.ts
-class SiblingVerdictFindings {
+class SiblingVerdictFindings extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-sibling-verdict-findings");
+  }
+  rebuild(values) {
+    return new SiblingVerdictFindings(values);
   }
   static of(values) {
     return new SiblingVerdictFindings(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new SiblingVerdictFindings(values));
   }
   add(value) {
     return new SiblingVerdictFindings([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
   toArray() {
     return this.#values;
@@ -10432,6 +11422,9 @@ class SiblingVerdictSkip {
   static of(props) {
     return new SiblingVerdictSkip(props);
   }
+  equals(other) {
+    return this.#target.equals(other.#target) && this.#reason.asString() === other.#reason.asString() && this.#detail === other.#detail;
+  }
   remap(unit, index) {
     const resolved = index.resolveDesignTarget(this.#target);
     if (!resolved.ok)
@@ -10448,22 +11441,26 @@ class SiblingVerdictSkip {
   }
 }
 // src/design/domain/sibling-verdict-skips.ts
-class SiblingVerdictSkips {
+class SiblingVerdictSkips extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-sibling-verdict-skips");
+  }
+  rebuild(values) {
+    return new SiblingVerdictSkips(values);
   }
   static of(values) {
     return new SiblingVerdictSkips(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new SiblingVerdictSkips(values));
   }
   add(value) {
     return new SiblingVerdictSkips([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
   toArray() {
     return this.#values;
@@ -10549,16 +11546,25 @@ class TransitionReference {
   }
 }
 // src/design/domain/unformalized-targets.ts
-class UnformalizedTargets {
+class UnformalizedTargets extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = values;
+    super();
+    this.#values = KeySet.of(boundedCollectionSnapshot(values, 65536, "too-many-unformalized-targets"));
+  }
+  rebuild(values) {
+    return new UnformalizedTargets(values);
   }
   static of(values) {
-    return new UnformalizedTargets(KeySet.of(values));
+    return new UnformalizedTargets(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new UnformalizedTargets(values));
   }
   add(value) {
-    return new UnformalizedTargets(this.#values.with(value));
+    if (this.#values.has(value))
+      return this;
+    return new UnformalizedTargets([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -10572,18 +11578,22 @@ class UnformalizedTargets {
   toStrings() {
     return this.#values.toArray().map((v) => v.asString());
   }
-  isEmpty() {
-    return this.#values.isEmpty();
-  }
 }
 // src/design/domain/unmapped-declarations.ts
-class UnmappedDeclarations {
+class UnmappedDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-unmapped-declarations");
+  }
+  rebuild(values) {
+    return new UnmappedDeclarations(values);
   }
   static of(values) {
     return new UnmappedDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new UnmappedDeclarations(values));
   }
   add(value) {
     return new UnmappedDeclarations([...this.#values, value]);
@@ -10607,9 +11617,6 @@ class UnmappedDeclarations {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/design/domain/unmapped-target.ts
 class UnmappedTarget {
@@ -10621,6 +11628,9 @@ class UnmappedTarget {
   }
   static of(props) {
     return new UnmappedTarget(props.target, props.reason);
+  }
+  equals(other) {
+    return this.#target.equals(other.#target) && this.#reason === other.#reason;
   }
   isFor(token) {
     return this.#target.asString() === token;
@@ -10684,13 +11694,16 @@ function parseDesignEntities(schema) {
         ...typeof t.max === "number" ? { max: DeclaredBound.of(t.max) } : {}
       }));
     }
+    const declarations = DesignAttributeDeclarations.parse(attributes);
+    if (!declarations.ok)
+      return declarations;
     entities.push(DesignEntityDeclaration.of({
       name: name.value,
       ...typeof ent.description === "string" ? { description: ent.description } : {},
-      attributes: DesignAttributeDeclarations.of(attributes)
+      attributes: declarations.value
     }));
   }
-  return ok(DesignEntityDeclarations.of(entities));
+  return DesignEntityDeclarations.parse(entities);
 }
 function renderDesignEntities(entities) {
   return entities.toArray().map((ent) => {
@@ -11055,14 +12068,14 @@ function parseFindingsValues(raw) {
       const fields = combineResults({
         backend: BackendName.parse(entry.backend),
         unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit),
-        targets: traverseResult(entry.targets, TargetIdentifier.parse)
+        targets: flatMapResult(traverseResult(entry.targets, TargetIdentifier.parse), TargetIdentifiers.parse)
       });
       if (!fields.ok)
         return fields;
       return ok({
         backend: fields.value.backend,
         unit: fields.value.unit,
-        targets: TargetIdentifiers.of(fields.value.targets)
+        targets: fields.value.targets
       });
     })
   });
@@ -11135,10 +12148,7 @@ class SystemClock {
 }
 // src/design/adapter/parse-business-rule-reference-index.ts
 function parseBusinessRuleReferenceIndex(markdown) {
-  return flatMapResult(traverseResult([...markdown.matchAll(/\bBR[0-9]+\.[0-9]+\b/g)], (match) => BusinessRuleReference.parse(match[0])), (values) => flatMapResult(BusinessRuleReferences.parse(values), (references) => ({
-    ok: true,
-    value: BusinessRuleReferenceIndex.of(references)
-  })));
+  return flatMapResult(traverseResult([...markdown.matchAll(/\bBR[0-9]+\.[0-9]+\b/g)], (match) => BusinessRuleReference.parse(match[0])), (values) => flatMapResult(BusinessRuleReferences.parse(values), BusinessRuleReferenceIndex.parse));
 }
 
 // src/design/adapter/design-intermediate-representation-validation-materials-repository-implementation.ts
@@ -11239,12 +12249,17 @@ function buildUnitView(rawUnit, unitName, recordRoot) {
     const id = DesignMachineIdentifier.parse(sm.id);
     if (!id.ok)
       return err(JSON.stringify(id.error));
+    const children = combineResults({
+      transitions: DesignTransitionDeclarations.parse(transitions),
+      ignores: DesignIgnoreDeclarations.parse(ignores)
+    });
+    if (!children.ok)
+      return err(JSON.stringify(children.error));
     stateMachines.push(DesignMachineDeclaration.of({
       id: id.value,
       attrPath,
       initial: states.value,
-      transitions: DesignTransitionDeclarations.of(transitions),
-      ignores: DesignIgnoreDeclarations.of(ignores)
+      ...children.value
     }));
   }
   const scenarios = [];
@@ -11301,14 +12316,19 @@ function buildUnitView(rawUnit, unitName, recordRoot) {
   const targets = traverseResult(unformalizedTargets, TargetIdentifier.parse);
   if (!targets.ok)
     return err(JSON.stringify(targets.error));
+  const declarations = combineResults({
+    obligations: DesignObligationDeclarations.parse(obligations),
+    stateMachines: DesignMachineDeclarations.parse(stateMachines),
+    scenarios: DesignScenarioDeclarations.parse(scenarios),
+    background: DesignBackgroundDeclarations.parse(background),
+    unformalizedTargets: UnformalizedTargets.parse(targets.value)
+  });
+  if (!declarations.ok)
+    return err(JSON.stringify(declarations.error));
   return ok(DesignUnitDeclaration.of({
     unit: unit.value,
     entities: entities.value,
-    obligations: DesignObligationDeclarations.of(obligations),
-    stateMachines: DesignMachineDeclarations.of(stateMachines),
-    scenarios: DesignScenarioDeclarations.of(scenarios),
-    background: DesignBackgroundDeclarations.of(background),
-    unformalizedTargets: UnformalizedTargets.of(targets.value),
+    ...declarations.value,
     directoryExists,
     rules: rules.value
   }));
@@ -11379,11 +12399,14 @@ class DesignIntermediateRepresentationValidationMaterialsRepositoryImplementatio
         units.push(parsed.value);
       }
     }
+    const declarations = DesignUnitDeclarations.parse(units);
+    if (!declarations.ok)
+      return corrupt(JSON.stringify(declarations.error));
     return ok(DesignIntermediateRepresentationValidationMaterials.of({
       id,
       irVersion: irVersion.value,
       schemaErrors: messages.value,
-      units: DesignUnitDeclarations.of(units),
+      units: declarations.value,
       sourceDocument: new Uint8Array(bytes)
     }));
   }
@@ -11501,7 +12524,9 @@ function parseDesignModel(raw) {
         id: DesignMachineIdentifier.parse(sm.id),
         initial: flatMapResult(traverseResult(strArr(sm.initial), InitialState.parse), InitialStates.parse),
         entity: DesignEntityName.parse(sm.entity),
-        attribute: DesignAttributeName.parse(sm.attribute)
+        attribute: DesignAttributeName.parse(sm.attribute),
+        transitions: DesignTransitions.parse(transitions),
+        ignores: DesignIgnores.parse(ignores)
       });
       if (!parsed.ok)
         return err(JSON.stringify(parsed.error));
@@ -11510,8 +12535,8 @@ function parseDesignModel(raw) {
         entity: parsed.value.entity,
         attribute: parsed.value.attribute,
         initial: parsed.value.initial,
-        transitions: DesignTransitions.of(transitions),
-        ignores: DesignIgnores.of(ignores),
+        transitions: parsed.value.transitions,
+        ignores: parsed.value.ignores,
         deterministic: sm.deterministic !== false
       }));
     }
@@ -11560,18 +12585,26 @@ function parseDesignModel(raw) {
         return err(JSON.stringify(constructed.error));
       background.push(constructed.value);
     }
+    const collections = combineResults({
+      obligations: DesignObligations.parse(obligations),
+      machines: DesignMachines.parse(machines),
+      scenarios: DesignScenarios.parse(scenarios),
+      background: DesignBackgroundAssumptions.parse(background)
+    });
+    if (!collections.ok)
+      return err(JSON.stringify(collections.error));
     units.push(DesignUnit.of({
       unit: unit.value,
       catalog: catalog.value,
-      obligations: DesignObligations.of(obligations),
-      machines: DesignMachines.of(machines),
-      scenarios: DesignScenarios.of(scenarios),
-      background: DesignBackgroundAssumptions.of(background)
+      ...collections.value
     }));
   }
   if (units.length === 0)
     return err("design IR carries no parseable units");
-  return ok({ irVersion: irVersion.value, units: DesignUnits.of(units) });
+  const declaredUnits = DesignUnits.parse(units);
+  if (!declaredUnits.ok)
+    return err(JSON.stringify(declaredUnits.error));
+  return ok({ irVersion: irVersion.value, units: declaredUnits.value });
 }
 // src/design/adapter/design-model-repository-implementation.ts
 import { existsSync as existsSync4, readFileSync as readFileSync5 } from "fs";
@@ -11673,16 +12706,21 @@ function parseSiblingDesignReportDocument(directory, fileName, raw) {
   });
   if (!comparisons.ok)
     return comparisons;
+  const collections = combineResults({
+    findings: DesignFindings.parse(findings),
+    skipped: DesignSkips.parse(skipped),
+    inputs: doc.inputs === undefined ? ok(null) : DesignInputAnchors.parse(doc.inputs.map((entry) => DesignInputAnchor.of({ artifact: entry.artifact.asString(), sha256: entry.sha256 }))),
+    checked: checked.value === undefined ? ok(null) : CheckedUnits.parse(checked.value),
+    crossChecked: comparisons.value === null ? ok(null) : DesignCrossCheckedEntries.parse(comparisons.value)
+  });
+  if (!collections.ok)
+    return err(JSON.stringify(collections.error));
   return ok(DesignReport.of({
     id: DesignReportIdentifier.of(directory, doc.backend.asString()),
     irVersion: doc.irVersion,
     irHash: doc.irHash,
     method: doc.method,
-    findings: DesignFindings.of(findings),
-    skipped: DesignSkips.of(skipped),
-    inputs: doc.inputs === undefined ? null : DesignInputAnchors.of(doc.inputs.map((entry) => DesignInputAnchor.of({ artifact: entry.artifact.asString(), sha256: entry.sha256 }))),
-    checked: checked.value === undefined ? null : CheckedUnits.of(checked.value),
-    crossChecked: comparisons.value === null ? null : DesignCrossCheckedEntries.of(comparisons.value),
+    ...collections.value,
     unavailableReason: doc.unavailable?.reason ?? null
   }));
 }
@@ -11718,12 +12756,15 @@ class DesignVerifyDirectoryRepositoryImplementation {
     const siblings = this.#siblingsOf(directory);
     if (!siblings.ok)
       return err(siblings.error);
+    const reports = DesignReports.parse(siblings.value);
+    if (!reports.ok)
+      return err({ kind: "corrupt", path: directory.asString(), cause: JSON.stringify(reports.error) });
     const crossPath = join5(directory.asString(), CROSS_CHECK_BASENAME);
     if (!existsSync5(crossPath)) {
-      return ok(DesignVerifyDirectory.of(directory, DesignReports.of(siblings.value), null));
+      return ok(DesignVerifyDirectory.of(directory, reports.value, null));
     }
     const crossCheck = this.#readReport(directory, CROSS_CHECK_BASENAME);
-    return ok(DesignVerifyDirectory.of(directory, DesignReports.of(siblings.value), crossCheck.ok ? crossCheck.value : null));
+    return ok(DesignVerifyDirectory.of(directory, reports.value, crossCheck.ok ? crossCheck.value : null));
   }
   store(aggregate) {
     const directory = aggregate.directory();
@@ -12068,12 +13109,17 @@ class RefinementMaterialsRepositoryImplementation {
         event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger }
       }));
     }
+    const collections = combineResults({
+      attributes: RefinementAttributes.parse(attributes),
+      obligations: RefinementObligations.parse(obligations),
+      scenarios: RefinementScenarios.parse(scenarios)
+    });
+    if (!collections.ok)
+      return err({ kind: "corrupt", path, cause: JSON.stringify(collections.error) });
     const model = RefinementRequirements.of({
       id: FormalModelIdentifier.of(ArtifactPath.of(path)),
       hash: ContentHash.ofText(canonicalStringify(raw)),
-      attributes: RefinementAttributes.of(attributes),
-      obligations: RefinementObligations.of(obligations),
-      scenarios: RefinementScenarios.of(scenarios)
+      ...collections.value
     });
     return ok({ model, bytes: bytes.value });
   }
@@ -12171,13 +13217,13 @@ function parseRefinementMapDocument(bytes, id, mapSchemaPath) {
         continue;
       const parsed = combineResults({
         reqTrigger: TriggerName.parse(e.reqTrigger),
-        transitions: traverseResult(strArr(e.transitions), TransitionReference.parse)
+        transitions: flatMapResult(traverseResult(strArr(e.transitions), TransitionReference.parse), TransitionReferences.parse)
       });
       if (!parsed.ok)
         return { kind: "malformed", error: JSON.stringify(parsed.error) };
       eventMap.push(EventMapping.of({
         reqTrigger: parsed.value.reqTrigger,
-        transitions: TransitionReferences.of(parsed.value.transitions),
+        transitions: parsed.value.transitions,
         waived: isObject(e.waived) && typeof e.waived.reason === "string" ? { reason: e.waived.reason } : undefined
       }));
     }
@@ -12193,11 +13239,16 @@ function parseRefinementMapDocument(bytes, id, mapSchemaPath) {
     const unit = DesignUnitIdentifier.parse(u.unit);
     if (!unit.ok)
       return { kind: "malformed", error: JSON.stringify(unit.error) };
+    const collections = combineResults({
+      attrMap: AttributeMappings.parse(attrMap),
+      eventMap: EventMappings.parse(eventMap),
+      unmapped: UnmappedDeclarations.parse(unmapped)
+    });
+    if (!collections.ok)
+      return { kind: "malformed", error: JSON.stringify(collections.error) };
     units.push(RefinementUnitMap.of({
       unit: unit.value,
-      attrMap: AttributeMappings.of(attrMap),
-      eventMap: EventMappings.of(eventMap),
-      unmapped: UnmappedDeclarations.of(unmapped)
+      ...collections.value
     }));
   }
   const hashes = combineResults({
@@ -12206,13 +13257,16 @@ function parseRefinementMapDocument(bytes, id, mapSchemaPath) {
   });
   if (!hashes.ok)
     return { kind: "malformed", error: JSON.stringify(hashes.error) };
+  const unitMaps = RefinementUnitMaps.parse(units);
+  if (!unitMaps.ok)
+    return { kind: "malformed", error: JSON.stringify(unitMaps.error) };
   return {
     kind: "parsed",
     map: RefinementMap.of({
       id,
       requirementsIrHash: hashes.value.requirements,
       designIrHash: hashes.value.design,
-      units: RefinementUnitMaps.of(units),
+      units: unitMaps.value,
       sourceDocument: bytes
     })
   };
@@ -12626,17 +13680,17 @@ class RefinementSolverClientImplementation {
       });
       if (!parsed.ok)
         return RefinementCheck.unavailable(built.plan, ErrorMessage.of(`invalid solver query label: ${JSON.stringify(parsed.error)}`));
-      verdicts.push([
-        parsed.value.label,
-        RefinementQueryVerdict.of({
-          status: r.status,
-          decodedModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, false) : undefined,
-          decodedPostModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, true) : undefined,
-          core: parsed.value.core?.map((label) => label.asString())
-        })
-      ]);
+      verdicts.push(RefinementQueryVerdictEntry.of(parsed.value.label, RefinementQueryVerdict.of({
+        status: r.status,
+        decodedModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, false) : undefined,
+        decodedPostModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, true) : undefined,
+        core: parsed.value.core?.map((label) => label.asString())
+      })));
     }
-    return RefinementCheck.solved(built.plan, RefinementQueryVerdicts.of(KeyedIndex.of(verdicts)));
+    const collected = RefinementQueryVerdicts.parse(verdicts);
+    if (!collected.ok)
+      return RefinementCheck.unavailable(built.plan, ErrorMessage.of(`invalid solver verdict collection: ${JSON.stringify(collected.error)}`));
+    return RefinementCheck.solved(built.plan, collected.value);
   }
   #runChild(queries, budgetMs) {
     const payload = JSON.stringify({ queries, timeoutMs: this.#config.perQueryTimeoutMs, budgetMs });
@@ -12708,7 +13762,13 @@ function parseSiblingVerdictDocument(raw) {
       return SiblingVerdictDocument.unreadable(JSON.stringify(target.error));
     skipped.push(SiblingVerdictSkip.of({ ...skip, target: target.value }));
   }
-  return SiblingVerdictDocument.readable(doc.method, SiblingVerdictFindings.of(findings), SiblingVerdictSkips.of(skipped));
+  const collections = combineResults({
+    findings: SiblingVerdictFindings.parse(findings),
+    skipped: SiblingVerdictSkips.parse(skipped)
+  });
+  if (!collections.ok)
+    return SiblingVerdictDocument.unreadable(JSON.stringify(collections.error));
+  return SiblingVerdictDocument.readable(doc.method, collections.value.findings, collections.value.skipped);
 }
 
 // src/design/adapter/sibling-backend-client-implementation.ts
@@ -13086,7 +14146,7 @@ function main() {
       process.exit(0);
       break;
     case "model-unreadable":
-      process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "ir-unreadable" })}
+      process.stdout.write(`${JSON.stringify({ pass: false, findings_count: 0, skipped_count: 0, note: "ir-unreadable" })}
 `);
       process.exit(0);
       break;
