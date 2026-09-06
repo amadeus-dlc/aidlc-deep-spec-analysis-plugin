@@ -20,7 +20,6 @@ import {
   QuintScenarioVerdict,
   QuintTemporalVerdict,
   ScenarioIdentifier,
-  TraceStates,
   VerificationSkips,
 } from "@deep-spec-analysis/requirements-domain";
 import type { QuintClient } from "@deep-spec-analysis/requirements-usecase";
@@ -214,16 +213,12 @@ export class QuintClientImplementation implements QuintClient {
     if (`${run.stdout}\n${run.stderr}`.toLowerCase().includes("deadlock")) {
       if (!run.itf) return QuintMachineRunVerdict.deadlock(null);
       const trace = decodeItfTrace(run.itf, machine.varToPath);
-      return trace.ok
-        ? QuintMachineRunVerdict.deadlock(TraceStates.of(trace.value))
-        : QuintMachineRunVerdict.runFailed(trace.error);
+      return trace.ok ? QuintMachineRunVerdict.deadlock(trace.value) : QuintMachineRunVerdict.runFailed(trace.error);
     }
     const violated = run.itf !== null && (itfStatus(run.itf) === "violation" || (bounded && !!run.itf));
     if (violated && run.itf) {
       const trace = decodeItfTrace(run.itf, machine.varToPath);
-      return trace.ok
-        ? QuintMachineRunVerdict.violation(TraceStates.of(trace.value))
-        : QuintMachineRunVerdict.runFailed(trace.error);
+      return trace.ok ? QuintMachineRunVerdict.violation(trace.value) : QuintMachineRunVerdict.runFailed(trace.error);
     }
     if (!violated && run.itf === null && this.#didNotAnswer(run)) {
       return QuintMachineRunVerdict.runFailed(this.#outputTail(run));
@@ -262,9 +257,7 @@ export class QuintClientImplementation implements QuintClient {
         const trace = decodeItfTrace(run.itf, machine.varToPath);
         out.set(
           obId,
-          trace.ok
-            ? QuintTemporalVerdict.violation(TraceStates.of(trace.value))
-            : QuintTemporalVerdict.runFailed(trace.error),
+          trace.ok ? QuintTemporalVerdict.violation(trace.value) : QuintTemporalVerdict.runFailed(trace.error),
         );
       } else if (this.#didNotAnswer(run)) {
         // verify は違反時にだけ ITF を書くので、ITF 無しは clean か失敗かの二択。
