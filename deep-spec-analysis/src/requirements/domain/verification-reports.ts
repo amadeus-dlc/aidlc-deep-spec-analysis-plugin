@@ -1,3 +1,4 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import {
   type BackendName,
   type ContentHash,
@@ -16,7 +17,7 @@ import { VerificationReport } from "./verification-report.ts";
 import type { VerificationReportIdentifier } from "./verification-report-identifier.ts";
 import { VerificationSkips } from "./verification-skips.ts";
 
-export class VerificationReports {
+export class VerificationReports implements FirstClassCollection, IterableFirstClassCollection<VerificationReport> {
   readonly #values: readonly VerificationReport[];
 
   private constructor(values: readonly VerificationReport[]) {
@@ -80,5 +81,9 @@ export class VerificationReports {
     return failure === null
       ? report
       : report.degraded(`scenario cross-check could not be constructed: ${failure.kind}`);
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

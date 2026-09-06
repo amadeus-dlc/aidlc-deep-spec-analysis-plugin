@@ -1,0 +1,2416 @@
+{
+  "domainFiles": 371,
+  "classes": 356,
+  "sourceFingerprint": "6bb00be340fb39863d645005f7b51bd2859b4fb66152dad93ebf5387b6e312ad",
+  "collectionCount": 112,
+  "emptyAllowed": 110,
+  "nonEmpty": 2,
+  "iterable": 97,
+  "findings": [],
+  "applied": [
+    {
+      "name": "AttributeMappings",
+      "path": "src/design/domain/attribute-mappings.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly AttributeMapping[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "AttributePaths",
+      "path": "src/design/domain/attribute-paths.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly AttributePath[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "BusinessRuleReferenceIndex",
+      "path": "src/design/domain/business-rule-reference-index.ts",
+      "nonEmpty": false,
+      "iterable": false,
+      "contracts": [
+        "FirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "ids: BusinessRuleReferences"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "BusinessRuleReferences",
+      "path": "src/design/domain/business-rule-references.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly BusinessRuleReference[]"
+          ]
+        },
+        {
+          "name": "parse",
+          "parameters": [
+            "values: readonly BusinessRuleReference[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "CheckedUnits",
+      "path": "src/design/domain/checked-units.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly UnitName[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignAssignments",
+      "path": "src/design/domain/design-assignments.ts",
+      "nonEmpty": false,
+      "iterable": false,
+      "contracts": [
+        "FirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "parse",
+          "parameters": [
+            "values: readonly DesignAssignment[]"
+          ]
+        },
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignAssignment[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignAttributeCatalog",
+      "path": "src/design/domain/design-attribute-catalog.ts",
+      "nonEmpty": false,
+      "iterable": false,
+      "contracts": [
+        "FirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "declarations: DesignEntityDeclarations"
+          ]
+        },
+        {
+          "name": "parse",
+          "parameters": [
+            "declarations: DesignEntityDeclarations"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignAttributeDeclarations",
+      "path": "src/design/domain/design-attribute-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignAttributeDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignBackgroundAssumptions",
+      "path": "src/design/domain/design-background-assumptions.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignBackgroundAssumption[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignBackgroundDeclarations",
+      "path": "src/design/domain/design-background-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignBackgroundDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignCrossCheckedEntries",
+      "path": "src/design/domain/design-cross-checked-entries.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignCrossCheckedEntry[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignEntityDeclarations",
+      "path": "src/design/domain/design-entity-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignEntityDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignEventRuleCatalog",
+      "path": "src/design/domain/design-event-rule-catalog.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "unit: DesignUnit"
+          ]
+        },
+        {
+          "name": "parse",
+          "parameters": [
+            "unit: DesignUnit"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignFindings",
+      "path": "src/design/domain/design-findings.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignFinding[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignIgnoreDeclarations",
+      "path": "src/design/domain/design-ignore-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignIgnoreDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignIgnores",
+      "path": "src/design/domain/design-ignores.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignIgnore[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignInputAnchors",
+      "path": "src/design/domain/design-input-anchors.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignInputAnchor[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignMachineDeclarations",
+      "path": "src/design/domain/design-machine-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignMachineDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignMachines",
+      "path": "src/design/domain/design-machines.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignMachine[]"
+          ]
+        },
+        {
+          "name": "attrPathOf",
+          "parameters": [
+            "sm: DesignMachine"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignObligationDeclarations",
+      "path": "src/design/domain/design-obligation-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignObligationDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignObligations",
+      "path": "src/design/domain/design-obligations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignObligation[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignReports",
+      "path": "src/design/domain/design-reports.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignReport[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignScenarioDeclarations",
+      "path": "src/design/domain/design-scenario-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignScenarioDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignScenarios",
+      "path": "src/design/domain/design-scenarios.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignScenario[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignSkips",
+      "path": "src/design/domain/design-skips.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignSkipped[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignTransitionDeclarations",
+      "path": "src/design/domain/design-transition-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignTransitionDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignTransitions",
+      "path": "src/design/domain/design-transitions.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignTransition[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignUnitDeclarations",
+      "path": "src/design/domain/design-unit-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignUnitDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignUnits",
+      "path": "src/design/domain/design-units.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignUnit[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "EffectAssignments",
+      "path": "src/design/domain/effect-assignments.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly EffectAssignment[]"
+          ]
+        },
+        {
+          "name": "parse",
+          "parameters": [
+            "values: readonly EffectAssignment[]"
+          ]
+        },
+        {
+          "name": "fromEffect",
+          "parameters": [
+            "effect: ExpressionTree"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "EventMappings",
+      "path": "src/design/domain/event-mappings.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly EventMapping[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "InitialStates",
+      "path": "src/design/domain/initial-states.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "parse",
+          "parameters": [
+            "values: readonly InitialState[]"
+          ]
+        },
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly InitialState[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "IssuedLoweredIdentifiers",
+      "path": "src/design/domain/issued-lowered-identifiers.ts",
+      "nonEmpty": false,
+      "iterable": false,
+      "contracts": [
+        "FirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly LoweredIdentifier[]"
+          ]
+        },
+        {
+          "name": "parse",
+          "parameters": [
+            "values: readonly LoweredIdentifier[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "LoweredBackgrounds",
+      "path": "src/design/domain/lowered-backgrounds.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly LoweredBackground[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "LoweredObligations",
+      "path": "src/design/domain/lowered-obligations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly LoweredObligation[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "LoweredScenarios",
+      "path": "src/design/domain/lowered-scenarios.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly LoweredScenario[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "ReachabilityPlan",
+      "path": "src/design/domain/reachability-plan.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "machines: readonly MachineReachability[]"
+          ]
+        },
+        {
+          "name": "parse",
+          "parameters": [
+            "machines: readonly MachineReachability[]"
+          ]
+        },
+        {
+          "name": "forUnit",
+          "parameters": [
+            "unit: DesignUnit",
+            "lowered: LoweredUnit",
+            "method: VerificationMethod"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "RefinementAttributes",
+      "path": "src/design/domain/refinement-attributes.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly RefinementAttribute[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "RefinementObligations",
+      "path": "src/design/domain/refinement-obligations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly RefinementObligation[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "RefinementQueryVerdicts",
+      "path": "src/design/domain/refinement-query-verdicts.ts",
+      "nonEmpty": false,
+      "iterable": false,
+      "contracts": [
+        "FirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: KeyedIndex<QueryLabel, RefinementQueryVerdict>"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "RefinementQuintInvariants",
+      "path": "src/design/domain/refinement-quint-invariants.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly RefinementQuintInvariant[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "RefinementScenarios",
+      "path": "src/design/domain/refinement-scenarios.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly RefinementScenario[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "RefinementUnitMaps",
+      "path": "src/design/domain/refinement-unit-maps.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly RefinementUnitMap[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "RuleSubsumptions",
+      "path": "src/design/domain/rule-subsumptions.ts",
+      "nonEmpty": false,
+      "iterable": false,
+      "contracts": [
+        "FirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly RuleSubsumption[]"
+          ]
+        },
+        {
+          "name": "parse",
+          "parameters": [
+            "values: readonly RuleSubsumption[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "SiblingVerdictFindings",
+      "path": "src/design/domain/sibling-verdict-findings.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly SiblingVerdictFinding[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "SiblingVerdictSkips",
+      "path": "src/design/domain/sibling-verdict-skips.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly SiblingVerdictSkip[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "TransitionReferences",
+      "path": "src/design/domain/transition-references.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly TransitionReference[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "UnformalizedTargets",
+      "path": "src/design/domain/unformalized-targets.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly TargetIdentifier[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "UnmappedDeclarations",
+      "path": "src/design/domain/unmapped-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly UnmappedTarget[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DesignArtifacts",
+      "path": "src/doctor/domain/design-artifacts.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DesignArtifactReference[]"
+          ]
+        },
+        {
+          "name": "parse",
+          "parameters": [
+            "values: readonly DesignArtifactReference[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "HealthVerdict",
+      "path": "src/doctor/domain/health-verdict.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly Check[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "InstallationManifest",
+      "path": "src/doctor/domain/installation-manifest.ts",
+      "nonEmpty": true,
+      "iterable": true,
+      "contracts": [
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": false,
+      "factories": [
+        {
+          "name": "standard",
+          "parameters": []
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "StableReleases",
+      "path": "src/doctor/domain/stable-releases.ts",
+      "nonEmpty": false,
+      "iterable": false,
+      "contracts": [
+        "FirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "versions: readonly PluginVersion[]"
+          ]
+        },
+        {
+          "name": "parse",
+          "parameters": [
+            "versions: readonly PluginVersion[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "StageScopes",
+      "path": "src/doctor/domain/stage-scopes.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly StageScope[]"
+          ]
+        },
+        {
+          "name": "parse",
+          "parameters": [
+            "values: readonly StageScope[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "StructuralDebt",
+      "path": "src/doctor/domain/structural-debt.ts",
+      "nonEmpty": false,
+      "iterable": false,
+      "contracts": [
+        "FirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "observations: readonly StructuralObservation[]"
+          ]
+        },
+        {
+          "name": "parse",
+          "parameters": [
+            "observations: readonly StructuralObservation[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DeclaredBindings",
+      "path": "src/kernel/domain/declared-bindings.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "parse",
+          "parameters": [
+            "values: readonly BindingDeclaration[]"
+          ]
+        },
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly BindingDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "EnumerationMembers",
+      "path": "src/kernel/domain/enumeration-members.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "parse",
+          "parameters": [
+            "values: readonly EnumerationMember[]"
+          ]
+        },
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly EnumerationMember[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "ErrorMessages",
+      "path": "src/kernel/domain/error-messages.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "parse",
+          "parameters": [
+            "values: readonly ErrorMessage[]"
+          ]
+        },
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly ErrorMessage[]"
+          ]
+        },
+        {
+          "name": "collect",
+          "parameters": [
+            "diagnostics: Iterable<Result<ErrorMessage, ParseError>>"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "FunctionalRequirementReferences",
+      "path": "src/kernel/domain/functional-requirement-references.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "parse",
+          "parameters": [
+            "values: readonly RequirementIdentifier[]"
+          ]
+        },
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly RequirementIdentifier[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "RequirementIdentifiers",
+      "path": "src/kernel/domain/requirement-identifiers.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "extractFrom",
+          "parameters": [
+            "text: string"
+          ]
+        },
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly RequirementIdentifier[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "ScenarioBindings",
+      "path": "src/kernel/domain/scenario-bindings.ts",
+      "nonEmpty": false,
+      "iterable": false,
+      "contracts": [
+        "FirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "parse",
+          "parameters": [
+            "values: readonly ScenarioBinding[]"
+          ]
+        },
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly ScenarioBinding[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "ScenarioVerdicts",
+      "path": "src/kernel/domain/scenario-verdicts.ts",
+      "nonEmpty": false,
+      "iterable": false,
+      "contracts": [
+        "FirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly ScenarioVerdict[]"
+          ]
+        },
+        {
+          "name": "parse",
+          "parameters": [
+            "values: readonly ScenarioVerdict[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "TargetIdentifiers",
+      "path": "src/kernel/domain/target-identifiers.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly TargetIdentifier[]"
+          ]
+        },
+        {
+          "name": "safe",
+          "parameters": [
+            "prefix: string",
+            "raw: string"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "AllowedValues",
+      "path": "src/refcheck/domain/allowed-values.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly AllowedValue[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "AttributeDeclarations",
+      "path": "src/refcheck/domain/attribute-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly AttributeDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "AttributeNames",
+      "path": "src/refcheck/domain/attribute-names.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly AttributeName[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "CheckFamilies",
+      "path": "src/refcheck/domain/check-families.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly CheckFamily[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "ComponentEntities",
+      "path": "src/refcheck/domain/component-entities.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly ComponentEntity[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "ComponentReferences",
+      "path": "src/refcheck/domain/component-references.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly ComponentReference[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "ComponentShapeErrors",
+      "path": "src/refcheck/domain/component-shape-errors.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly ComponentShapeError[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "Components",
+      "path": "src/refcheck/domain/components.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly Component[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "ContractRows",
+      "path": "src/refcheck/domain/contract-rows.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly ContractRow[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "DomainEntitySketches",
+      "path": "src/refcheck/domain/domain-entity-sketches.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly DomainEntitySketch[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "EntityDeclarations",
+      "path": "src/refcheck/domain/entity-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly EntityDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "EntityReferences",
+      "path": "src/refcheck/domain/entity-references.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly EntityReference[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "Findings",
+      "path": "src/refcheck/domain/findings.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly Finding[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "InputAnchors",
+      "path": "src/refcheck/domain/input-anchors.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly InputAnchor[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "RelationshipDeclarations",
+      "path": "src/refcheck/domain/relationship-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly RelationshipDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "RuleDeclarations",
+      "path": "src/refcheck/domain/rule-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly RuleDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "ShapeErrors",
+      "path": "src/refcheck/domain/shape-errors.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly ShapeError[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "SiblingUnitIndex",
+      "path": "src/refcheck/domain/sibling-unit-index.ts",
+      "nonEmpty": false,
+      "iterable": false,
+      "contracts": [
+        "FirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "units: KeyedIndex<UnitName, EntityDeclarations>"
+          ]
+        },
+        {
+          "name": "parse",
+          "parameters": [
+            "units: KeyedIndex<UnitName, EntityDeclarations>"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "Skips",
+      "path": "src/refcheck/domain/skips.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly Skipped[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "SourceIdentifiers",
+      "path": "src/refcheck/domain/source-identifiers.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly SourceIdentifier[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "SpecificationBlockAssessments",
+      "path": "src/refcheck/domain/specification-block-assessments.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly SpecificationBlockAssessment[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "StateMachineSketches",
+      "path": "src/refcheck/domain/state-machine-sketches.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly StateMachineSketch[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "StateNames",
+      "path": "src/refcheck/domain/state-names.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly StateName[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "UnitDeclarations",
+      "path": "src/refcheck/domain/unit-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly UnitDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "UnitNames",
+      "path": "src/refcheck/domain/unit-names.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly UnitName[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "WitnessReferences",
+      "path": "src/refcheck/domain/witness-references.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly WitnessReference[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "BackgroundAssumptions",
+      "path": "src/requirements/domain/background-assumptions.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly BackgroundAssumption[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "CrossCheckedEntries",
+      "path": "src/requirements/domain/cross-checked-entries.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly CrossCheckedEntry[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "FunctionalRequirementReferenceClaims",
+      "path": "src/requirements/domain/functional-requirement-reference-claims.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly FunctionalRequirementReferenceClaim[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "FunctionalRequirementReferenceIndex",
+      "path": "src/requirements/domain/functional-requirement-reference-index.ts",
+      "nonEmpty": false,
+      "iterable": false,
+      "contracts": [
+        "FirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "claims: readonly FunctionalRequirementReferenceClaim[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "IntermediateRepresentationAttributeCatalog",
+      "path": "src/requirements/domain/intermediate-representation-attribute-catalog.ts",
+      "nonEmpty": false,
+      "iterable": false,
+      "contracts": [
+        "FirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "declarations: IntermediateRepresentationEntityDeclarations"
+          ]
+        },
+        {
+          "name": "parse",
+          "parameters": [
+            "declarations: IntermediateRepresentationEntityDeclarations"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "IntermediateRepresentationAttributeDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-attribute-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly IntermediateRepresentationAttributeDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "IntermediateRepresentationBackgroundDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-background-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly IntermediateRepresentationBackgroundDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "IntermediateRepresentationEntityDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-entity-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly IntermediateRepresentationEntityDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "IntermediateRepresentationObligationDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-obligation-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly IntermediateRepresentationObligationDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "IntermediateRepresentationScenarioDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-scenario-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly IntermediateRepresentationScenarioDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "ObligationIdentifiers",
+      "path": "src/requirements/domain/obligation-identifiers.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly ObligationIdentifier[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "Obligations",
+      "path": "src/requirements/domain/obligations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly Obligation[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "QuintMachineComponents",
+      "path": "src/requirements/domain/quint-machine-components.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly QuintMachineComponent[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "RequirementAttributeDeclarations",
+      "path": "src/requirements/domain/requirement-attribute-declarations.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly RequirementAttributeDeclaration[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "SatisfiabilityModuloTheoriesEventPairProbes",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-event-pair-probes.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly SatisfiabilityModuloTheoriesEventPairProbe[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "SatisfiabilityModuloTheoriesQueryVerdicts",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-query-verdicts.ts",
+      "nonEmpty": false,
+      "iterable": false,
+      "contracts": [
+        "FirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: KeyedIndex<QueryLabel, SatisfiabilityModuloTheoriesQueryVerdict>"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "Scenarios",
+      "path": "src/requirements/domain/scenarios.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly Scenario[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "TraceState",
+      "path": "src/requirements/domain/trace-state.ts",
+      "nonEmpty": false,
+      "iterable": false,
+      "contracts": [
+        "FirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "empty",
+          "parameters": []
+        },
+        {
+          "name": "fromBindings",
+          "parameters": [
+            "bindings: ScenarioBindings"
+          ]
+        },
+        {
+          "name": "of",
+          "parameters": [
+            "entries: Iterable<readonly [AttributePath, TraceValue]>"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "TraceStates",
+      "path": "src/requirements/domain/trace-states.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly TraceState[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "VerificationFindings",
+      "path": "src/requirements/domain/verification-findings.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly VerificationFinding[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "VerificationReports",
+      "path": "src/requirements/domain/verification-reports.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly VerificationReport[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "VerificationSkips",
+      "path": "src/requirements/domain/verification-skips.ts",
+      "nonEmpty": false,
+      "iterable": true,
+      "contracts": [
+        "FirstClassCollection",
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": true,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "values: readonly VerificationSkipped[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    },
+    {
+      "name": "FindingTargets",
+      "path": "src/kernel/domain/finding-targets.ts",
+      "nonEmpty": true,
+      "iterable": true,
+      "contracts": [
+        "IterableFirstClassCollection"
+      ],
+      "hasIsEmpty": false,
+      "factories": [
+        {
+          "name": "of",
+          "parameters": [
+            "head: TargetIdentifier",
+            "tail: readonly TargetIdentifier[]"
+          ]
+        },
+        {
+          "name": "parse",
+          "parameters": [
+            "head: TargetIdentifier",
+            "tail: readonly TargetIdentifier[]"
+          ]
+        }
+      ],
+      "factoryContractChecked": true
+    }
+  ]
+}

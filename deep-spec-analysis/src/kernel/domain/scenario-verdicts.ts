@@ -4,12 +4,13 @@ import {
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
+import type { FirstClassCollection } from "./first-class-collection.ts";
 import { KeySet } from "./key-set.ts";
 import { ScenarioComparison } from "./scenario-comparison.ts";
 import type { ScenarioVerdict } from "./scenario-verdict.ts";
 
 // 同じシナリオに対するバックエンドごとの判定。元のバックエンド順で比較する。
-export class ScenarioVerdicts {
+export class ScenarioVerdicts implements FirstClassCollection {
   readonly #values: readonly ScenarioVerdict[];
 
   /** 比較入力の予算は128バックエンド（最大8,128組）。コピーと一意性検査より先に確認する。 */
@@ -43,5 +44,9 @@ export class ScenarioVerdicts {
           throw new Error(`defect: validated scenario verdicts cannot be compared (${comparison.error.kind})`);
         yield comparison.value;
       }
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

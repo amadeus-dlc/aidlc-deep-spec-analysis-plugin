@@ -1,3 +1,4 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { DesignFinding } from "./design-finding.ts";
 
 // 設計バックエンドの正準順: kind 順位（kernel の FindingKind）→ unit → targets
@@ -17,7 +18,7 @@ function sortDesignFindings(findings: readonly DesignFinding[]): DesignFinding[]
 // finding / skip のファーストクラスコレクション。契約2 拡張（設計 11-kind
 // 順位）の正準ソートという集合の知識を所有する。
 
-export class DesignFindings {
+export class DesignFindings implements FirstClassCollection, IterableFirstClassCollection<DesignFinding> {
   readonly #values: readonly DesignFinding[];
 
   private constructor(values: readonly DesignFinding[]) {

@@ -1,4 +1,11 @@
-import { FindingKind, type QueryLabel, TargetIdentifiers, type TriggerName } from "@deep-spec-analysis/kernel-domain";
+import {
+  FindingKind,
+  FindingTargets,
+  type QueryLabel,
+  TargetIdentifiers,
+  type TriggerName,
+} from "@deep-spec-analysis/kernel-domain";
+import { ok, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { ObligationIdentifier } from "./obligation-identifier.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { SatisfiabilityModuloTheoriesQueryVerdicts } from "./satisfiability-modulo-theories-query-verdicts.ts";
@@ -41,12 +48,12 @@ export class SatisfiabilityModuloTheoriesEventPairProbe {
   interpret(
     model: RequirementsModel,
     results: SatisfiabilityModuloTheoriesQueryVerdicts,
-  ): { findings: VerificationFindings; skipped: VerificationSkips } {
+  ): Result<{ findings: VerificationFindings; skipped: VerificationSkips }, ParseError> {
     const overlap = this.#overlapVerdictIn(results);
     const joint = this.#jointVerdictIn(results);
     if (overlap.isSat() && joint.isUnsat()) {
-      const targets = this.targets().sortedUniqueCanonically();
-      return {
+      const targets = FindingTargets.of(this.#a.asTargetId(), [this.#b.asTargetId()]).sortedUniqueCanonically();
+      return ok({
         findings: VerificationFindings.of([
           VerificationFinding.of({
             kind: FindingKind.conflict(),
@@ -57,17 +64,17 @@ export class SatisfiabilityModuloTheoriesEventPairProbe {
           }),
         ]),
         skipped: VerificationSkips.of([]),
-      };
+      });
     }
     const pending =
       [overlap, joint].find((verdict) => verdict.isMissing()) ?? (overlap.isUndecided() ? overlap : joint);
-    return {
+    return ok({
       findings: VerificationFindings.of([]),
       skipped:
         overlap.isUndecided() || joint.isUndecided()
           ? pending.skipsFor(this.targets(), `event-pair check for trigger "${this.#trigger.asString()}"`)
           : VerificationSkips.of([]),
-    };
+    });
   }
 
   // 対の 2 対象（発行順）。

@@ -1,3 +1,4 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { type ArtifactPath, AttributePath, type Expression, ExpressionTree } from "@deep-spec-analysis/kernel-domain";
 import { err, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import { AttributeCoverage } from "./attribute-coverage.ts";
@@ -17,7 +18,7 @@ import type { UnmappedDeclarations } from "./unmapped-declarations.ts";
 // （`substitute`——旧 alphaExpr の逐語）、未代入属性のフレーム等式（`equalityFor`）
 // はコレクションの知識で、置換の材料は各写像が所有する（種別規律の裁定 10、
 // 2026-09-02——旧 `AlphaContext` を吸収）。
-export class AttributeMappings {
+export class AttributeMappings implements FirstClassCollection, IterableFirstClassCollection<AttributeMapping> {
   readonly #values: readonly AttributeMapping[];
 
   private constructor(values: readonly AttributeMapping[]) {
@@ -149,5 +150,9 @@ export class AttributeMappings {
 
   toArray(): readonly AttributeMapping[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

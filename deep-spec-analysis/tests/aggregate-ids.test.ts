@@ -52,6 +52,7 @@ import {
   EnumerationMember,
   EnumerationMembers,
   FindingKind,
+  FindingTargets,
   IntermediateRepresentationVersion,
   ObligationNature,
   RequirementIdentifier,
@@ -318,7 +319,7 @@ describe("requirements first-class collections", () => {
     const finding = VerificationFinding.of({
       kind: FindingKind.of("conflict"),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      targets: TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))),
+      targets: FindingTargets.of(TargetIdentifier.of("OB-1"), []),
       witness: VerificationWitness.core([]),
       detail: "d",
     });
@@ -448,7 +449,7 @@ describe("design first-class collections", () => {
     const finding = DesignFinding.of({
       kind: FindingKind.of("conflict"),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      targets: TargetIdentifiers.of(Array.from(["DOB-1"], (raw) => TargetIdentifier.of(raw))),
+      targets: FindingTargets.of(TargetIdentifier.of("DOB-1"), []),
       witness: DesignWitness.refs([]),
       unit: UnitName.of("u2"),
       detail: "d",

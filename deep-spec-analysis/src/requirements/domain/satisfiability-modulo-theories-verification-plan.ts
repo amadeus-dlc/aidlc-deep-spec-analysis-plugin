@@ -6,6 +6,7 @@ import type {
   TargetIdentifiers,
   TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
+import { ok, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import { SatisfiabilityModuloTheoriesProbe } from "./satisfiability-modulo-theories-probe.ts";
 
 // コンパイルされた問いと対象の対応を保持する検証計画。
@@ -63,35 +64,44 @@ export class SatisfiabilityModuloTheoriesVerificationPlan {
   interpret(
     model: RequirementsModel,
     results: SatisfiabilityModuloTheoriesQueryVerdicts,
-  ): { findings: VerificationFindings; skipped: VerificationSkips } {
+  ): Result<{ findings: VerificationFindings; skipped: VerificationSkips }, ParseError> {
     const findings: VerificationFinding[] = [];
     const skipped: VerificationSkipped[] = [...this.#skipped];
-    const collect = (evidence: { findings: VerificationFindings; skipped: VerificationSkips }): void => {
-      findings.push(...evidence.findings);
-      skipped.push(...evidence.skipped);
-    };
+    for (const result of this.#interpretProbes(model, results)) {
+      if (!result.ok) return result;
+      findings.push(...result.value.findings);
+      skipped.push(...result.value.skipped);
+    }
+    return ok({
+      findings: VerificationFindings.of(findings).distinctConflicts(),
+      skipped: VerificationSkips.of(skipped),
+    });
+  }
+
+  *#interpretProbes(
+    model: RequirementsModel,
+    results: SatisfiabilityModuloTheoriesQueryVerdicts,
+  ): IterableIterator<Result<{ findings: VerificationFindings; skipped: VerificationSkips }, ParseError>> {
     const consistency = SatisfiabilityModuloTheoriesProbe.consistency(
       model.obligations().compiledInvariantTargets(this.#compiled),
       this.#labelToTarget,
     );
-    collect(consistency.interpret(model, results));
+    yield consistency.interpret(model, results);
     if (consistency.allowsVacuityChecks(results))
       for (const [subject, query] of this.#vacuityQueries)
-        collect(
-          SatisfiabilityModuloTheoriesProbe.vacuity(query, subject, this.#labelToTarget).interpret(model, results),
-        );
-    for (const pair of this.#eventPairs) collect(pair.interpret(model, results));
+        yield SatisfiabilityModuloTheoriesProbe.vacuity(query, subject, this.#labelToTarget).interpret(model, results);
+    for (const pair of this.#eventPairs) yield pair.interpret(model, results);
     for (const [trigger, targets] of [...this.#gapTriggers].sort((a, b) =>
       a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0,
     ))
-      collect(SatisfiabilityModuloTheoriesProbe.completeness(trigger, targets).interpret(model, results));
+      yield SatisfiabilityModuloTheoriesProbe.completeness(trigger, targets).interpret(model, results);
     for (const scenario of model.scenarios()) {
       const query = this.#scenarioQueries.get(scenario.id());
       if (query !== undefined)
-        collect(
-          SatisfiabilityModuloTheoriesProbe.scenario(query, scenario, this.#labelToTarget).interpret(model, results),
+        yield SatisfiabilityModuloTheoriesProbe.scenario(query, scenario, this.#labelToTarget).interpret(
+          model,
+          results,
         );
     }
-    return { findings: VerificationFindings.of(findings).distinctConflicts(), skipped: VerificationSkips.of(skipped) };
   }
 }

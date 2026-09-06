@@ -1,8 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { DesignUnit } from "./design-unit.ts";
 
 // 設計ユニットのファーストクラスコレクション。ユニット名昇順の整列
 // （DesignModel の組成不変条件）という集合の知識を所有する。
-export class DesignUnits {
+export class DesignUnits implements FirstClassCollection, IterableFirstClassCollection<DesignUnit> {
   readonly #values: readonly DesignUnit[];
 
   private constructor(values: readonly DesignUnit[]) {

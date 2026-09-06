@@ -1,10 +1,13 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { ObligationIdentifiers } from "./obligation-identifiers.ts";
 import type { QuintMachineComponent } from "./quint-machine-component.ts";
 import type { TraceState } from "./trace-state.ts";
 
 // 不変量成分のファーストクラスコレクション。帰属評価（どの成分が最終状態で
 // 破れているか）は成分集合自身の知識で、個々の破れは成分に問う。
-export class QuintMachineComponents {
+export class QuintMachineComponents
+  implements FirstClassCollection, IterableFirstClassCollection<QuintMachineComponent>
+{
   readonly #values: readonly QuintMachineComponent[];
 
   private constructor(values: readonly QuintMachineComponent[]) {

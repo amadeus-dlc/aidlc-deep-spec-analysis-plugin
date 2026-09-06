@@ -1,6 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { DesignAttributeDeclaration } from "./design-attribute-declaration.ts";
 
-export class DesignAttributeDeclarations {
+export class DesignAttributeDeclarations
+  implements FirstClassCollection, IterableFirstClassCollection<DesignAttributeDeclaration>
+{
   readonly #values: readonly DesignAttributeDeclaration[];
 
   private constructor(values: readonly DesignAttributeDeclaration[]) {
@@ -21,5 +24,9 @@ export class DesignAttributeDeclarations {
 
   toArray(): readonly DesignAttributeDeclaration[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

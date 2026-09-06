@@ -2,9 +2,9 @@ import {
   type ArtifactPath,
   type AttributePath,
   FindingKind,
+  FindingTargets,
   FunctionalRequirementReferences,
   TargetIdentifier,
-  TargetIdentifiers,
   type TriggerName,
   UnitName,
 } from "@deep-spec-analysis/kernel-domain";
@@ -45,7 +45,7 @@ export class RefinementUnitMap {
   }
 
   gapFor(
-    targets: TargetIdentifiers,
+    targets: FindingTargets,
     detail: string,
     artifact: ArtifactPath,
     references = FunctionalRequirementReferences.of([]),
@@ -61,7 +61,7 @@ export class RefinementUnitMap {
   }
   attributeGap(path: AttributePath, detail: string, artifact: ArtifactPath): DesignFinding {
     return this.gapFor(
-      TargetIdentifiers.of([TargetIdentifier.of(`attr:${path.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`)]),
+      FindingTargets.of(TargetIdentifier.of(`attr:${path.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`), []),
       detail,
       artifact,
     );

@@ -1,4 +1,4 @@
-import { type ArtifactPath, FindingKind } from "@deep-spec-analysis/kernel-domain";
+import { type ArtifactPath, FindingKind, FindingTargets, TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
 import type { CheckFamily } from "./check-family.ts";
 import type { ElementPath } from "./element-path.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
@@ -23,7 +23,7 @@ export class ShapeError {
     report.finding(
       family,
       FindingKind.structureInvalid(),
-      [family.asCheckTarget()],
+      FindingTargets.of(TargetIdentifier.of(family.asCheckTarget()), []),
       [WitnessReference.at(artifact.asString(), this.#element.asString())],
       this.#detail,
     );

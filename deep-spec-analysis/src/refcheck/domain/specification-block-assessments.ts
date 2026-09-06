@@ -1,8 +1,14 @@
-import type { ArtifactPath } from "@deep-spec-analysis/kernel-domain";
+import type {
+  ArtifactPath,
+  FirstClassCollection,
+  IterableFirstClassCollection,
+} from "@deep-spec-analysis/kernel-domain";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { SpecificationBlockAssessment } from "./specification-block-assessment.ts";
 
-export class SpecificationBlockAssessments {
+export class SpecificationBlockAssessments
+  implements FirstClassCollection, IterableFirstClassCollection<SpecificationBlockAssessment>
+{
   readonly #values: readonly SpecificationBlockAssessment[];
 
   private constructor(values: readonly SpecificationBlockAssessment[]) {
@@ -30,5 +36,9 @@ export class SpecificationBlockAssessments {
     for (const block of this) {
       block.check(report, artifact);
     }
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

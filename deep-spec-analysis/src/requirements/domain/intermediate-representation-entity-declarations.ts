@@ -1,8 +1,11 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { ErrorMessage, ErrorMessages } from "@deep-spec-analysis/kernel-domain";
 import type { IntermediateRepresentationAttributeDeclaration } from "./intermediate-representation-attribute-declaration.ts";
 import type { IntermediateRepresentationEntityDeclaration } from "./intermediate-representation-entity-declaration.ts";
 
-export class IntermediateRepresentationEntityDeclarations {
+export class IntermediateRepresentationEntityDeclarations
+  implements FirstClassCollection, IterableFirstClassCollection<IntermediateRepresentationEntityDeclaration>
+{
   readonly #values: readonly IntermediateRepresentationEntityDeclaration[];
 
   private constructor(values: readonly IntermediateRepresentationEntityDeclaration[]) {
@@ -70,5 +73,9 @@ export class IntermediateRepresentationEntityDeclarations {
 
   toArray(): readonly IntermediateRepresentationEntityDeclaration[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

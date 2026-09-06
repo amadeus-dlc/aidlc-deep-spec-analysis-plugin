@@ -1,3 +1,4 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import {
   type BackendName,
   type ContentHash,
@@ -17,7 +18,7 @@ import { DesignReport } from "./design-report.ts";
 import type { DesignReportIdentifier } from "./design-report-identifier.ts";
 import { DesignSkips } from "./design-skips.ts";
 
-export class DesignReports {
+export class DesignReports implements FirstClassCollection, IterableFirstClassCollection<DesignReport> {
   readonly #values: readonly DesignReport[];
 
   private constructor(values: readonly DesignReport[]) {
@@ -85,5 +86,9 @@ export class DesignReports {
     return failure === null
       ? report
       : report.degraded(`scenario cross-check could not be constructed: ${failure.kind}`);
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

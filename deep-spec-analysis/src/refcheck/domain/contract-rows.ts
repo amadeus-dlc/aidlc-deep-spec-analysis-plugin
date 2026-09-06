@@ -2,12 +2,16 @@
 // 解析（markdown テーブル/fence/YAML 歩き）はアダプタのパーサが行う。
 // フィールドはドメインプリミティブ、集まりはファーストクラスコレクション。
 
-import type { ArtifactPath } from "@deep-spec-analysis/kernel-domain";
+import type {
+  ArtifactPath,
+  FirstClassCollection,
+  IterableFirstClassCollection,
+} from "@deep-spec-analysis/kernel-domain";
 import type { ContractRow } from "./contract-row.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { UnitDeclarations } from "./unit-declarations.ts";
 
-export class ContractRows {
+export class ContractRows implements FirstClassCollection, IterableFirstClassCollection<ContractRow> {
   readonly #values: readonly ContractRow[];
 
   private constructor(values: readonly ContractRow[]) {
@@ -46,5 +50,9 @@ export class ContractRows {
     for (const row of this) {
       row.checkPartiesDeclared(declared, report, artifact, depArtifact);
     }
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

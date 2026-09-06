@@ -1,8 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { type KeySet, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import type { Obligation } from "./obligation.ts";
 import type { ObligationIdentifier } from "./obligation-identifier.ts";
 
-export class Obligations {
+export class Obligations implements FirstClassCollection, IterableFirstClassCollection<Obligation> {
   readonly #values: readonly Obligation[];
 
   private constructor(values: readonly Obligation[]) {
@@ -39,5 +40,9 @@ export class Obligations {
 
   toArray(): readonly Obligation[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

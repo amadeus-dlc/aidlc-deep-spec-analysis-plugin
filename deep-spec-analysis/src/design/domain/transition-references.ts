@@ -1,7 +1,8 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { TransitionReference } from "./transition-reference.ts";
 
 // eventMap の transitions（写像先の設計 遷移/義務 id）のコレクション。
-export class TransitionReferences {
+export class TransitionReferences implements FirstClassCollection, IterableFirstClassCollection<TransitionReference> {
   readonly #values: readonly TransitionReference[];
 
   private constructor(values: readonly TransitionReference[]) {

@@ -1,9 +1,9 @@
 import {
   type ArtifactPath,
+  FindingTargets,
   type FunctionalRequirementReferences,
   SkipReason,
   type TargetIdentifier,
-  TargetIdentifiers,
   UnitName,
 } from "@deep-spec-analysis/kernel-domain";
 
@@ -56,7 +56,7 @@ export class RefinementStatus {
     artifact: ArtifactPath,
   ): DesignFinding | null {
     return this.#kind === "gap"
-      ? map.gapFor(TargetIdentifiers.of([target]), `${target.asString()}: ${this.#text}`, artifact, references)
+      ? map.gapFor(FindingTargets.of(target, []), `${target.asString()}: ${this.#text}`, artifact, references)
       : null;
   }
 

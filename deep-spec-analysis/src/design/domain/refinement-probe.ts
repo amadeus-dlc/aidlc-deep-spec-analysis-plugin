@@ -1,10 +1,10 @@
 import {
   FindingKind,
   type FindingKind as FindingKindType,
+  FindingTargets,
   type QueryLabel,
   SkipReason,
   type TargetIdentifier,
-  TargetIdentifiers,
   type UnitName,
 } from "@deep-spec-analysis/kernel-domain";
 import { DesignFinding } from "./design-finding.ts";
@@ -58,7 +58,7 @@ export class RefinementProbe {
   belongsTo(unit: UnitName): boolean {
     return this.#state.unit.equals(unit);
   }
-  #finding(kind: FindingKindType, targets: TargetIdentifiers, witness: DesignWitness, detail: string): DesignFinding {
+  #finding(kind: FindingKindType, targets: FindingTargets, witness: DesignWitness, detail: string): DesignFinding {
     return DesignFinding.of({
       kind,
       targets,
@@ -92,7 +92,7 @@ export class RefinementProbe {
     const unit = state.unit.asString();
     const target = this.reqTarget();
     const id = target.asString();
-    const targets = TargetIdentifiers.of([target]);
+    const targets = FindingTargets.of(target, []);
     if (state.kind === "scenario") {
       if (!state.subject.isViolatedBySatisfiability(verdict.isSat())) return null;
       return state.subject.isAccept()
@@ -121,17 +121,17 @@ export class RefinementProbe {
       case "enabledness":
         return this.#finding(
           FindingKind.completenessGap(),
-          TargetIdentifiers.of([
+          FindingTargets.of(
             target,
-            ...[...state.transitions].map((reference) => reference.asTargetId()),
-          ]).sortedUniqueCanonically(),
+            [...state.transitions].map((reference) => reference.asTargetId()),
+          ).sortedUniqueCanonically(),
           DesignWitness.model(verdict.witnessModel()),
           `The requirements event ${id} applies in the witness design state, but none of its mapped design transitions is enabled there: the design has no answer in a region the requirement covers.`,
         );
       case "simulation":
         return this.#finding(
           FindingKind.refinementViolation(),
-          TargetIdentifiers.of([target, state.designId.asTargetId()]).sortedUniqueCanonically(),
+          FindingTargets.of(target, [state.designId.asTargetId()]).sortedUniqueCanonically(),
           DesignWitness.trace(verdict.witnessTrace()),
           `Design step ${state.designId.asString()} of unit ${unit}, taken where requirements event ${id} applies, produces an abstract post-state that violates the requirements effect or the abstract frame (pre/post design states attached).`,
         );

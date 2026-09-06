@@ -1,8 +1,9 @@
 import {
+  FindingTargets,
   FunctionalRequirementReferences,
   ObligationNature,
   TargetIdentifier,
-  TargetIdentifiers,
+  type TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
 
 import {
@@ -39,10 +40,11 @@ export class RuleSubsumptionProbe {
   references(): readonly [LoweredOriginReference, LoweredOriginReference] {
     return [this.#subsumer.reference(), this.#subsumed.reference()];
   }
-  targets(): TargetIdentifiers {
-    return TargetIdentifiers.of(
-      this.references().map((reference) => TargetIdentifier.of(reference.asString())),
-    ).sortedUniqueCanonically();
+  targets(): FindingTargets {
+    const [subsumer, subsumed] = this.references();
+    return FindingTargets.of(TargetIdentifier.of(subsumer.asString()), [
+      TargetIdentifier.of(subsumed.asString()),
+    ]).sortedUniqueCanonically();
   }
   isReverseOf(other: RuleSubsumptionProbe): boolean {
     return this.#subsumer.sameRuleAs(other.#subsumed) && this.#subsumed.sameRuleAs(other.#subsumer);

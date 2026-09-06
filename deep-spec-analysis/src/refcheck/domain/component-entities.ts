@@ -1,7 +1,8 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { ComponentEntity } from "./component-entity.ts";
 import type { EntityName } from "./entity-name.ts";
 
-export class ComponentEntities {
+export class ComponentEntities implements FirstClassCollection, IterableFirstClassCollection<ComponentEntity> {
   readonly #values: readonly ComponentEntity[];
 
   private constructor(values: readonly ComponentEntity[]) {
@@ -27,5 +28,9 @@ export class ComponentEntities {
 
   toArray(): readonly ComponentEntity[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

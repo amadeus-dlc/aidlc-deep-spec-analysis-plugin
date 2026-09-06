@@ -1,4 +1,12 @@
-import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  FindingKind,
+  FindingTargets,
+  type FirstClassCollection,
+  type IterableFirstClassCollection,
+  TargetIdentifier,
+  TargetIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
 import { CD_3 } from "./contract-check-families.ts";
 import type { ContractRows } from "./contract-rows.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
@@ -7,7 +15,7 @@ import { UnitNames } from "./unit-names.ts";
 import { WitnessReference } from "./witness-reference.ts";
 
 // units エッジブロックの宣言面——CD-1 の照合と CD-3 の走査順を知識に持つ。
-export class UnitDeclarations {
+export class UnitDeclarations implements FirstClassCollection, IterableFirstClassCollection<UnitDeclaration> {
   readonly #values: readonly UnitDeclaration[];
 
   private constructor(values: readonly UnitDeclaration[]) {
@@ -62,7 +70,9 @@ export class UnitDeclarations {
           report.finding(
             CD_3,
             FindingKind.consistencyMismatch(),
-            [TargetIdentifiers.safe("unit", depName), TargetIdentifiers.safe("unit", uName)],
+            FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("unit", depName)), [
+              TargetIdentifier.of(TargetIdentifiers.safe("unit", uName)),
+            ]),
             [
               WitnessReference.at(depArt, `units (${uName} depends_on ${depName})`),
               WitnessReference.at(art, "contracts table"),
@@ -72,5 +82,9 @@ export class UnitDeclarations {
         }
       }
     }
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

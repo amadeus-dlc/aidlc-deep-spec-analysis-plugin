@@ -2,6 +2,8 @@ import {
   type ArtifactPath,
   type ErrorMessage,
   FindingKind,
+  FindingTargets,
+  TargetIdentifier,
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
 import type { DeclaredEntities } from "./declared-entities.ts";
@@ -86,7 +88,7 @@ export class StateMachineSketch {
       report.finding(
         FD_S1,
         FindingKind.consistencyMismatch(),
-        [TargetIdentifiers.safe("entity", entName)],
+        FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", entName)), []),
         [WitnessReference.at(specArt, el, entName)],
         `state machine names entity "${entName}" which is not declared in entities.md`,
       );

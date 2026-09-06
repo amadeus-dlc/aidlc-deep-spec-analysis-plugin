@@ -1,4 +1,11 @@
-import { type ArtifactPath, FindingKind, TargetIdentifiers, type UnitName } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  FindingKind,
+  FindingTargets,
+  TargetIdentifier,
+  TargetIdentifiers,
+  type UnitName,
+} from "@deep-spec-analysis/kernel-domain";
 import type { AttributeNames } from "./attribute-names.ts";
 import type { ComponentName } from "./component-name.ts";
 import type { EntityName } from "./entity-name.ts";
@@ -44,7 +51,7 @@ export class DomainEntitySketch {
       report.finding(
         XS_1,
         FindingKind.consistencyMismatch(),
-        [TargetIdentifiers.safe("entity", this.#name.asString())],
+        FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", this.#name.asString())), []),
         [
           WitnessReference.at(compArt, this.catalogLabel()),
           ...definers.map((u) =>
@@ -60,7 +67,7 @@ export class DomainEntitySketch {
       report.finding(
         XS_2,
         FindingKind.consistencyMismatch(),
-        [TargetIdentifiers.safe("entity", this.#name.asString())],
+        FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", this.#name.asString())), []),
         [WitnessReference.at(compArt, this.catalogLabel())],
         `domain entity "${this.#name.asString()}" is defined in no unit's entities.md — it was dropped on the way to functional design`,
       );
@@ -74,7 +81,7 @@ export class DomainEntitySketch {
           report.finding(
             XS_3,
             FindingKind.consistencyMismatch(),
-            [TargetIdentifiers.safe("entity", this.#name.asString())],
+            FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", this.#name.asString())), []),
             dropped.map((a) => WitnessReference.at(compArt, `entity ${this.#name.asString()}.attributes`, a)),
             `domain-design declares attribute(s) ${dropped.join(", ")} on "${this.#name.asString()}" that this unit's entities.md does not carry`,
           );

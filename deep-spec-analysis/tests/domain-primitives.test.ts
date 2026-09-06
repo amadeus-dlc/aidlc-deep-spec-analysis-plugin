@@ -3,6 +3,7 @@ import {
   ContentHash,
   FindingKind,
   FindingsSchema,
+  FindingTargets,
   FunctionalRequirementReferences,
   IntermediateRepresentationVersion,
   SkipReason,
@@ -208,7 +209,7 @@ describe("finding kind の strict creation は未知 kind を受け付けない 
     // 生の string は 3 クラスのどの正常生成口にも渡らない（型で弾かれる）。
     const designProps = {
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      targets: TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))),
+      targets: FindingTargets.of(TargetIdentifier.of("OB-1"), []),
       witness: DesignWitness.core([]),
       unit: UnitName.of("u1"),
       detail: "d",
@@ -219,7 +220,7 @@ describe("finding kind の strict creation は未知 kind を受け付けない 
       // @ts-expect-error 正常生成口は検証済みの FindingKind だけを受け取る
       kind: "no-such-kind",
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      targets: TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))),
+      targets: FindingTargets.of(TargetIdentifier.of("OB-1"), []),
       witness: VerificationWitness.core([]),
       detail: "d",
     });
@@ -227,7 +228,7 @@ describe("finding kind の strict creation は未知 kind を受け付けない 
       // @ts-expect-error 正常生成口は検証済みの FindingKind だけを受け取る
       kind: "no-such-kind",
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      targets: TargetIdentifiers.of(Array.from(["check:DD-0"], (raw) => TargetIdentifier.of(raw))),
+      targets: FindingTargets.of(TargetIdentifier.of("check:DD-0"), []),
       witness: { refs: WitnessReferences.of([]) },
       detail: "DD-0: x",
     });
@@ -316,7 +317,7 @@ describe("FindingsSchema は契約2 の適合判定を値として持つ", () =>
       DesignFinding.of({
         kind: FindingKind.conflict(),
         functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-        targets: TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))),
+        targets: FindingTargets.of(TargetIdentifier.of("OB-1"), []),
         witness: DesignWitness.core([]),
         unit: UnitName.of("u1"),
         detail: "from the future",
@@ -346,7 +347,7 @@ describe("ReferenceCheckReport.conformedTo は契約2 の適合判定を集約�
     const clean = ReferenceCheckReport.of({
       id: ReferenceCheckReportIdentifier.of(refcheckPath("/tmp/r"), "components"),
       inputs: InputAnchors.of([]),
-      checked: TargetIdentifiers.of(Array.from(["check:DD-0"], (raw) => TargetIdentifier.of(raw))),
+      checked: TargetIdentifiers.of([TargetIdentifier.of("check:DD-0")]),
       findings: Findings.of([]),
       skipped: Skips.of([]),
       unavailableReason: null,
@@ -361,7 +362,7 @@ describe("ReferenceCheckReport.conformedTo は契約2 の適合判定を集約�
         Finding.of({
           kind: FindingKind.conflict(),
           functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-          targets: TargetIdentifiers.of(Array.from(["check:DD-0"], (raw) => TargetIdentifier.of(raw))),
+          targets: FindingTargets.of(TargetIdentifier.of("check:DD-0"), []),
           witness: { refs: WitnessReferences.of([]) },
           detail: "DD-0: from the future",
         }),

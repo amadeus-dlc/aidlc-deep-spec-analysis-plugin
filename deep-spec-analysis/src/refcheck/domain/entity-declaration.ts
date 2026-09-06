@@ -1,4 +1,10 @@
-import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  FindingKind,
+  FindingTargets,
+  TargetIdentifier,
+  TargetIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
 import type { AttributeDeclaration } from "./attribute-declaration.ts";
 import type { AttributeDeclarations } from "./attribute-declarations.ts";
 import type { AttributeName } from "./attribute-name.ts";
@@ -42,7 +48,12 @@ export class EntityDeclaration {
       report.finding(
         FD_E1,
         FindingKind.structureInvalid(),
-        [TargetIdentifiers.safe("attr", `${this.#name.asString()}.${duplicate.name().asString()}`)],
+        FindingTargets.of(
+          TargetIdentifier.of(
+            TargetIdentifiers.safe("attr", `${this.#name.asString()}.${duplicate.name().asString()}`),
+          ),
+          [],
+        ),
         [
           WitnessReference.at(
             artifact.asString(),

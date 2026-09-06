@@ -1,6 +1,7 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { type AttributePath, KeySet } from "@deep-spec-analysis/kernel-domain";
 // 設計属性パス集合のファーストクラスコレクション（lowering・alpha 置換の照会面）。
-export class AttributePaths {
+export class AttributePaths implements FirstClassCollection, IterableFirstClassCollection<AttributePath> {
   readonly #values: KeySet<AttributePath>;
 
   private constructor(values: KeySet<AttributePath>) {
@@ -25,5 +26,9 @@ export class AttributePaths {
 
   toArray(): readonly AttributePath[] {
     return [...this.#values];
+  }
+
+  isEmpty(): boolean {
+    return this.#values.isEmpty();
   }
 }

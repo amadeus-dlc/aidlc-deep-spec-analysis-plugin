@@ -1,9 +1,12 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { type AttributePath, KeyedIndex } from "@deep-spec-analysis/kernel-domain";
 import type { RequirementAttributeDeclaration } from "./requirement-attribute-declaration.ts";
 
 // 属性宣言のファーストクラスコレクション。パス索引という集合の知識を所有し、
 // ドメイン層に裸の配列・Map を流さない。toArray() は境界専用の脱出口。
-export class RequirementAttributeDeclarations {
+export class RequirementAttributeDeclarations
+  implements FirstClassCollection, IterableFirstClassCollection<RequirementAttributeDeclaration>
+{
   readonly #values: readonly RequirementAttributeDeclaration[];
   readonly #byPath: KeyedIndex<AttributePath, RequirementAttributeDeclaration>;
 
@@ -39,5 +42,9 @@ export class RequirementAttributeDeclarations {
 
   toArray(): readonly RequirementAttributeDeclaration[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

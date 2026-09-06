@@ -64,13 +64,13 @@ import {
   EnumerationMembers,
   type Expression,
   FindingKind,
+  FindingTargets,
   FunctionalRequirementReferences,
   ObligationNature,
   RequirementIdentifier,
   ScenarioExpectation,
   SkipReason,
   TargetIdentifier,
-  TargetIdentifiers,
   TriggerName,
   UnitName,
   VerificationMethod,
@@ -397,13 +397,16 @@ describe("design transition and ignore (compile-down owners)", () => {
 });
 
 describe("design finding (conflict reinterpretation owner)", () => {
-  const finding = (kind: string, targets: string[]) =>
+  const finding = (kind: string, [head, ...tail]: readonly [string, ...string[]]) =>
     DesignFinding.of({
       kind: FindingKind.of(kind),
       functionalRequirementReferences: FunctionalRequirementReferences.of(
         Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw)),
       ),
-      targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))),
+      targets: FindingTargets.of(
+        TargetIdentifier.of(head),
+        tail.map((raw) => TargetIdentifier.of(raw)),
+      ),
       witness: DesignWitness.trace([{ "T.s": "a" }]),
       unit: UnitName.of("u1"),
       detail: "overlap",

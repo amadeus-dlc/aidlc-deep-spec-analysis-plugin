@@ -1,7 +1,8 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { LoweredScenario } from "./lowered-scenario.ts";
 
 // lowered シナリオのファーストクラスコレクション（SC-n 採番順を保持）。
-export class LoweredScenarios {
+export class LoweredScenarios implements FirstClassCollection, IterableFirstClassCollection<LoweredScenario> {
   readonly #values: readonly LoweredScenario[];
 
   private constructor(values: readonly LoweredScenario[]) {
@@ -26,5 +27,9 @@ export class LoweredScenarios {
 
   toArray(): readonly LoweredScenario[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

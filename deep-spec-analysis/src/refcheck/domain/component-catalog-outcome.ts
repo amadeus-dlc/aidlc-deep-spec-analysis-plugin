@@ -1,4 +1,4 @@
-import { type ArtifactPath, FindingKind } from "@deep-spec-analysis/kernel-domain";
+import { type ArtifactPath, FindingKind, FindingTargets, TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
 import { DD_0, DD_1, DD_2, DD_3, DD_4, DD_5, DD_6, DD_7 } from "./component-check-families.ts";
 import type { ComponentShapeErrors } from "./component-shape-errors.ts";
 import type { Components } from "./components.ts";
@@ -89,7 +89,7 @@ export class ComponentCatalogOutcome {
         report.finding(
           DD_0,
           FindingKind.structureInvalid(),
-          [DD_0.asCheckTarget()],
+          FindingTargets.of(TargetIdentifier.of(DD_0.asCheckTarget()), []),
           [WitnessReference.at(art, "yaml fence")],
           `components.md must carry exactly one fenced yaml source-of-truth block (found ${found})`,
         );
@@ -99,7 +99,7 @@ export class ComponentCatalogOutcome {
         report.finding(
           DD_0,
           FindingKind.structureInvalid(),
-          [DD_0.asCheckTarget()],
+          FindingTargets.of(TargetIdentifier.of(DD_0.asCheckTarget()), []),
           [WitnessReference.at(art, `yaml fence (line ${line.asNumber()})`)],
           `yaml block does not parse in the supported subset: ${error}`,
         );
@@ -110,7 +110,7 @@ export class ComponentCatalogOutcome {
           report.finding(
             DD_0,
             FindingKind.structureInvalid(),
-            [DD_0.asCheckTarget()],
+            FindingTargets.of(TargetIdentifier.of(DD_0.asCheckTarget()), []),
             [WitnessReference.at(art, e.element().asString())],
             e.detail(),
           );

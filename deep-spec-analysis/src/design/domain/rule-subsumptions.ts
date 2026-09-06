@@ -1,4 +1,4 @@
-import type { TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import type { FirstClassCollection, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import {
   IllegalArgumentException,
   type ParseError,
@@ -9,7 +9,7 @@ import type { DesignFinding } from "./design-finding.ts";
 import { DesignFindings } from "./design-findings.ts";
 import type { RuleSubsumption } from "./rule-subsumption.ts";
 
-export class RuleSubsumptions {
+export class RuleSubsumptions implements FirstClassCollection {
   readonly #values: readonly RuleSubsumption[];
   private constructor(values: readonly RuleSubsumption[]) {
     if (values.length > 65_536)
@@ -39,5 +39,9 @@ export class RuleSubsumptions {
         findings.push(group.some((other) => first.isReverseOf(other)) ? first.equivalenceFinding() : first.finding());
     }
     return DesignFindings.of(findings);
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

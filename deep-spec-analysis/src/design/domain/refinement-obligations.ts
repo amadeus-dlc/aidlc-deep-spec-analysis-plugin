@@ -1,8 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { RefinementObligation } from "./refinement-obligation.ts";
 
 // 要件義務のファーストクラスコレクション。id 索引は最後の宣言が勝つ
 // （旧 new Map(...) の凍結挙動）。
-export class RefinementObligations {
+export class RefinementObligations implements FirstClassCollection, IterableFirstClassCollection<RefinementObligation> {
   readonly #values: readonly RefinementObligation[];
 
   private constructor(values: readonly RefinementObligation[]) {
@@ -35,5 +36,9 @@ export class RefinementObligations {
 
   toArray(): readonly RefinementObligation[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

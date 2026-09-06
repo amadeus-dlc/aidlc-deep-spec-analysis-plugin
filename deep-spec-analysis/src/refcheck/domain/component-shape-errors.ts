@@ -1,6 +1,7 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { ComponentShapeError } from "./component-shape-error.ts";
 
-export class ComponentShapeErrors {
+export class ComponentShapeErrors implements FirstClassCollection, IterableFirstClassCollection<ComponentShapeError> {
   readonly #values: readonly ComponentShapeError[];
 
   private constructor(values: readonly ComponentShapeError[]) {
@@ -25,5 +26,9 @@ export class ComponentShapeErrors {
 
   toArray(): readonly ComponentShapeError[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

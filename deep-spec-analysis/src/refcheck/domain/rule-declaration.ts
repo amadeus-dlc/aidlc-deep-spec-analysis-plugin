@@ -1,4 +1,10 @@
-import { type ArtifactPath, FindingKind, type RequirementIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  FindingKind,
+  FindingTargets,
+  type RequirementIdentifiers,
+  TargetIdentifier,
+} from "@deep-spec-analysis/kernel-domain";
 import type { AppliesTo } from "./applies-to.ts";
 import type { DeclaredRuleIdentifier } from "./declared-rule-identifier.ts";
 import type { ElementPath } from "./element-path.ts";
@@ -56,7 +62,7 @@ export class RuleDeclaration {
     report.finding(
       FD_R1,
       FindingKind.structureInvalid(),
-      [this.#findingTarget("check:FD-R1")],
+      FindingTargets.of(TargetIdentifier.of(this.#findingTarget("check:FD-R1")), []),
       [WitnessReference.at(artifact.asString(), this.#element.asString())],
       `rule is missing required key(s): ${this.#missing.join(", ")}`,
     );
@@ -68,7 +74,7 @@ export class RuleDeclaration {
     report.finding(
       FD_R2,
       FindingKind.structureInvalid(),
-      [FD_R2.asCheckTarget()],
+      FindingTargets.of(TargetIdentifier.of(FD_R2.asCheckTarget()), []),
       [WitnessReference.at(artifact.asString(), `${this.#element.asString()}.id`, id.asString())],
       `rule id "${id.asString()}" does not match BR{group}.{seq}`,
     );
@@ -80,7 +86,7 @@ export class RuleDeclaration {
     report.finding(
       FD_R2,
       FindingKind.structureInvalid(),
-      [id.asString()],
+      FindingTargets.of(TargetIdentifier.of(id.asString()), []),
       [WitnessReference.at(artifact.asString(), `${this.#element.asString()}.id`, id.asString())],
       `rule id "${id.asString()}" is declared more than once`,
     );
@@ -92,7 +98,7 @@ export class RuleDeclaration {
     report.finding(
       FD_R3,
       FindingKind.referenceBroken(),
-      [this.#findingTarget("check:FD-R3")],
+      FindingTargets.of(TargetIdentifier.of(this.#findingTarget("check:FD-R3")), []),
       missing.map((id) => WitnessReference.at(artifact.asString(), `${this.#element.asString()}.source`, id)),
       `source id(s) ${missing.join(", ")} do not exist in requirements.md`,
       missing,
@@ -105,7 +111,7 @@ export class RuleDeclaration {
     report.finding(
       FD_R4,
       FindingKind.referenceBroken(),
-      [this.#findingTarget("check:FD-R4")],
+      FindingTargets.of(TargetIdentifier.of(this.#findingTarget("check:FD-R4")), []),
       [WitnessReference.at(artifact.asString(), this.#element.asString(), target.asString())],
       `applies-to "${target.asString()}" does not resolve to a declared entity or entity.attribute`,
     );
@@ -117,7 +123,7 @@ export class RuleDeclaration {
     report.finding(
       FD_R5,
       FindingKind.structureInvalid(),
-      [this.#findingTarget("check:FD-R5")],
+      FindingTargets.of(TargetIdentifier.of(this.#findingTarget("check:FD-R5")), []),
       [WitnessReference.at(artifact.asString(), `${this.#element.asString()}.category`, category.asString())],
       `category "${category.asString()}" is not one of validation | authorization | constraint | calculation | policy`,
     );

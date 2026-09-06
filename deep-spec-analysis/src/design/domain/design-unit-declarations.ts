@@ -1,7 +1,10 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { ErrorMessage, ErrorMessages } from "@deep-spec-analysis/kernel-domain";
 import type { DesignUnitDeclaration } from "./design-unit-declaration.ts";
 
-export class DesignUnitDeclarations {
+export class DesignUnitDeclarations
+  implements FirstClassCollection, IterableFirstClassCollection<DesignUnitDeclaration>
+{
   readonly #values: readonly DesignUnitDeclaration[];
 
   private constructor(values: readonly DesignUnitDeclaration[]) {
@@ -36,5 +39,9 @@ export class DesignUnitDeclarations {
 
   toArray(): readonly DesignUnitDeclaration[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

@@ -1,4 +1,10 @@
-import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  FindingKind,
+  FindingTargets,
+  TargetIdentifier,
+  TargetIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
 import type { CardinalityNotation } from "./cardinality-notation.ts";
 import type { ElementPath } from "./element-path.ts";
 import type { EntityDeclarations } from "./entity-declarations.ts";
@@ -42,7 +48,7 @@ export class RelationshipDeclaration {
         report.finding(
           FD_E4,
           FindingKind.referenceBroken(),
-          [TargetIdentifiers.safe("entity", endpoint.asString())],
+          FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", endpoint.asString())), []),
           [WitnessReference.at(artifact.asString(), this.#element.asString(), endpoint.asString())],
           `relationship endpoint "${endpoint.asString()}" is not a declared entity`,
         );
@@ -51,7 +57,7 @@ export class RelationshipDeclaration {
       report.finding(
         FD_E5,
         FindingKind.structureInvalid(),
-        [FD_E5.asCheckTarget()],
+        FindingTargets.of(TargetIdentifier.of(FD_E5.asCheckTarget()), []),
         [WitnessReference.at(artifact.asString(), this.#element.asString(), this.#cardinality?.asString())],
         `cardinality "${this.#cardinality?.asString()}" is not in the closed set 1:1 | 1:N | N:1 | N:M`,
       );
@@ -59,7 +65,7 @@ export class RelationshipDeclaration {
       report.finding(
         FD_E5,
         FindingKind.structureInvalid(),
-        [FD_E5.asCheckTarget()],
+        FindingTargets.of(TargetIdentifier.of(FD_E5.asCheckTarget()), []),
         [WitnessReference.at(artifact.asString(), this.#element.asString())],
         "relationship declares a cardinality but no direction (from/to or direction key)",
       );

@@ -1,4 +1,9 @@
-import type { ArtifactPath, UnitName } from "@deep-spec-analysis/kernel-domain";
+import type {
+  ArtifactPath,
+  FirstClassCollection,
+  IterableFirstClassCollection,
+  UnitName,
+} from "@deep-spec-analysis/kernel-domain";
 import type { DomainEntitySketch } from "./domain-entity-sketch.ts";
 import { XS_3 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
@@ -6,7 +11,7 @@ import type { SiblingUnitIndex } from "./sibling-unit-index.ts";
 
 // domain-design 側素描のコレクション。名前順の整列と正規化名での一意化
 // （XS 検査の凍結挙動）を所有する。
-export class DomainEntitySketches {
+export class DomainEntitySketches implements FirstClassCollection, IterableFirstClassCollection<DomainEntitySketch> {
   readonly #values: readonly DomainEntitySketch[];
 
   private constructor(values: readonly DomainEntitySketch[]) {
@@ -62,5 +67,9 @@ export class DomainEntitySketches {
         "the unit for this functional-design record could not be determined from its path",
       );
     }
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

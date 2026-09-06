@@ -1,8 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { ComponentName } from "./component-name.ts";
 import type { ComponentReference } from "./component-reference.ts";
 
 // 依存参照（depends_on / dependents）のファーストクラスコレクション。
-export class ComponentReferences {
+export class ComponentReferences implements FirstClassCollection, IterableFirstClassCollection<ComponentReference> {
   readonly #values: readonly ComponentReference[];
 
   private constructor(values: readonly ComponentReference[]) {
@@ -28,5 +29,9 @@ export class ComponentReferences {
 
   toArray(): readonly ComponentReference[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

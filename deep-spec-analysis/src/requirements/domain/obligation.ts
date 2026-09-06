@@ -2,14 +2,14 @@ import {
   type Expression,
   ExpressionTree,
   FindingKind,
+  FindingTargets,
   type FunctionalRequirementReferences,
   type ObligationNature,
   SkipReason,
-  TargetIdentifiers,
   type TriggerName,
   type VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import { ok, type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { QuintTemporalVerdict } from "./quint-temporal-verdict.ts";
 import { VerificationFinding } from "./verification-finding.ts";
 import { VerificationFindings } from "./verification-findings.ts";
@@ -86,9 +86,9 @@ export class Obligation {
   interpretQuintTemporal(
     method: VerificationMethod,
     verdict: QuintTemporalVerdict | undefined,
-  ): { findings: VerificationFindings; skipped: VerificationSkips } {
+  ): Result<{ findings: VerificationFindings; skipped: VerificationSkips }, ParseError> {
     if (!this.isStateTemporal() || this.#temporal?.pattern !== "leads-to")
-      return { findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) };
+      return ok({ findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) });
     const target = this.#id.asTargetId();
     let skip: VerificationSkipped | null = null;
     if (!method.isBounded())
@@ -105,17 +105,20 @@ export class Obligation {
         detail: "quint returned no run for this temporal obligation",
       });
     else skip = verdict.skipFor(target);
-    if (skip !== null) return { findings: VerificationFindings.of([]), skipped: VerificationSkips.of([skip]) };
+    if (skip !== null) return ok({ findings: VerificationFindings.of([]), skipped: VerificationSkips.of([skip]) });
     const finding = verdict?.isViolation()
       ? VerificationFinding.of({
           kind: FindingKind.conflict(),
           functionalRequirementReferences: this.#functionalRequirementReferences.sortedUnique(),
-          targets: TargetIdentifiers.of([target]),
+          targets: FindingTargets.of(target, []),
           witness: verdict.witness(),
           detail: `Temporal obligation ${this.#id.asString()} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`,
         })
       : null;
-    return { findings: VerificationFindings.of(finding === null ? [] : [finding]), skipped: VerificationSkips.of([]) };
+    return ok({
+      findings: VerificationFindings.of(finding === null ? [] : [finding]),
+      skipped: VerificationSkips.of([]),
+    });
   }
 
   id(): ObligationIdentifier {

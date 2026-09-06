@@ -1,6 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { IntermediateRepresentationScenarioDeclaration } from "./intermediate-representation-scenario-declaration.ts";
 
-export class IntermediateRepresentationScenarioDeclarations {
+export class IntermediateRepresentationScenarioDeclarations
+  implements FirstClassCollection, IterableFirstClassCollection<IntermediateRepresentationScenarioDeclaration>
+{
   readonly #values: readonly IntermediateRepresentationScenarioDeclaration[];
 
   private constructor(values: readonly IntermediateRepresentationScenarioDeclaration[]) {
@@ -23,5 +26,9 @@ export class IntermediateRepresentationScenarioDeclarations {
 
   toArray(): readonly IntermediateRepresentationScenarioDeclaration[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

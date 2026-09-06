@@ -2,6 +2,7 @@ import {
   ContentHash,
   type FindingKind,
   type FindingsSchema,
+  type FindingTargets,
   FunctionalRequirementReferences,
   RequirementIdentifier,
   SkipReason,
@@ -124,7 +125,7 @@ export class ReferenceCheckReport {
   finding(
     family: CheckFamily,
     kind: FindingKind,
-    targets: string[],
+    targets: FindingTargets,
     refs: WitnessReference[],
     detail: string,
     functionalRequirementReferences: string[] = [],
@@ -136,9 +137,7 @@ export class ReferenceCheckReport {
           functionalRequirementReferences: FunctionalRequirementReferences.of(
             Array.from(functionalRequirementReferences, (raw) => RequirementIdentifier.of(raw)),
           ).sortedUnique(),
-          targets: TargetIdentifiers.of(
-            Array.from(targets, (raw) => TargetIdentifier.of(raw)),
-          ).sortedUniqueCanonically(),
+          targets: targets.sortedUniqueCanonically(),
           witness: { refs: WitnessReferences.of(refs) },
           detail: family.prefixedDetail(detail),
           ...(this.#unit !== undefined ? { unit: this.#unit } : {}),

@@ -1,7 +1,8 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { DesignScenario } from "./design-scenario.ts";
 
 // 設計シナリオのファーストクラスコレクション。
-export class DesignScenarios {
+export class DesignScenarios implements FirstClassCollection, IterableFirstClassCollection<DesignScenario> {
   readonly #values: readonly DesignScenario[];
 
   private constructor(values: readonly DesignScenario[]) {
@@ -31,5 +32,9 @@ export class DesignScenarios {
 
   toArray(): readonly DesignScenario[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

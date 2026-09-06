@@ -3,6 +3,7 @@ import {
   ContentHash,
   FindingKind,
   FindingsSchema,
+  FindingTargets,
   FunctionalRequirementReferences,
   KeyedIndex,
   RequirementIdentifier,
@@ -735,7 +736,7 @@ describe("functional branches the fixtures do not exercise", () => {
         Finding.of({
           kind: FindingKind.conflict(),
           functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-          targets: TargetIdentifiers.of(Array.from(["check:DD-0"], (raw) => TargetIdentifier.of(raw))),
+          targets: FindingTargets.of(TargetIdentifier.of("check:DD-0"), []),
           witness: { refs: WitnessReferences.of([]) },
           detail: "DD-0: x",
         }),

@@ -1,29 +1,43 @@
-import { ExpressionTree } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
-// DesignAssignments — 設計イベントの効果（属性パス → 右辺式）の索引。キーは
-// AttributePath、内側は KeyedIndex（裁定 3-1、2026-09-03）。
+import type { FirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type AttributePath, type Expression, KeyedIndex } from "@deep-spec-analysis/kernel-domain";
+import {
+  IllegalArgumentException,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
+import type { DesignAssignment } from "./design-assignment.ts";
 
-import type { AttributePath, Expression } from "@deep-spec-analysis/kernel-domain";
-import { KeyedIndex } from "@deep-spec-analysis/kernel-domain";
+/** 設計イベントの属性代入。右辺式だけを問い合わせる索引。 */
+export class DesignAssignments implements FirstClassCollection {
+  readonly #values: KeyedIndex<AttributePath, DesignAssignment>;
 
-export class DesignAssignments {
-  readonly #values: KeyedIndex<AttributePath, Expression>;
-
-  private constructor(values: KeyedIndex<AttributePath, Expression>) {
-    this.#values = KeyedIndex.of(
-      [...values].map(([path, expression]) => [path, ExpressionTree.of(expression).asExpression()] as const),
-    );
+  private constructor(values: readonly DesignAssignment[]) {
+    if (values.length > 10_000) throw new IllegalArgumentException({ kind: "expression-too-large" });
+    let nodes = 0;
+    const entries: (readonly [AttributePath, DesignAssignment])[] = [];
+    for (const assignment of values) {
+      assignment.rightHandSide().walk(() => {
+        if (++nodes > 10_000) throw new IllegalArgumentException({ kind: "expression-too-large" });
+      });
+      entries.push([assignment.target(), assignment]);
+    }
+    this.#values = KeyedIndex.of(entries);
   }
 
-  static parse(values: KeyedIndex<AttributePath, Expression>): Result<DesignAssignments, ParseError> {
+  static parse(values: readonly DesignAssignment[]): Result<DesignAssignments, ParseError> {
     return parseConstruction(() => new DesignAssignments(values));
   }
 
-  static of(values: KeyedIndex<AttributePath, Expression>): DesignAssignments {
+  static of(values: readonly DesignAssignment[]): DesignAssignments {
     return new DesignAssignments(values);
   }
 
   rhsOf(path: AttributePath): Expression | undefined {
-    return this.#values.get(path);
+    return this.#values.get(path)?.rightHandSide().asExpression();
+  }
+
+  isEmpty(): boolean {
+    return this.#values.isEmpty();
   }
 }

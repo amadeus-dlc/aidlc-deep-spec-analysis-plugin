@@ -435,6 +435,9 @@ class DesignArtifacts {
   *[Symbol.iterator]() {
     yield* this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/doctor/domain/digest-anchor.ts
 class DigestAnchor {
@@ -779,6 +782,9 @@ class DeclaredBindings {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/kernel/domain/declared-bound.ts
 class DeclaredBound {
@@ -888,6 +894,9 @@ class EnumerationMembers {
   }
   toArray() {
     return this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/kernel/domain/error-message.ts
@@ -1121,6 +1130,56 @@ class FindingKind {
   }
   asString() {
     return this.#value;
+  }
+}
+// src/kernel/domain/finding-targets.ts
+var MAX_FINDING_TARGETS = 65536;
+
+class FindingTargets {
+  #values;
+  constructor(head, tail) {
+    if (tail.length >= MAX_FINDING_TARGETS)
+      throw new IllegalArgumentException({ kind: "too-many-finding-targets", raw: tail.length + 1 });
+    const snapshot = [head];
+    for (const value of tail) {
+      if (snapshot.length === MAX_FINDING_TARGETS)
+        throw new IllegalArgumentException({ kind: "too-many-finding-targets", raw: snapshot.length + 1 });
+      snapshot.push(value);
+    }
+    this.#values = Object.freeze(snapshot);
+  }
+  static of(head, tail) {
+    return new FindingTargets(head, tail);
+  }
+  static parse(head, tail) {
+    return parseConstruction(() => new FindingTargets(head, tail));
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  count() {
+    return this.#values.length;
+  }
+  includes(value) {
+    return this.#values.some((target) => target.equals(value));
+  }
+  sortedCanonically() {
+    const [head, ...tail] = [...this.#values].sort((a, b) => a.compareTo(b));
+    return new FindingTargets(head, tail);
+  }
+  sortedUniqueCanonically() {
+    const unique = new Map(this.#values.map((target) => [target.asString(), target]));
+    const [head, ...tail] = [...unique.values()].sort((a, b) => a.compareTo(b));
+    return new FindingTargets(head, tail);
+  }
+  joined(separator) {
+    return this.toStrings().join(separator);
+  }
+  toArray() {
+    return this.#values;
+  }
+  toStrings() {
+    return this.#values.map((target) => target.asString());
   }
 }
 // src/kernel/domain/findings-schema.ts
@@ -1438,6 +1497,9 @@ class RequirementIdentifiers {
   toStrings() {
     return this.#values.toArray().map((v) => v.asString());
   }
+  isEmpty() {
+    return this.#values.isEmpty();
+  }
 }
 // src/kernel/domain/scenario-binding.ts
 class ScenarioBinding {
@@ -1498,6 +1560,9 @@ class ScenarioBindings {
   }
   toDocument() {
     return Object.fromEntries(this.entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()]));
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/kernel/domain/scenario-comparison.ts
@@ -1649,6 +1714,9 @@ class ScenarioVerdicts {
         yield comparison.value;
       }
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/kernel/domain/skip-reason.ts
 var KNOWN_REASONS = new Set([
@@ -1790,6 +1858,9 @@ class TargetIdentifiers {
   }
   toStrings() {
     return this.#values.map((v) => v.asString());
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/kernel/domain/trigger-name.ts
@@ -1988,6 +2059,9 @@ class HealthVerdict {
   }
   document() {
     return { checks: this.#values.map((c) => c.toDocument()) };
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/doctor/domain/manifest-entry.ts
@@ -2296,6 +2370,9 @@ class StableReleases {
         latest = version;
     return latest === null ? VersionAdvisory.skipped(installed, ErrorMessage.of("GitHub returned no stable Semantic Versioning tag")) : installed.assessLatest(latest);
   }
+  isEmpty() {
+    return this.#versions.length === 0;
+  }
 }
 // src/doctor/domain/stage-scope.ts
 class StageScope {
@@ -2340,6 +2417,9 @@ class StageScopes {
   *[Symbol.iterator]() {
     yield* this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/doctor/domain/structural-debt.ts
 class StructuralDebt {
@@ -2366,6 +2446,9 @@ class StructuralDebt {
   }
   rows() {
     return this.#observations.filter((observation) => observation.hasDebt());
+  }
+  isEmpty() {
+    return this.#observations.length === 0;
   }
 }
 // src/doctor/domain/structural-observation.ts

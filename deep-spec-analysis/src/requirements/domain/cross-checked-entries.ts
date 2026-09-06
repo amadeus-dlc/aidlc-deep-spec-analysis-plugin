@@ -1,7 +1,8 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { CrossCheckedEntry } from "./cross-checked-entry.ts";
 
 // クロスチェック判定表のファーストクラスコレクション。
-export class CrossCheckedEntries {
+export class CrossCheckedEntries implements FirstClassCollection, IterableFirstClassCollection<CrossCheckedEntry> {
   readonly #values: readonly CrossCheckedEntry[];
 
   private constructor(values: readonly CrossCheckedEntry[]) {
@@ -22,5 +23,9 @@ export class CrossCheckedEntries {
 
   toArray(): readonly CrossCheckedEntry[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

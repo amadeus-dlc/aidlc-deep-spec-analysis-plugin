@@ -1,6 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { RelationshipDeclaration } from "./relationship-declaration.ts";
 
-export class RelationshipDeclarations {
+export class RelationshipDeclarations
+  implements FirstClassCollection, IterableFirstClassCollection<RelationshipDeclaration>
+{
   readonly #values: readonly RelationshipDeclaration[];
 
   private constructor(values: readonly RelationshipDeclaration[]) {
@@ -25,5 +28,9 @@ export class RelationshipDeclarations {
 
   toArray(): readonly RelationshipDeclaration[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

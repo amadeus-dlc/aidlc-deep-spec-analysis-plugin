@@ -78,6 +78,7 @@ import {
   EnumerationMember,
   EnumerationMembers,
   type Expression,
+  ExpressionTree,
   FindingsSchema,
   FunctionalRequirementReferences,
   IntermediateRepresentationVersion,
@@ -1040,15 +1041,17 @@ describe("event catalog and effect assignments", () => {
     expect(catalog.eventOf(TargetIdentifier.of("DOB-2"))).toBe(null);
     expect(catalog.eventOf(TargetIdentifier.of("DOB-3"))).toBe(null);
 
-    const orEffect = EffectAssignments.parse({ op: "or", args: [] });
+    const orEffect = EffectAssignments.fromEffect(ExpressionTree.of({ op: "or", args: [] }));
     expect(!orEffect.ok && orEffect.error.kind).toBe("effect-not-assignment-conjunction");
-    const unprimed = EffectAssignments.parse({
-      op: "eq",
-      args: [
-        { op: "ref", path: "x" },
-        { op: "int", value: 1 },
-      ],
-    });
+    const unprimed = EffectAssignments.fromEffect(
+      ExpressionTree.of({
+        op: "eq",
+        args: [
+          { op: "ref", path: "x" },
+          { op: "int", value: 1 },
+        ],
+      }),
+    );
     expect(unprimed.ok).toBe(false);
   });
 });

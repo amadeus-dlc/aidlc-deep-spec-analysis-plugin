@@ -1,0 +1,35 @@
+{
+  "tests": {
+    "passed": 1169,
+    "skipped": 1,
+    "failed": 0,
+    "total": 1170,
+    "files": 60,
+    "assertions": 6181,
+    "exitCode": 0
+  },
+  "coverage": {
+    "covered": 12562,
+    "total": 12575,
+    "percent": 99.89662027833002
+  },
+  "typecheck": "passed",
+  "biome": {
+    "files": 637,
+    "result": "passed"
+  },
+  "usecaseLint": {
+    "files": 60,
+    "violations": 0
+  },
+  "generatedTools": 14,
+  "implementationAudit": {
+    "collections": 112,
+    "missing": 0
+  },
+  "independentReview": {
+    "findings": 3,
+    "resolved": 3
+  },
+  "scope": "deep-spec-analysis plugin, shared collection principles, active intent audit and evidence"
+}

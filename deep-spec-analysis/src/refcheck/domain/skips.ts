@@ -1,8 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { Skipped } from "./skipped.ts";
 
 // skip 記録のファーストクラスコレクション。正準ソート（target → reason）を
 // 所有する。
-export class Skips {
+export class Skips implements FirstClassCollection, IterableFirstClassCollection<Skipped> {
   readonly #values: readonly Skipped[];
 
   private constructor(values: readonly Skipped[]) {
@@ -31,5 +32,9 @@ export class Skips {
 
   toArray(): readonly Skipped[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

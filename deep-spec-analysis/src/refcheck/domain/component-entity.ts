@@ -1,4 +1,10 @@
-import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  FindingKind,
+  FindingTargets,
+  TargetIdentifier,
+  TargetIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
 import type { AttributeName } from "./attribute-name.ts";
 import { DD_2, DD_5, DD_6 } from "./component-check-families.ts";
 import type { Components } from "./components.ts";
@@ -40,7 +46,7 @@ export class ComponentEntity {
       report.finding(
         DD_5,
         FindingKind.structureInvalid(),
-        [TargetIdentifiers.safe("entity", this.#name.asString())],
+        FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", this.#name.asString())), []),
         [WitnessReference.at(artifact.asString(), `${this.#element.asString()}.identifier`)],
         `entity "${this.#name.asString()}" has no identifier`,
       );
@@ -51,7 +57,10 @@ export class ComponentEntity {
         report.finding(
           DD_2,
           FindingKind.referenceBroken(),
-          [TargetIdentifiers.safe("component", reference.ownedBy().asString())],
+          FindingTargets.of(
+            TargetIdentifier.of(TargetIdentifiers.safe("component", reference.ownedBy().asString())),
+            [],
+          ),
           [
             WitnessReference.at(
               artifact.asString(),
@@ -70,7 +79,7 @@ export class ComponentEntity {
         report.finding(
           DD_6,
           FindingKind.referenceBroken(),
-          [TargetIdentifiers.safe("entity", reference.entity().asString())],
+          FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", reference.entity().asString())), []),
           [
             WitnessReference.at(
               artifact.asString(),

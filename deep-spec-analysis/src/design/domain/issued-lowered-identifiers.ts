@@ -1,3 +1,4 @@
+import type { FirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { KeySet } from "@deep-spec-analysis/kernel-domain";
 import {
   IllegalArgumentException,
@@ -8,7 +9,7 @@ import {
 import { LoweredIdentifier } from "./lowered-identifier.ts";
 
 // 一つのloweringで発行した識別子。一意性と衝突しない追加採番を所有する。
-export class IssuedLoweredIdentifiers {
+export class IssuedLoweredIdentifiers implements FirstClassCollection {
   readonly #values: KeySet<LoweredIdentifier>;
   /** 一つの変換文書の識別子予算は65,536件。 */
   private constructor(values: readonly LoweredIdentifier[]) {
@@ -38,5 +39,9 @@ export class IssuedLoweredIdentifiers {
       remaining--;
       yield id;
     }
+  }
+
+  isEmpty(): boolean {
+    return this.#values.isEmpty();
   }
 }

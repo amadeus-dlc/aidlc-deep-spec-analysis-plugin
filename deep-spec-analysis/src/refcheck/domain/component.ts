@@ -1,4 +1,10 @@
-import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  FindingKind,
+  FindingTargets,
+  TargetIdentifier,
+  TargetIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
 import { DD_1, DD_2, DD_3 } from "./component-check-families.ts";
 import type { ComponentEntities } from "./component-entities.ts";
 import type { ComponentName } from "./component-name.ts";
@@ -46,7 +52,7 @@ export class Component {
       report.finding(
         DD_1,
         FindingKind.structureInvalid(),
-        [TargetIdentifiers.safe("component", name)],
+        FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", name)), []),
         [WitnessReference.at(artifact.asString(), `${this.#element.asString()}.name`, name)],
         `component name "${name}" is not PascalCase`,
       );
@@ -57,7 +63,10 @@ export class Component {
         report.finding(
           DD_2,
           FindingKind.referenceBroken(),
-          [TargetIdentifiers.safe("component", reference.component().asString())],
+          FindingTargets.of(
+            TargetIdentifier.of(TargetIdentifiers.safe("component", reference.component().asString())),
+            [],
+          ),
           [WitnessReference.at(artifact.asString(), reference.element().asString(), reference.component().asString())],
           `"${this.#name.asString()}" references undeclared component "${reference.component().asString()}"`,
         );
@@ -69,7 +78,7 @@ export class Component {
       report.finding(
         DD_3,
         FindingKind.structureInvalid(),
-        [TargetIdentifiers.safe("component", this.#name.asString())],
+        FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", this.#name.asString())), []),
         [WitnessReference.at(artifact.asString(), reference.element().asString(), this.#name.asString())],
         `component "${this.#name.asString()}" lists itself as a dependency`,
       );

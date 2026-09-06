@@ -1,9 +1,13 @@
-import type { TriggerName } from "@deep-spec-analysis/kernel-domain";
+import type {
+  FirstClassCollection,
+  IterableFirstClassCollection,
+  TriggerName,
+} from "@deep-spec-analysis/kernel-domain";
 import type { EventMapping } from "./event-mapping.ts";
 
 // eventMap 宣言のファーストクラスコレクション。トリガ索引は旧
 // new Map(...) の凍結挙動どおり重複トリガは最後の宣言が勝つ。
-export class EventMappings {
+export class EventMappings implements FirstClassCollection, IterableFirstClassCollection<EventMapping> {
   readonly #values: readonly EventMapping[];
 
   private constructor(values: readonly EventMapping[]) {
@@ -32,5 +36,9 @@ export class EventMappings {
 
   toArray(): readonly EventMapping[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

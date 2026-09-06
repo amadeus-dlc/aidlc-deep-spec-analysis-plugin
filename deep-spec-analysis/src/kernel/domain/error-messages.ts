@@ -5,11 +5,13 @@ import {
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
 import { ErrorMessage } from "./error-message.ts";
+import type { FirstClassCollection } from "./first-class-collection.ts";
+import type { IterableFirstClassCollection } from "./iterable-first-class-collection.ts";
 
 // 診断の発生順と所有権を保持する。文字列の構築契約はErrorMessageが担う。
 const MAX_MESSAGES = 65_536;
 
-export class ErrorMessages {
+export class ErrorMessages implements FirstClassCollection, IterableFirstClassCollection<ErrorMessage> {
   readonly #values: readonly ErrorMessage[];
 
   private constructor(values: readonly ErrorMessage[]) {

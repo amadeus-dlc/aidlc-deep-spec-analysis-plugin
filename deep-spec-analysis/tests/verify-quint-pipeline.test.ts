@@ -16,8 +16,8 @@ import {
   TriggerName,
   VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
-
 import { scenarioBindings } from "./binding-fixtures.ts";
+import { requireSuccess } from "./result-fixtures.ts";
 
 // レイヤード verify-quint パイプラインの in-process 検証（PR4、#17）。
 //
@@ -582,15 +582,17 @@ describe("quint verdict interpretation", () => {
     method = "simulation",
     compileSkips: { target: string; reason: string }[] = [],
   ) =>
-    plan.interpret(
-      machineModel,
-      VerificationSkips.of(
-        compileSkips.map((k) =>
-          VerificationSkipped.of({ target: TargetIdentifier.of(k.target), reason: SkipReason.of(k.reason) }),
+    requireSuccess(
+      plan.interpret(
+        machineModel,
+        VerificationSkips.of(
+          compileSkips.map((k) =>
+            VerificationSkipped.of({ target: TargetIdentifier.of(k.target), reason: SkipReason.of(k.reason) }),
+          ),
         ),
+        VerificationMethod.of(method),
+        QuintRuns.of({ ...EMPTY_RUNS, ...runs }),
       ),
-      VerificationMethod.of(method),
-      QuintRuns.of({ ...EMPTY_RUNS, ...runs }),
     );
 
   test("a machine timeout skips every machine target with the frozen budget wording", () => {
@@ -738,11 +740,13 @@ describe("quint verdict interpretation", () => {
       eventIds: ObligationIdentifiers.of([ObligationIdentifier.of("OB-2")]),
       scenariosWithInit: [],
     });
-    const unbound = unboundFacts.interpret(
-      machineModel,
-      VerificationSkips.of([]),
-      VerificationMethod.of("simulation"),
-      QuintRuns.of(EMPTY_RUNS),
+    const unbound = requireSuccess(
+      unboundFacts.interpret(
+        machineModel,
+        VerificationSkips.of([]),
+        VerificationMethod.of("simulation"),
+        QuintRuns.of(EMPTY_RUNS),
+      ),
     );
     expect(
       unbound.skipped
