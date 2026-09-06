@@ -9502,71 +9502,37 @@ class SiblingVerdictDocument {
     });
   }
   #remapReadable(u, index, method, docFindings, docSkipped) {
-    const mapTarget = (t) => index.resolveDesignTarget(t);
-    const rewriteLabel = (label) => index.rewriteLoweredIdTokens(label);
-    const remapDetail = (detail) => index.rewriteLoweredIds(detail);
+    const unit = UnitName.of(u.name());
     const findings = [];
     const skipped = [];
     const waived = new Set;
     const deadDesignIds = new Set;
     const relations = [];
-    for (const f of docFindings) {
-      const mapped = f.targets().map((t) => mapTarget(t.asString()));
-      const functionalRequirementReferences = f.functionalRequirementReferences();
-      const detail = remapDetail(f.detail());
-      const witness = f.witnessRemappedBy(rewriteLabel);
-      const synth = mapped.find((m) => m.entry?.isSyntheticProbe());
-      if (synth?.entry?.isKind("vac-dead") && f.isKind("conflict")) {
-        const design = synth.entry.design().asString();
-        const isTransition = index.isTransition(design);
-        deadDesignIds.add(design);
-        findings.push(DesignFinding.of({
-          kind: FindingKind.unreachable(),
-          functionalRequirementReferences,
-          targets: TargetIdentifiers.of(Array.from([design], (raw) => TargetIdentifier.of(raw))),
-          witness,
-          unit: UnitName.of(u.name()),
-          detail: `The guard of ${design} can never hold under the entity constraints and invariants (witness core attached): the ${isTransition ? "transition" : "rule"} is dead.`
-        }));
-        continue;
-      }
-      const probe = synth?.entry?.subsumptionProbe();
-      if (probe != null) {
-        const verdict = RuleSubsumptionVerdict.fromFinding(probe, f, witness, UnitName.of(u.name()));
-        const relation = RuleSubsumption.parse(verdict);
-        if (relation.ok)
-          relations.push(relation.value);
-        continue;
-      }
-      if (synth)
-        continue;
-      const targets = TargetIdentifiers.of(Array.from(mapped.map((m) => m.design), (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically().toStrings();
-      if (f.isKind("conflict") && targets.length > 0) {
-        const machines = targets.map((t) => index.machineOfTransition(t));
-        const first = machines[0];
-        if (first?.waivesOverlapOf(machines)) {
-          for (const t of targets) {
-            if (!waived.has(t)) {
-              waived.add(t);
-              skipped.push(DesignSkipped.of({
-                target: TargetIdentifier.of(t),
-                reason: SkipReason.waived(),
-                unit: UnitName.of(u.name()),
-                detail: `machine ${first.id().asString()} declares deterministic: false \u2014 the same-(state,trigger) overlap check is waived by the model`
-              }));
+    for (const source of docFindings) {
+      const result = source.remap(unit, index);
+      switch (result.kind) {
+        case "finding":
+          findings.push(result.finding);
+          break;
+        case "unreachable":
+          deadDesignIds.add(result.target.asString());
+          findings.push(result.finding);
+          break;
+        case "subsumption":
+          relations.push(result.relation);
+          break;
+        case "waived":
+          for (const skip of result.skipped) {
+            const target = skip.target().asString();
+            if (!waived.has(target)) {
+              waived.add(target);
+              skipped.push(skip);
             }
           }
-          continue;
-        }
+          break;
+        case "ignored":
+          break;
       }
-      findings.push(DesignFinding.of({
-        kind: FindingKind.of(f.kind()),
-        functionalRequirementReferences,
-        targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))),
-        witness,
-        unit: UnitName.of(u.name()),
-        detail
-      }));
     }
     const subsumptions = RuleSubsumptions.parse(relations);
     if (!subsumptions.ok)
@@ -9578,21 +9544,15 @@ class SiblingVerdictDocument {
       };
     findings.push(...subsumptions.value.findingsExcept(TargetIdentifiers.of([...deadDesignIds].map(TargetIdentifier.of))));
     const seenSkip = new Set;
-    for (const s of docSkipped) {
-      const { design, entry } = mapTarget(s.target().asString());
-      if (entry?.isSyntheticProbe())
+    for (const source of docSkipped) {
+      const mapped = source.remap(unit, index);
+      if (mapped === null)
         continue;
-      const detail = s.detail();
-      const key = `${design}|${s.reason()}`;
-      if (seenSkip.has(key))
-        continue;
-      seenSkip.add(key);
-      skipped.push(DesignSkipped.of({
-        target: TargetIdentifier.of(design),
-        reason: SkipReason.of(s.reason()),
-        unit: UnitName.of(u.name()),
-        ...detail !== undefined ? { detail: remapDetail(detail) } : {}
-      }));
+      const key = `${mapped.target().asString()}|${mapped.reason()}`;
+      if (!seenSkip.has(key)) {
+        seenSkip.add(key);
+        skipped.push(mapped);
+      }
     }
     return { findings: DesignFindings.of(findings), skipped: DesignSkips.of(skipped), unavailable: null, method };
   }
@@ -9613,6 +9573,60 @@ class SiblingVerdictFinding {
   }
   static of(props) {
     return new SiblingVerdictFinding(props);
+  }
+  remap(unit, index) {
+    const mapped = this.#targets.map((target) => index.resolveDesignTarget(target.asString()));
+    const witness = this.witnessRemappedBy((label) => index.rewriteLoweredIdTokens(label));
+    const synthetic = mapped.find((target) => target.entry?.isSyntheticProbe());
+    if (synthetic?.entry?.isKind("vac-dead") && this.isKind("conflict")) {
+      const design = synthetic.entry.design().asString();
+      const target = TargetIdentifier.of(design);
+      return {
+        kind: "unreachable",
+        target,
+        finding: DesignFinding.of({
+          kind: FindingKind.unreachable(),
+          functionalRequirementReferences: this.#functionalRequirementReferences,
+          targets: TargetIdentifiers.of([target]),
+          witness,
+          unit,
+          detail: `The guard of ${design} can never hold under the entity constraints and invariants (witness core attached): the ${index.isTransition(design) ? "transition" : "rule"} is dead.`
+        })
+      };
+    }
+    const probe = synthetic?.entry?.subsumptionProbe();
+    if (probe != null) {
+      const relation = RuleSubsumption.parse(RuleSubsumptionVerdict.fromFinding(probe, this, witness, unit));
+      return relation.ok ? { kind: "subsumption", relation: relation.value } : { kind: "ignored" };
+    }
+    if (synthetic !== undefined)
+      return { kind: "ignored" };
+    const targets = TargetIdentifiers.of(mapped.map((target) => TargetIdentifier.of(target.design))).sortedUniqueCanonically();
+    if (this.isKind("conflict") && targets.count() > 0) {
+      const machines = [...targets].map((target) => index.machineOfTransition(target.asString()));
+      const machine = machines[0];
+      if (machine?.waivesOverlapOf(machines))
+        return {
+          kind: "waived",
+          skipped: DesignSkips.of([...targets].map((target) => DesignSkipped.of({
+            target,
+            reason: SkipReason.waived(),
+            unit,
+            detail: `machine ${machine.id().asString()} declares deterministic: false \u2014 the same-(state,trigger) overlap check is waived by the model`
+          })))
+        };
+    }
+    return {
+      kind: "finding",
+      finding: DesignFinding.of({
+        kind: this.#kind,
+        functionalRequirementReferences: this.#functionalRequirementReferences,
+        targets,
+        witness,
+        unit,
+        detail: index.rewriteLoweredIds(this.#detail)
+      })
+    };
   }
   kind() {
     return this.#kind.asString();
@@ -9671,6 +9685,17 @@ class SiblingVerdictSkip {
   }
   static of(props) {
     return new SiblingVerdictSkip(props);
+  }
+  remap(unit, index) {
+    const mapped = index.resolveDesignTarget(this.#target.asString());
+    if (mapped.entry?.isSyntheticProbe())
+      return null;
+    return DesignSkipped.of({
+      target: TargetIdentifier.of(mapped.design),
+      reason: this.#reason,
+      unit,
+      ...this.#detail !== undefined ? { detail: index.rewriteLoweredIds(this.#detail) } : {}
+    });
   }
   target() {
     return this.#target;

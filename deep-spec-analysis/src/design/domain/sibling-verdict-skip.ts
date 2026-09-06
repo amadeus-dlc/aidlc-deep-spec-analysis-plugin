@@ -1,9 +1,9 @@
-import type { SkipReason } from "@deep-spec-analysis/kernel-domain";
+import { type SkipReason, TargetIdentifier, type UnitName } from "@deep-spec-analysis/kernel-domain";
+import { DesignSkipped } from "./design-skipped.ts";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
+import type { LoweringIndex } from "./lowering-index.ts";
 
-// 兄弟バックエンドの v1 文書が運ぶ skip（lowered 語彙）。remap が設計語彙へ
-// 写す材料——対象は lowered id、reason は分類文字列、detail は prose。
-// 記録自身は自分の面を差し出すだけ（#71 波22）。
+// 兄弟バックエンドのskip。自分の対象と文言を設計上の帰属へ写し替える。
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type SiblingVerdictSkipParam = { target: LoweredIdentifier; reason: SkipReason; detail?: string };
 
@@ -20,6 +20,17 @@ export class SiblingVerdictSkip {
 
   static of(props: SiblingVerdictSkipParam): SiblingVerdictSkip {
     return new SiblingVerdictSkip(props);
+  }
+
+  remap(unit: UnitName, index: LoweringIndex): DesignSkipped | null {
+    const mapped = index.resolveDesignTarget(this.#target.asString());
+    if (mapped.entry?.isSyntheticProbe()) return null;
+    return DesignSkipped.of({
+      target: TargetIdentifier.of(mapped.design),
+      reason: this.#reason,
+      unit,
+      ...(this.#detail !== undefined ? { detail: index.rewriteLoweredIds(this.#detail) } : {}),
+    });
   }
 
   target(): LoweredIdentifier {

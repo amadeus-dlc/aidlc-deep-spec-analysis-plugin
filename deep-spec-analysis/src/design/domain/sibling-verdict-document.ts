@@ -1,21 +1,17 @@
 import {
-  FindingKind,
-  SkipReason,
   TargetIdentifier,
   TargetIdentifiers,
   UnitName,
   type VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
-import { DesignFinding } from "./design-finding.ts";
+import type { DesignFinding } from "./design-finding.ts";
 import { DesignFindings } from "./design-findings.ts";
-import { DesignSkipped } from "./design-skipped.ts";
+import type { DesignSkipped } from "./design-skipped.ts";
 import { DesignSkips } from "./design-skips.ts";
 import type { DesignUnit } from "./design-unit.ts";
-import type { LoweredOrigin } from "./lowered-origin.ts";
 import type { LoweringIndex } from "./lowering-index.ts";
 import { ReachabilityVerdict } from "./reachability-verdict.ts";
-import { RuleSubsumption } from "./rule-subsumption.ts";
-import { RuleSubsumptionVerdict } from "./rule-subsumption-verdict.ts";
+import type { RuleSubsumption } from "./rule-subsumption.ts";
 import { RuleSubsumptions } from "./rule-subsumptions.ts";
 import type { SiblingVerdictFindings } from "./sibling-verdict-findings.ts";
 import type { SiblingVerdictSkips } from "./sibling-verdict-skips.ts";
@@ -132,7 +128,7 @@ export class SiblingVerdictDocument {
     });
   }
 
-  // 読めた文書の再割り当て本体（旧 remapVerdicts の readable 分岐、逐語）。
+  // 各診断が再割り当てを行い、文書は包摂関係とskipの重複を整理する。
   #remapReadable(
     u: DesignUnit,
     index: LoweringIndex,
@@ -140,89 +136,38 @@ export class SiblingVerdictDocument {
     docFindings: SiblingVerdictFindings,
     docSkipped: SiblingVerdictSkips,
   ): ReturnType<SiblingVerdictDocument["remapVerdicts"]> {
-    const mapTarget = (t: string): { design: string; entry: LoweredOrigin | null } => index.resolveDesignTarget(t);
-    const rewriteLabel = (label: string): string => index.rewriteLoweredIdTokens(label);
-    const remapDetail = (detail: string): string => index.rewriteLoweredIds(detail);
-
+    const unit = UnitName.of(u.name());
     const findings: DesignFinding[] = [];
     const skipped: DesignSkipped[] = [];
     const waived = new Set<string>();
     const deadDesignIds = new Set<string>();
     const relations: RuleSubsumption[] = [];
 
-    for (const f of docFindings) {
-      const mapped = f.targets().map((t) => mapTarget(t.asString()));
-      const functionalRequirementReferences = f.functionalRequirementReferences();
-      const detail = remapDetail(f.detail());
-      const witness = f.witnessRemappedBy(rewriteLabel);
-
-      const synth = mapped.find((m) => m.entry?.isSyntheticProbe());
-      if (synth?.entry?.isKind("vac-dead") && f.isKind("conflict")) {
-        const design = synth.entry.design().asString();
-        const isTransition = index.isTransition(design);
-        deadDesignIds.add(design);
-        findings.push(
-          DesignFinding.of({
-            kind: FindingKind.unreachable(),
-            functionalRequirementReferences: functionalRequirementReferences,
-            targets: TargetIdentifiers.of(Array.from([design], (raw) => TargetIdentifier.of(raw))),
-            witness,
-            unit: UnitName.of(u.name()),
-            detail: `The guard of ${design} can never hold under the entity constraints and invariants (witness core attached): the ${isTransition ? "transition" : "rule"} is dead.`,
-          }),
-        );
-        continue;
-      }
-      const probe = synth?.entry?.subsumptionProbe();
-      if (probe != null) {
-        const verdict = RuleSubsumptionVerdict.fromFinding(probe, f, witness, UnitName.of(u.name()));
-        const relation = RuleSubsumption.parse(verdict);
-        if (relation.ok) relations.push(relation.value);
-        continue;
-      }
-      if (synth) continue; // 合成に触れる他の判定はノイズ
-
-      const targets = TargetIdentifiers.of(
-        Array.from(
-          mapped.map((m) => m.design),
-          (raw) => TargetIdentifier.of(raw),
-        ),
-      )
-        .sortedUniqueCanonically()
-        .toStrings();
-      // deterministic:false waiver：同トリガ conflict の対象がすべて、非決定を
-      // 宣言した 1 機械の遷移であるとき（判定は機械自身へ命じる——波7）。
-      if (f.isKind("conflict") && targets.length > 0) {
-        const machines = targets.map((t) => index.machineOfTransition(t));
-        const first = machines[0];
-        if (first?.waivesOverlapOf(machines)) {
-          for (const t of targets) {
-            if (!waived.has(t)) {
-              waived.add(t);
-              skipped.push(
-                DesignSkipped.of({
-                  target: TargetIdentifier.of(t),
-                  reason: SkipReason.waived(),
-                  unit: UnitName.of(u.name()),
-                  detail: `machine ${first.id().asString()} declares deterministic: false — the same-(state,trigger) overlap check is waived by the model`,
-                }),
-              );
+    for (const source of docFindings) {
+      const result = source.remap(unit, index);
+      switch (result.kind) {
+        case "finding":
+          findings.push(result.finding);
+          break;
+        case "unreachable":
+          deadDesignIds.add(result.target.asString());
+          findings.push(result.finding);
+          break;
+        case "subsumption":
+          relations.push(result.relation);
+          break;
+        case "waived":
+          for (const skip of result.skipped) {
+            const target = skip.target().asString();
+            if (!waived.has(target)) {
+              waived.add(target);
+              skipped.push(skip);
             }
           }
-          continue;
-        }
+          break;
+        case "ignored":
+          break;
       }
-      // 兄弟バックエンドの検証済み判定を設計側の座標へ写す。
-      findings.push(
-        DesignFinding.of({
-          kind: FindingKind.of(f.kind()),
-          functionalRequirementReferences: functionalRequirementReferences,
-          targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))),
-          witness,
-          unit: UnitName.of(u.name()),
-          detail,
-        }),
-      );
     }
 
     const subsumptions = RuleSubsumptions.parse(relations);
@@ -238,21 +183,14 @@ export class SiblingVerdictDocument {
     );
 
     const seenSkip = new Set<string>();
-    for (const s of docSkipped) {
-      const { design, entry } = mapTarget(s.target().asString());
-      if (entry?.isSyntheticProbe()) continue; // 合成の予算ノイズ
-      const detail = s.detail();
-      const key = `${design}|${s.reason()}`;
-      if (seenSkip.has(key)) continue;
-      seenSkip.add(key);
-      skipped.push(
-        DesignSkipped.of({
-          target: TargetIdentifier.of(design),
-          reason: SkipReason.of(s.reason()),
-          unit: UnitName.of(u.name()),
-          ...(detail !== undefined ? { detail: remapDetail(detail) } : {}),
-        }),
-      );
+    for (const source of docSkipped) {
+      const mapped = source.remap(unit, index);
+      if (mapped === null) continue;
+      const key = `${mapped.target().asString()}|${mapped.reason()}`;
+      if (!seenSkip.has(key)) {
+        seenSkip.add(key);
+        skipped.push(mapped);
+      }
     }
     return { findings: DesignFindings.of(findings), skipped: DesignSkips.of(skipped), unavailable: null, method };
   }
