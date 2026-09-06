@@ -31,9 +31,12 @@ export class IssuedLoweredIdentifiers {
     return parseConstruction(() => new IssuedLoweredIdentifiers(values));
   }
   *availableObligations(): IterableIterator<LoweredIdentifier> {
-    for (let sequence = 1; sequence <= 65_536; sequence++) {
+    let remaining = 65_536 - this.#values.size();
+    for (let sequence = 1; sequence <= 65_536 && remaining > 0; sequence++) {
       const id = LoweredIdentifier.of(`OB-${sequence}`);
-      if (!this.#values.has(id)) yield id;
+      if (this.#values.has(id)) continue;
+      remaining--;
+      yield id;
     }
   }
 }

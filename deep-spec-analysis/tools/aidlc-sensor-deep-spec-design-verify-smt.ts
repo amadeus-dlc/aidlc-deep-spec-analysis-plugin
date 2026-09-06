@@ -7918,10 +7918,13 @@ class IssuedLoweredIdentifiers {
     return parseConstruction(() => new IssuedLoweredIdentifiers(values));
   }
   *availableObligations() {
-    for (let sequence = 1;sequence <= 65536; sequence++) {
+    let remaining = 65536 - this.#values.size();
+    for (let sequence = 1;sequence <= 65536 && remaining > 0; sequence++) {
       const id = LoweredIdentifier.of(`OB-${sequence}`);
-      if (!this.#values.has(id))
-        yield id;
+      if (this.#values.has(id))
+        continue;
+      remaining--;
+      yield id;
     }
   }
 }
