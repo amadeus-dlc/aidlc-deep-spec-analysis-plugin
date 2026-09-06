@@ -822,6 +822,7 @@ describe("plan classification and gap findings", () => {
 
   test("statuses classify checkable / waived / capability / gap, and gaps become findings", () => {
     const plan = UnitRefinementPlan.of(designUnit, unitMap, req, ArtifactPath.of("construction/x/map.md"));
+    expect(UnitRefinementPlan.parse(designUnit, unitMap, req, ArtifactPath.of("construction/x/map.md")).ok).toBe(true);
     expect(plainStatus(plan.statusOfObligation("OB-1"))).toEqual({ kind: "checkable" });
     expect(plainStatus(plan.statusOfObligation("OB-2"))).toEqual({ kind: "checkable" });
     expect(plan.mappedTransitionsOf("OB-2").map((t) => t.asString())).toEqual(["TR-1"]);
@@ -1221,13 +1222,11 @@ describe("refinement collections (first-class operations)", () => {
       UnmappedTarget.of({ target: uref("R.x"), reason: "last" }),
     );
     expect([...un].length).toBe(2);
-    expect(un.covers("R.x")).toBe(true);
-    expect(un.covers("R.y")).toBe(false);
-    expect(un.coversAll(["R.x"])).toBe(true);
-    expect(un.coversAll(["R.x", "R.y"])).toBe(false);
+    expect(un.covers(AttributePath.of("R.x"))).toBe(true);
+    expect(un.covers(AttributePath.of("R.y"))).toBe(false);
     // 理由の索引も最後の宣言が勝つ。
-    expect(un.reasonOf("R.x")).toBe("last");
-    expect(un.reasonOf("R.y")).toBe(undefined);
+    expect(un.reasonOf(AttributePath.of("R.x"))).toBe("last");
+    expect(un.reasonOf(AttributePath.of("R.y"))).toBe(undefined);
     expect(un.toArray().length).toBe(2);
 
     const m1 = refUnitMap({ unit: "u1" });

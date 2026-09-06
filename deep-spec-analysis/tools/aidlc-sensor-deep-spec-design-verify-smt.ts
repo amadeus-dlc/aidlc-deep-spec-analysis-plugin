@@ -4188,6 +4188,95 @@ class DesignSkipped {
   }
 }
 
+// src/design/domain/refinement-status.ts
+class RefinementStatus {
+  #kind;
+  #text;
+  constructor(props) {
+    this.#kind = props.kind;
+    this.#text = props.text;
+  }
+  static checkable() {
+    return new RefinementStatus({ kind: "checkable", text: "" });
+  }
+  static waived(reason) {
+    return new RefinementStatus({ kind: "waived", text: reason });
+  }
+  static gap(detail) {
+    return new RefinementStatus({ kind: "gap", text: detail });
+  }
+  static capability(detail) {
+    return new RefinementStatus({ kind: "capability", text: detail });
+  }
+  isCheckable() {
+    return this.#kind === "checkable";
+  }
+  gapDetail() {
+    return this.#kind === "gap" ? this.#text : null;
+  }
+  findingFor(target, references, map, artifact) {
+    return this.#kind === "gap" ? map.gapFor(TargetIdentifiers.of([target]), `${target.asString()}: ${this.#text}`, artifact, references) : null;
+  }
+  skipFor(target, unit) {
+    if (this.#kind === "waived")
+      return DesignSkipped.of({ target, reason: SkipReason.waived(), unit: UnitName.of(unit), detail: this.#text });
+    if (this.#kind === "capability")
+      return DesignSkipped.of({ target, reason: SkipReason.capability(), unit: UnitName.of(unit), detail: this.#text });
+    return null;
+  }
+}
+
+// src/design/domain/attribute-coverage.ts
+class AttributeCoverage {
+  #required;
+  #mapped;
+  #waived;
+  #missing;
+  constructor(props) {
+    const required = [...props.required];
+    if (required.length > 65536)
+      throw new IllegalArgumentException({ kind: "attribute-coverage-too-large", raw: required.length });
+    for (const path of required) {
+      const occurrences = [props.mapped, props.waived, props.missing].filter((part) => part.has(path)).length;
+      if (occurrences !== 1)
+        throw new IllegalArgumentException({ kind: "invalid-attribute-coverage-partition" });
+    }
+    for (const part of [props.mapped, props.waived, props.missing])
+      for (const path of part)
+        if (!props.required.has(path))
+          throw new IllegalArgumentException({ kind: "attribute-coverage-outside-subject" });
+    this.#required = props.required;
+    this.#mapped = props.mapped;
+    this.#waived = props.waived;
+    this.#missing = props.missing;
+  }
+  static of(props) {
+    return new AttributeCoverage(props);
+  }
+  static parse(props) {
+    return parseConstruction(() => new AttributeCoverage(props));
+  }
+  #names(compare) {
+    return [...this.#waived, ...this.#missing].sort(compare).map((path) => path.asString()).join(", ");
+  }
+  #status(waived, gap) {
+    if ([...this.#required].every((path) => this.#mapped.has(path)))
+      return RefinementStatus.checkable();
+    return [...this.#missing].length === 0 ? RefinementStatus.waived(waived) : RefinementStatus.gap(gap);
+  }
+  forInvariant() {
+    const names = this.#names((a, b) => a.asString() < b.asString() ? -1 : a.asString() > b.asString() ? 1 : 0);
+    return this.#status(`depends on unmapped attribute(s) ${names}`, `depends on attribute(s) ${names} that are neither mapped nor in unmapped[]`);
+  }
+  forEvent() {
+    const names = this.#names((a, b) => a.compareTo(b));
+    return this.#status(`depends on unmapped attribute(s) ${names}`, `depends on attribute(s) ${names} that are neither mapped nor in unmapped[]`);
+  }
+  forScenario() {
+    const names = this.#names((a, b) => a.asString() < b.asString() ? -1 : a.asString() > b.asString() ? 1 : 0);
+    return this.#status(`binds unmapped attribute(s) ${names}`, `binds attribute(s) ${names} that are neither mapped nor in unmapped[]`);
+  }
+}
 // src/design/domain/refinement-map-defect.ts
 class RefinementMapDefect {
   #kind;
@@ -4255,20 +4344,50 @@ class AttributeMapping {
   static parse(req, value) {
     return parseConstruction(() => new AttributeMapping(req, value));
   }
+  diagnostics(unit, attributes) {
+    const messages = [];
+    const reqPath = this.#req.asString();
+    const reqAttr = attributes.byPath(AttributePath.of(reqPath));
+    if (!reqAttr) {
+      messages.push(`attrMap entry "${reqPath}" names no attribute of the requirements IR`);
+      return ErrorMessages.collect(messages.map(ErrorMessage.parse));
+    }
+    if (this.#variant.kind === "enum-cases") {
+      const from = this.#variant.from.asString();
+      if (!reqAttr.isEnum()) {
+        messages.push(`attrMap entry "${reqPath}" uses enumMap but the requirements attribute is ${reqAttr.kind()}`);
+      }
+      if (!unit.attrPaths().has(AttributePath.of(from))) {
+        messages.push(`enumMap.from "${from}" is not a design attribute of unit ${unit.name()}`);
+        return ErrorMessages.collect(messages.map(ErrorMessage.parse));
+      }
+      const fromValues = unit.declaredEnumValuesOf(from);
+      if (fromValues === null) {
+        messages.push(`enumMap.from "${from}" is not an enum design attribute`);
+        return ErrorMessages.collect(messages.map(ErrorMessage.parse));
+      }
+      const missing = this.missingCasesOver(fromValues);
+      if (missing.length > 0) {
+        messages.push(`enumMap for "${reqPath}" is not total over "${from}": missing case(s) ${missing.join(", ")}`);
+      }
+      const badResults = this.producedValuesOutside(reqAttr.declaredValues());
+      if (badResults.length > 0) {
+        messages.push(`enumMap for "${reqPath}" produces value(s) ${badResults.join(", ")} outside the requirements attribute's values`);
+      }
+    } else if (this.#variant.kind === "expression") {
+      for (const r of this.referencedPaths()) {
+        if (!unit.attrPaths().has(AttributePath.of(r))) {
+          messages.push(`attrMap expression for "${reqPath}" references "${r}", which is not a design attribute of unit ${unit.name()}`);
+        }
+      }
+    }
+    return ErrorMessages.collect(messages.map(ErrorMessage.parse));
+  }
   isFor(reqPath) {
-    return this.#req.asString() === reqPath;
+    return this.#req.equals(reqPath);
   }
   req() {
     return this.#req;
-  }
-  isEnumCases() {
-    return this.#variant.kind === "enum-cases";
-  }
-  isExpression() {
-    return this.#variant.kind === "expression";
-  }
-  enumFrom() {
-    return this.#variant.kind === "enum-cases" ? this.#variant.from.asString() : undefined;
   }
   expandComparison(op, reqValue, primed) {
     const variant = this.#variant;
@@ -4332,68 +4451,6 @@ class AttributeMapping {
     return ExpressionTree.of(variant.expr).referencedPaths();
   }
 }
-// src/design/domain/attribute-mappings.ts
-class AttributeMappings {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new AttributeMappings(values);
-  }
-  add(value) {
-    return new AttributeMappings([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  byRequirementPath(reqPath) {
-    let found;
-    for (const m of this.#values) {
-      if (m.isFor(reqPath))
-        found = m;
-    }
-    return found;
-  }
-  covers(reqPath) {
-    return this.byRequirementPath(reqPath) !== undefined;
-  }
-  substitute(e, post) {
-    if (e.op === "eq" || e.op === "ne") {
-      const [a, b] = e.args ?? [];
-      const refArg = a?.op === "ref" ? a : b?.op === "ref" ? b : null;
-      const enumArg = a?.op === "enum" ? a : b?.op === "enum" ? b : null;
-      if (refArg && enumArg && typeof refArg.path === "string" && typeof enumArg.value === "string") {
-        const expanded = this.byRequirementPath(refArg.path)?.expandComparison(e.op, enumArg.value, post || refArg.prime === true);
-        if (expanded !== null && expanded !== undefined)
-          return ok(expanded);
-      }
-    }
-    if (e.op === "ref" && typeof e.path === "string") {
-      const mapping = this.byRequirementPath(e.path);
-      if (!mapping)
-        return err(RefinementMapDefect.uncoveredAttribute(e.path));
-      return mapping.substituteForReference(e.path, post || e.prime === true);
-    }
-    if (e.args) {
-      const args = [];
-      for (const a of e.args) {
-        const sub = this.substitute(a, post);
-        if (!sub.ok)
-          return sub;
-        args.push(sub.value);
-      }
-      return ok({ ...e, args });
-    }
-    return ok(e);
-  }
-  equalityFor(reqPath) {
-    return this.byRequirementPath(reqPath)?.abstractFrameEquality() ?? null;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
 // src/design/domain/attribute-paths.ts
 class AttributePaths {
   #values;
@@ -4414,6 +4471,151 @@ class AttributePaths {
   }
   toArray() {
     return [...this.#values];
+  }
+}
+
+// src/design/domain/design-findings.ts
+function sortDesignFindings(findings) {
+  return [...findings].sort((a, b) => {
+    const kr = a.compareKindTo(b);
+    if (kr !== 0)
+      return kr;
+    if (a.unit() !== b.unit())
+      return a.unit() < b.unit() ? -1 : 1;
+    const ta = a.targets().joined(",");
+    const tb = b.targets().joined(",");
+    if (ta !== tb)
+      return ta < tb ? -1 : 1;
+    return a.detail() < b.detail() ? -1 : a.detail() > b.detail() ? 1 : 0;
+  });
+}
+
+class DesignFindings {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new DesignFindings(values);
+  }
+  add(value) {
+    return new DesignFindings([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  sortedCanonically() {
+    return new DesignFindings(sortDesignFindings(this.#values));
+  }
+  count() {
+    return this.#values.length;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/design/domain/attribute-mappings.ts
+class AttributeMappings {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new AttributeMappings(values);
+  }
+  add(value) {
+    return new AttributeMappings([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  coverageOf(required, unmapped) {
+    const mapped = [], waived = [], missing = [];
+    for (const path of required) {
+      if (this.covers(path.asString()))
+        mapped.push(path);
+      else if (unmapped.covers(path))
+        waived.push(path);
+      else
+        missing.push(path);
+    }
+    return AttributeCoverage.of({
+      required,
+      mapped: AttributePaths.of(mapped),
+      waived: AttributePaths.of(waived),
+      missing: AttributePaths.of(missing)
+    });
+  }
+  diagnostics(unit, requirements, map, artifact) {
+    const findings = [];
+    const seen = new Set;
+    for (const mapping of this.#values) {
+      const path = mapping.req();
+      if (seen.has(path.asString()))
+        findings.push(map.attributeGap(path, `attrMap maps "${path.asString()}" more than once`, artifact));
+      seen.add(path.asString());
+      for (const message of mapping.diagnostics(unit, requirements.attributes()))
+        findings.push(map.attributeGap(path, message.asString(), artifact));
+    }
+    for (const attribute of requirements.attributes().sortedByPath()) {
+      const path = attribute.path();
+      if (!this.covers(path.asString()) && !map.unmapped().covers(path))
+        findings.push(map.attributeGap(path, `requirements attribute "${path.asString()}" is neither mapped by attrMap nor listed in unmapped[] \u2014 silence is a contract violation`, artifact));
+    }
+    return DesignFindings.of(findings);
+  }
+  #byRequirementPath(reqPath) {
+    const path = AttributePath.parse(reqPath);
+    if (!path.ok)
+      return;
+    let found;
+    for (const m of this.#values) {
+      if (m.isFor(path.value))
+        found = m;
+    }
+    return found;
+  }
+  covers(reqPath) {
+    return this.#byRequirementPath(reqPath) !== undefined;
+  }
+  substitute(e, post) {
+    if (e.op === "eq" || e.op === "ne") {
+      const [a, b] = e.args ?? [];
+      const refArg = a?.op === "ref" ? a : b?.op === "ref" ? b : null;
+      const enumArg = a?.op === "enum" ? a : b?.op === "enum" ? b : null;
+      if (refArg && enumArg && typeof refArg.path === "string" && typeof enumArg.value === "string") {
+        const expanded = this.#byRequirementPath(refArg.path)?.expandComparison(e.op, enumArg.value, post || refArg.prime === true);
+        if (expanded !== null && expanded !== undefined)
+          return ok(expanded);
+      }
+    }
+    if (e.op === "ref" && typeof e.path === "string") {
+      const mapping = this.#byRequirementPath(e.path);
+      if (!mapping)
+        return err(RefinementMapDefect.uncoveredAttribute(e.path));
+      return mapping.substituteForReference(e.path, post || e.prime === true);
+    }
+    if (e.args) {
+      const args = [];
+      for (const a of e.args) {
+        const sub = this.substitute(a, post);
+        if (!sub.ok)
+          return sub;
+        args.push(sub.value);
+      }
+      return ok({ ...e, args });
+    }
+    return ok(e);
+  }
+  equalityFor(reqPath) {
+    return this.#byRequirementPath(reqPath)?.abstractFrameEquality() ?? null;
+  }
+  toArray() {
+    return this.#values;
   }
 }
 // src/design/domain/business-rule-reference.ts
@@ -5454,49 +5656,6 @@ class DesignFinding {
       unit: this.#unit,
       detail
     });
-  }
-}
-// src/design/domain/design-findings.ts
-function sortDesignFindings(findings) {
-  return [...findings].sort((a, b) => {
-    const kr = a.compareKindTo(b);
-    if (kr !== 0)
-      return kr;
-    if (a.unit() !== b.unit())
-      return a.unit() < b.unit() ? -1 : 1;
-    const ta = a.targets().joined(",");
-    const tb = b.targets().joined(",");
-    if (ta !== tb)
-      return ta < tb ? -1 : 1;
-    return a.detail() < b.detail() ? -1 : a.detail() > b.detail() ? 1 : 0;
-  });
-}
-
-class DesignFindings {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new DesignFindings(values);
-  }
-  add(value) {
-    return new DesignFindings([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  sortedCanonically() {
-    return new DesignFindings(sortDesignFindings(this.#values));
-  }
-  count() {
-    return this.#values.length;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
-  toArray() {
-    return this.#values;
   }
 }
 // src/design/domain/design-ignore.ts
@@ -7954,6 +8113,14 @@ class EventMapping {
       reason: props.waived?.reason ?? null
     });
   }
+  statusIn(unit) {
+    if (this.#reason !== null)
+      return RefinementStatus.waived(this.#reason);
+    if (this.#transitions.isEmpty())
+      return RefinementStatus.gap(`requirements event trigger "${this.#reqTrigger.asString()}" has no eventMap entry (map it to design transitions or waive it)`);
+    const unknown = this.#transitions.unknownAmong(new Set([...unit.obligations().ids(), ...unit.machines().transitionIds()]));
+    return unknown.length > 0 ? RefinementStatus.gap(`eventMap for "${this.#reqTrigger.asString()}" names unknown design id(s) ${unknown.join(", ")}`) : RefinementStatus.checkable();
+  }
   isForTrigger(reqTrigger) {
     return this.#reqTrigger.equals(reqTrigger);
   }
@@ -8354,49 +8521,7 @@ class RefinementQuintInvariants {
   }
 }
 
-// src/design/domain/refinement-status.ts
-class RefinementStatus {
-  #kind;
-  #text;
-  constructor(props) {
-    this.#kind = props.kind;
-    this.#text = props.text;
-  }
-  static checkable() {
-    return new RefinementStatus({ kind: "checkable", text: "" });
-  }
-  static waived(reason) {
-    return new RefinementStatus({ kind: "waived", text: reason });
-  }
-  static gap(detail) {
-    return new RefinementStatus({ kind: "gap", text: detail });
-  }
-  static capability(detail) {
-    return new RefinementStatus({ kind: "capability", text: detail });
-  }
-  isCheckable() {
-    return this.#kind === "checkable";
-  }
-  gapDetail() {
-    return this.#kind === "gap" ? this.#text : null;
-  }
-  skipFor(target, unit) {
-    if (this.#kind === "waived")
-      return DesignSkipped.of({ target, reason: SkipReason.waived(), unit: UnitName.of(unit), detail: this.#text });
-    if (this.#kind === "capability")
-      return DesignSkipped.of({ target, reason: SkipReason.capability(), unit: UnitName.of(unit), detail: this.#text });
-    return null;
-  }
-}
-
 // src/design/domain/unit-refinement-plan.ts
-function exprRefs(e, out) {
-  if (e.op === "ref" && typeof e.path === "string")
-    out.add(e.path);
-  for (const a of e.args ?? [])
-    exprRefs(a, out);
-}
-
 class UnitRefinementPlan {
   #unit;
   #requirements;
@@ -8405,184 +8530,42 @@ class UnitRefinementPlan {
   #scenarioStatus;
   #eventTransitions;
   #gaps;
-  constructor(props) {
-    this.#unit = props.unit;
-    this.#requirements = props.requirements;
-    this.#mappings = props.mappings;
-    this.#obligationStatus = props.obligationStatus;
-    this.#scenarioStatus = props.scenarioStatus;
-    this.#eventTransitions = props.eventTransitions;
-    this.#gaps = props.gaps;
+  constructor(unit, map, requirements, artifact) {
+    if (!map.isForUnit(unit.id()))
+      throw new IllegalArgumentException({ kind: "refinement-unit-mismatch" });
+    const obligations = [];
+    const transitions = [];
+    const scenarios = [];
+    const gaps = [...map.attrMap().diagnostics(unit, requirements, map, artifact)];
+    for (const obligation of requirements.obligations().sortedCanonically()) {
+      const status = obligation.coverageIn(map, unit);
+      obligations.push([obligation.id(), status]);
+      if (status.isCheckable() && obligation.isEvent())
+        transitions.push([obligation.id(), obligation.mappedTransitionsIn(map).sortedCanonically()]);
+      const finding = status.findingFor(obligation.id().asTargetId(), obligation.functionalRequirementReferences(), map, artifact);
+      if (finding !== null)
+        gaps.push(finding);
+    }
+    for (const scenario of requirements.scenarios().sortedCanonically()) {
+      const status = scenario.coverageIn(map);
+      scenarios.push([scenario.id(), status]);
+      const finding = status.findingFor(scenario.id().asTargetId(), scenario.functionalRequirementReferences(), map, artifact);
+      if (finding !== null)
+        gaps.push(finding);
+    }
+    this.#unit = unit;
+    this.#requirements = requirements;
+    this.#mappings = map.attrMap();
+    this.#obligationStatus = KeyedIndex.of(obligations);
+    this.#scenarioStatus = KeyedIndex.of(scenarios);
+    this.#eventTransitions = KeyedIndex.of(transitions);
+    this.#gaps = DesignFindings.of(gaps);
   }
-  static of(u, unitMap, req, mapArtifact) {
-    const gaps = [];
-    const gap = (targets, detail, functionalRequirementReferences = FunctionalRequirementReferences.of([])) => {
-      gaps.push(DesignFinding.of({
-        kind: FindingKind.mappingGap(),
-        functionalRequirementReferences: functionalRequirementReferences.sortedUnique(),
-        targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically(),
-        witness: DesignWitness.refs([
-          { artifact: mapArtifact.asString(), element: `units[${unitMap.unit().asString()}]` }
-        ]),
-        unit: UnitName.of(u.name()),
-        detail
-      }));
-    };
-    const byReq = new Map;
-    const unmapped = unitMap.unmapped();
-    for (const m of unitMap.attrMap()) {
-      const reqPath = m.req().asString();
-      const gapTarget = [`attr:${reqPath.replace(/[^A-Za-z0-9_./-]/g, "-")}`];
-      if (byReq.has(reqPath))
-        gap(gapTarget, `attrMap maps "${reqPath}" more than once`);
-      byReq.set(reqPath, m);
-      const reqAttr = req.attributes().byPath(AttributePath.of(reqPath));
-      if (!reqAttr) {
-        gap(gapTarget, `attrMap entry "${reqPath}" names no attribute of the requirements IR`);
-        continue;
-      }
-      if (m.isEnumCases()) {
-        const from = m.enumFrom() ?? "";
-        if (!reqAttr.isEnum()) {
-          gap(gapTarget, `attrMap entry "${reqPath}" uses enumMap but the requirements attribute is ${reqAttr.kind()}`);
-        }
-        if (!u.attrPaths().has(AttributePath.of(from))) {
-          gap(gapTarget, `enumMap.from "${from}" is not a design attribute of unit ${u.name()}`);
-          continue;
-        }
-        const fromValues = u.declaredEnumValuesOf(from);
-        if (fromValues === null) {
-          gap(gapTarget, `enumMap.from "${from}" is not an enum design attribute`);
-          continue;
-        }
-        const missing = m.missingCasesOver(fromValues);
-        if (missing.length > 0) {
-          gap(gapTarget, `enumMap for "${reqPath}" is not total over "${from}": missing case(s) ${missing.join(", ")}`);
-        }
-        const badResults = m.producedValuesOutside(reqAttr.declaredValues());
-        if (badResults.length > 0) {
-          gap(gapTarget, `enumMap for "${reqPath}" produces value(s) ${badResults.join(", ")} outside the requirements attribute's values`);
-        }
-      } else if (m.isExpression()) {
-        for (const r of m.referencedPaths()) {
-          if (!u.attrPaths().has(AttributePath.of(r))) {
-            gap(gapTarget, `attrMap expression for "${reqPath}" references "${r}", which is not a design attribute of unit ${u.name()}`);
-          }
-        }
-      }
-    }
-    for (const a of req.attributes().sortedByPath()) {
-      if (!byReq.has(a.path().asString()) && !unmapped.covers(a.path())) {
-        gap([
-          `attr:${a.path().asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`
-        ], `requirements attribute "${a.path().asString()}" is neither mapped by attrMap nor listed in unmapped[] \u2014 silence is a contract violation`);
-      }
-    }
-    const designIds = new Set([...u.obligations().ids(), ...u.machines().transitionIds()]);
-    const attrsCovered = (e) => {
-      if (!e)
-        return { ok: true, missing: [] };
-      const refs = new Set;
-      exprRefs(e, refs);
-      const missing = [...refs].filter((r) => !byReq.has(r)).sort();
-      return { ok: missing.length === 0, missing };
-    };
-    const obligationStatus = new Map;
-    const eventTransitions = new Map;
-    for (const ob of req.obligations()) {
-      if (unmapped.covers(ob.id())) {
-        obligationStatus.set(ob.id().asString(), RefinementStatus.waived(unmapped.reasonOf(ob.id()) ?? "listed in unmapped[]"));
-        continue;
-      }
-      if (ob.isStateTemporal()) {
-        obligationStatus.set(ob.id().asString(), RefinementStatus.capability("temporal refinement is outside v1 scope"));
-        continue;
-      }
-      if (ob.isInvariantLike()) {
-        const cov = attrsCovered(ob.assertion());
-        if (cov.ok)
-          obligationStatus.set(ob.id().asString(), RefinementStatus.checkable());
-        else if (unmapped.coversAll(cov.missing)) {
-          obligationStatus.set(ob.id().asString(), RefinementStatus.waived(`depends on unmapped attribute(s) ${cov.missing.join(", ")}`));
-        } else {
-          obligationStatus.set(ob.id().asString(), RefinementStatus.gap(`depends on attribute(s) ${cov.missing.join(", ")} that are neither mapped nor in unmapped[]`));
-        }
-        continue;
-      }
-      if (ob.isEvent()) {
-        const trigger = ob.trigger();
-        const entry = trigger === undefined ? undefined : unitMap.eventMappingOf(trigger);
-        const waiver = entry?.waiverReason() ?? null;
-        if (waiver !== null) {
-          obligationStatus.set(ob.id().asString(), RefinementStatus.waived(waiver));
-          continue;
-        }
-        const covG = attrsCovered(ob.guard());
-        const covE = attrsCovered(ob.effect());
-        const missing = [...new Set([...covG.missing, ...covE.missing])].sort((a, b) => AttributePath.of(a).compareTo(AttributePath.of(b)));
-        if (!entry || entry.transitions().isEmpty()) {
-          obligationStatus.set(ob.id().asString(), RefinementStatus.gap(`requirements event trigger "${trigger === undefined ? "?" : trigger.asString()}" has no eventMap entry (map it to design transitions or waive it)`));
-          continue;
-        }
-        const badIds = entry.transitions().unknownAmong(designIds);
-        if (badIds.length > 0) {
-          obligationStatus.set(ob.id().asString(), RefinementStatus.gap(`eventMap for "${trigger?.asString()}" names unknown design id(s) ${badIds.join(", ")}`));
-          continue;
-        }
-        if (missing.length > 0) {
-          if (unmapped.coversAll(missing)) {
-            obligationStatus.set(ob.id().asString(), RefinementStatus.waived(`depends on unmapped attribute(s) ${missing.join(", ")}`));
-          } else {
-            obligationStatus.set(ob.id().asString(), RefinementStatus.gap(`depends on attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]`));
-          }
-          continue;
-        }
-        obligationStatus.set(ob.id().asString(), RefinementStatus.checkable());
-        eventTransitions.set(ob.id().asString(), entry.transitions().sortedCanonically());
-        continue;
-      }
-      obligationStatus.set(ob.id().asString(), RefinementStatus.capability(`nature "${ob.nature().asString()}" has no refinement check`));
-    }
-    const scenarioStatus = new Map;
-    for (const sc of req.scenarios()) {
-      if (unmapped.covers(sc.id())) {
-        scenarioStatus.set(sc.id().asString(), RefinementStatus.waived(unmapped.reasonOf(sc.id()) ?? "listed in unmapped[]"));
-        continue;
-      }
-      if (sc.hasEvent()) {
-        scenarioStatus.set(sc.id().asString(), RefinementStatus.capability("event scenarios are not replayed in v1"));
-        continue;
-      }
-      const missing = sc.bindings().entriesCanonically().map((binding) => binding.path().asString()).filter((p) => !byReq.has(p)).sort();
-      if (missing.length === 0)
-        scenarioStatus.set(sc.id().asString(), RefinementStatus.checkable());
-      else if (unmapped.coversAll(missing)) {
-        scenarioStatus.set(sc.id().asString(), RefinementStatus.waived(`binds unmapped attribute(s) ${missing.join(", ")}`));
-      } else {
-        scenarioStatus.set(sc.id().asString(), RefinementStatus.gap(`binds attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]`));
-      }
-    }
-    for (const [id, st] of [...obligationStatus.entries()].sort((a, b) => TargetIdentifier.of(a[0]).compareTo(TargetIdentifier.of(b[0])))) {
-      const gapDetail = st.gapDetail();
-      if (gapDetail !== null) {
-        gap([id], `${id}: ${gapDetail}`, req.obligationById(id)?.functionalRequirementReferences() ?? FunctionalRequirementReferences.of([]));
-      }
-    }
-    for (const [id, st] of [...scenarioStatus.entries()].sort((a, b) => TargetIdentifier.of(a[0]).compareTo(TargetIdentifier.of(b[0])))) {
-      const gapDetail = st.gapDetail();
-      if (gapDetail !== null) {
-        gap([id], `${id}: ${gapDetail}`, req.scenarioById(id)?.functionalRequirementReferences() ?? FunctionalRequirementReferences.of([]));
-      }
-    }
-    return new UnitRefinementPlan({
-      unit: u,
-      requirements: req,
-      mappings: unitMap.attrMap(),
-      obligationStatus: KeyedIndex.of([...obligationStatus].map(([id, st]) => [ObligationIdentifier.of(id), st])),
-      scenarioStatus: KeyedIndex.of([...scenarioStatus].map(([id, st]) => [ScenarioIdentifier.of(id), st])),
-      eventTransitions: KeyedIndex.of([...eventTransitions].map(([id, trs]) => [ObligationIdentifier.of(id), trs])),
-      gaps: DesignFindings.of(gaps)
-    });
+  static of(unit, map, requirements, artifact) {
+    return new UnitRefinementPlan(unit, map, requirements, artifact);
+  }
+  static parse(unit, map, requirements, artifact) {
+    return parseConstruction(() => new UnitRefinementPlan(unit, map, requirements, artifact));
   }
   unit() {
     return this.#unit;
@@ -8740,7 +8723,17 @@ class RefinementMaterials {
         for (const unit of model) {
           const unitMap = map.unitMapOf(unit.id());
           if (unitMap !== undefined && unitMap !== null) {
-            plans.push(UnitRefinementPlan.of(unit, unitMap, requirements, artifact));
+            const plan = UnitRefinementPlan.parse(unit, unitMap, requirements, artifact);
+            if (plan.ok)
+              plans.push(plan.value);
+            else
+              for (const target of requirements.allTargetIds())
+                skipped = skipped.add(DesignSkipped.of({
+                  target,
+                  reason: SkipReason.compileError(),
+                  unit: UnitName.of(unit.name()),
+                  detail: `refinement plan could not be constructed: ${plan.error.kind}`
+                }));
             continue;
           }
           for (const target of requirements.allTargetIds())
@@ -8788,6 +8781,35 @@ class RefinementMaterialsIdentifier {
     return this.#model.artifactPath();
   }
 }
+// src/design/domain/transition-references.ts
+class TransitionReferences {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new TransitionReferences(values);
+  }
+  add(value) {
+    return new TransitionReferences([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
+  unknownAmong(declared) {
+    return this.#values.map((t) => t.asString()).filter((t) => !declared.has(t)).sort();
+  }
+  sortedCanonically() {
+    return [...this.#values].sort((a, b) => a.compareTo(b));
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
 // src/design/domain/refinement-obligation.ts
 class RefinementObligation {
   #id;
@@ -8811,6 +8833,42 @@ class RefinementObligation {
   }
   static of(props) {
     return new RefinementObligation(props);
+  }
+  #coverage(expressions, map) {
+    const paths = [];
+    for (const expression of expressions) {
+      if (expression === undefined)
+        continue;
+      const parsed = traverseResult(ExpressionTree.of(expression).referencedPaths(), AttributePath.parse);
+      if (!parsed.ok)
+        return parsed;
+      paths.push(...parsed.value);
+    }
+    return ok(map.attrMap().coverageOf(AttributePaths.of(paths), map.unmapped()));
+  }
+  coverageIn(map, unit) {
+    if (map.unmapped().covers(this.#id))
+      return RefinementStatus.waived(map.unmapped().reasonOf(this.#id) ?? "listed in unmapped[]");
+    if (this.isStateTemporal())
+      return RefinementStatus.capability("temporal refinement is outside v1 scope");
+    if (this.isInvariantLike()) {
+      const coverage = this.#coverage([this.#assert], map);
+      return coverage.ok ? coverage.value.forInvariant() : RefinementStatus.gap(`invalid attribute reference: ${coverage.error.kind}`);
+    }
+    if (this.isEvent()) {
+      const entry = this.#trigger === undefined ? undefined : map.eventMappingOf(this.#trigger);
+      if (entry === undefined)
+        return RefinementStatus.gap(`requirements event trigger "${this.#trigger?.asString() ?? "?"}" has no eventMap entry (map it to design transitions or waive it)`);
+      const eligibility = entry.statusIn(unit);
+      if (!eligibility.isCheckable())
+        return eligibility;
+      const coverage = this.#coverage([this.#guard, this.#effect], map);
+      return coverage.ok ? coverage.value.forEvent() : RefinementStatus.gap(`invalid attribute reference: ${coverage.error.kind}`);
+    }
+    return RefinementStatus.capability(`nature "${this.#nature.asString()}" has no refinement check`);
+  }
+  mappedTransitionsIn(map) {
+    return this.#trigger === undefined ? TransitionReferences.of([]) : map.eventMappingOf(this.#trigger)?.transitions() ?? TransitionReferences.of([]);
   }
   id() {
     return this.#id;
@@ -9031,6 +9089,13 @@ class RefinementScenario {
   static of(props) {
     return new RefinementScenario(props);
   }
+  coverageIn(map) {
+    if (map.unmapped().covers(this.#id))
+      return RefinementStatus.waived(map.unmapped().reasonOf(this.#id) ?? "listed in unmapped[]");
+    if (this.hasEvent())
+      return RefinementStatus.capability("event scenarios are not replayed in v1");
+    return map.attrMap().coverageOf(AttributePaths.of(this.#bindings.entriesCanonically().map((binding) => binding.path())), map.unmapped()).forScenario();
+  }
   id() {
     return this.#id;
   }
@@ -9078,6 +9143,9 @@ class RefinementScenarios {
         found = s;
     }
     return found;
+  }
+  sortedCanonically() {
+    return new RefinementScenarios([...this.#values].sort((a, b) => a.id().asTargetId().compareTo(b.id().asTargetId())));
   }
   toArray() {
     return this.#values;
@@ -9218,6 +9286,19 @@ class RefinementUnitMap {
   }
   static of(props) {
     return new RefinementUnitMap(props);
+  }
+  gapFor(targets, detail, artifact, references = FunctionalRequirementReferences.of([])) {
+    return DesignFinding.of({
+      kind: FindingKind.mappingGap(),
+      functionalRequirementReferences: references.sortedUnique(),
+      targets: targets.sortedUniqueCanonically(),
+      witness: DesignWitness.refs([{ artifact: artifact.asString(), element: `units[${this.#unit.asString()}]` }]),
+      unit: UnitName.of(this.#unit.asString()),
+      detail
+    });
+  }
+  attributeGap(path, detail, artifact) {
+    return this.gapFor(TargetIdentifiers.of([TargetIdentifier.of(`attr:${path.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`)]), detail, artifact);
   }
   unit() {
     return this.#unit;
@@ -9705,34 +9786,6 @@ class TransitionReference {
     return this.#value;
   }
 }
-// src/design/domain/transition-references.ts
-class TransitionReferences {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new TransitionReferences(values);
-  }
-  add(value) {
-    return new TransitionReferences([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
-  unknownAmong(declared) {
-    return this.#values.map((t) => t.asString()).filter((t) => !declared.has(t)).sort();
-  }
-  sortedCanonically() {
-    return [...this.#values].sort((a, b) => a.compareTo(b));
-  }
-  toArray() {
-    return this.#values;
-  }
-}
 // src/design/domain/unformalized-targets.ts
 class UnformalizedTargets {
   #values;
@@ -9759,10 +9812,6 @@ class UnformalizedTargets {
   }
 }
 // src/design/domain/unmapped-declarations.ts
-function tokenOf(carrier) {
-  return typeof carrier === "string" ? carrier : carrier.asString();
-}
-
 class UnmappedDeclarations {
   #values;
   constructor(values) {
@@ -9778,14 +9827,11 @@ class UnmappedDeclarations {
     yield* this.#values;
   }
   covers(target) {
-    const t = tokenOf(target);
+    const t = target.asString();
     return this.#values.some((x) => x.isFor(t));
   }
-  coversAll(targets) {
-    return targets.every((t) => this.covers(t));
-  }
   reasonOf(target) {
-    const t = tokenOf(target);
+    const t = target.asString();
     let found;
     for (const x of this.#values) {
       if (x.isFor(t))

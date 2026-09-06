@@ -1,6 +1,17 @@
 import type { TriggerName } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  type AttributePath,
+  FindingKind,
+  FunctionalRequirementReferences,
+  TargetIdentifier,
+  TargetIdentifiers,
+  UnitName,
+} from "@deep-spec-analysis/kernel-domain";
 import type { AttributeMappings } from "./attribute-mappings.ts";
+import { DesignFinding } from "./design-finding.ts";
 import type { DesignUnitIdentifier } from "./design-unit-identifier.ts";
+import { DesignWitness } from "./design-witness.ts";
 import type { EventMapping } from "./event-mapping.ts";
 import type { EventMappings } from "./event-mappings.ts";
 import type { UnmappedDeclarations } from "./unmapped-declarations.ts";
@@ -30,6 +41,29 @@ export class RefinementUnitMap {
 
   static of(props: RefinementUnitMapParam): RefinementUnitMap {
     return new RefinementUnitMap(props);
+  }
+
+  gapFor(
+    targets: TargetIdentifiers,
+    detail: string,
+    artifact: ArtifactPath,
+    references = FunctionalRequirementReferences.of([]),
+  ): DesignFinding {
+    return DesignFinding.of({
+      kind: FindingKind.mappingGap(),
+      functionalRequirementReferences: references.sortedUnique(),
+      targets: targets.sortedUniqueCanonically(),
+      witness: DesignWitness.refs([{ artifact: artifact.asString(), element: `units[${this.#unit.asString()}]` }]),
+      unit: UnitName.of(this.#unit.asString()),
+      detail,
+    });
+  }
+  attributeGap(path: AttributePath, detail: string, artifact: ArtifactPath): DesignFinding {
+    return this.gapFor(
+      TargetIdentifiers.of([TargetIdentifier.of(`attr:${path.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`)]),
+      detail,
+      artifact,
+    );
   }
 
   unit(): DesignUnitIdentifier {

@@ -1,5 +1,8 @@
-import { SkipReason, type TargetIdentifier, UnitName } from "@deep-spec-analysis/kernel-domain";
+import type { ArtifactPath, FunctionalRequirementReferences } from "@deep-spec-analysis/kernel-domain";
+import { SkipReason, type TargetIdentifier, TargetIdentifiers, UnitName } from "@deep-spec-analysis/kernel-domain";
+import type { DesignFinding } from "./design-finding.ts";
 import { DesignSkipped } from "./design-skipped.ts";
+import type { RefinementUnitMap } from "./refinement-unit-map.ts";
 
 // 要件義務／シナリオ 1 件の refinement 被覆状態。checkable（検査へ進む）、
 // waived（unmapped[] による人間の免除——理由つき）、gap（マップの欠落——
@@ -37,6 +40,17 @@ export class RefinementStatus {
   // マップの欠落なら finding の説明、そうでなければ null。
   gapDetail(): string | null {
     return this.#kind === "gap" ? this.#text : null;
+  }
+
+  findingFor(
+    target: TargetIdentifier,
+    references: FunctionalRequirementReferences,
+    map: RefinementUnitMap,
+    artifact: ArtifactPath,
+  ): DesignFinding | null {
+    return this.#kind === "gap"
+      ? map.gapFor(TargetIdentifiers.of([target]), `${target.asString()}: ${this.#text}`, artifact, references)
+      : null;
   }
 
   // 免除と範囲外は被覆 skip（凍結の reason 語彙）。checkable / gap は skip しない。

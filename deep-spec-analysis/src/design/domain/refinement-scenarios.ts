@@ -28,6 +28,12 @@ export class RefinementScenarios {
     return found;
   }
 
+  sortedCanonically(): RefinementScenarios {
+    return new RefinementScenarios(
+      [...this.#values].sort((a, b) => a.id().asTargetId().compareTo(b.id().asTargetId())),
+    );
+  }
+
   toArray(): readonly RefinementScenario[] {
     return this.#values;
   }

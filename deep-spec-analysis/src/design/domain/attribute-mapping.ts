@@ -1,4 +1,12 @@
-import { EnumerationMember, EnumerationMembers } from "@deep-spec-analysis/kernel-domain";
+import {
+  AttributePath,
+  EnumerationMember,
+  EnumerationMembers,
+  ErrorMessage,
+  ErrorMessages,
+} from "@deep-spec-analysis/kernel-domain";
+import type { DesignUnit } from "./design-unit.ts";
+import type { RefinementAttributes } from "./refinement-attributes.ts";
 
 // 属性写像（attrMap の 1 エントリ）。閉じた 3 variant —— 式写像（bool/int）・
 // enum 場合分け・unspecified。α置換の材料（enum 比較の展開・写像式の代入・
@@ -16,7 +24,6 @@ import {
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
-import type { AttributePath } from "@deep-spec-analysis/requirements-domain";
 import { RefinementMapDefect } from "./refinement-map-defect.ts";
 
 type AttributeMappingParam =
@@ -60,26 +67,58 @@ export class AttributeMapping {
     return parseConstruction(() => new AttributeMapping(req, value));
   }
 
+  diagnostics(unit: DesignUnit, attributes: RefinementAttributes): ErrorMessages {
+    const messages: string[] = [];
+    const reqPath = this.#req.asString();
+    const reqAttr = attributes.byPath(AttributePath.of(reqPath));
+    if (!reqAttr) {
+      messages.push(`attrMap entry "${reqPath}" names no attribute of the requirements IR`);
+      return ErrorMessages.collect(messages.map(ErrorMessage.parse));
+    }
+    // 判断は写像へ命じる（波5）——plan は gap 文言（凍結面）だけを所有する。
+    if (this.#variant.kind === "enum-cases") {
+      const from = this.#variant.from.asString();
+      if (!reqAttr.isEnum()) {
+        messages.push(`attrMap entry "${reqPath}" uses enumMap but the requirements attribute is ${reqAttr.kind()}`);
+      }
+      if (!unit.attrPaths().has(AttributePath.of(from))) {
+        messages.push(`enumMap.from "${from}" is not a design attribute of unit ${unit.name()}`);
+        return ErrorMessages.collect(messages.map(ErrorMessage.parse));
+      }
+      const fromValues = unit.declaredEnumValuesOf(from);
+      if (fromValues === null) {
+        messages.push(`enumMap.from "${from}" is not an enum design attribute`);
+        return ErrorMessages.collect(messages.map(ErrorMessage.parse));
+      }
+      const missing = this.missingCasesOver(fromValues);
+      if (missing.length > 0) {
+        messages.push(`enumMap for "${reqPath}" is not total over "${from}": missing case(s) ${missing.join(", ")}`);
+      }
+      const badResults = this.producedValuesOutside(reqAttr.declaredValues());
+      if (badResults.length > 0) {
+        messages.push(
+          `enumMap for "${reqPath}" produces value(s) ${badResults.join(", ")} outside the requirements attribute's values`,
+        );
+      }
+    } else if (this.#variant.kind === "expression") {
+      for (const r of this.referencedPaths()) {
+        if (!unit.attrPaths().has(AttributePath.of(r))) {
+          messages.push(
+            `attrMap expression for "${reqPath}" references "${r}", which is not a design attribute of unit ${unit.name()}`,
+          );
+        }
+      }
+    }
+    return ErrorMessages.collect(messages.map(ErrorMessage.parse));
+  }
+
   // 同一性——この写像がその要件属性のものか。
-  isFor(reqPath: string): boolean {
-    return this.#req.asString() === reqPath;
+  isFor(reqPath: AttributePath): boolean {
+    return this.#req.equals(reqPath);
   }
 
   req(): AttributePath {
     return this.#req;
-  }
-
-  isEnumCases(): boolean {
-    return this.#variant.kind === "enum-cases";
-  }
-
-  isExpression(): boolean {
-    return this.#variant.kind === "expression";
-  }
-
-  // enum-cases の写像元（設計属性パス）。enum-cases でなければ undefined。
-  enumFrom(): string | undefined {
-    return this.#variant.kind === "enum-cases" ? this.#variant.from.asString() : undefined;
   }
 
   // eq/ne 比較の展開（旧 alphaExpr の enum 分岐）: その要件値へ写る設計値の

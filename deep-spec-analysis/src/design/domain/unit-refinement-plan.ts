@@ -1,15 +1,17 @@
 import {
   type ArtifactPath,
-  AttributePath,
-  type Expression,
-  FindingKind,
-  FunctionalRequirementReferences,
   KeyedIndex,
   SkipReason,
   TargetIdentifier,
-  TargetIdentifiers,
   UnitName,
 } from "@deep-spec-analysis/kernel-domain";
+import {
+  IllegalArgumentException,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
+import type { RefinementStatus } from "./refinement-status.ts";
 
 // map 検査と被覆分類 — ソルバ不要の決定論部。閉包規則：要件の全義務・全
 // シナリオ・全属性は「写像済み／waive 済み／unmapped[] 記載」のどれかで、
@@ -19,28 +21,19 @@ import {
 // 照会・skip 導出メソッドになった（OOUI 裁定）。
 
 import { ObligationIdentifier, ScenarioIdentifier } from "@deep-spec-analysis/requirements-domain";
-import type { AttributeMapping } from "./attribute-mapping.ts";
 import type { AttributeMappings } from "./attribute-mappings.ts";
-import { DesignFinding } from "./design-finding.ts";
 import { DesignFindings } from "./design-findings.ts";
 import type { DesignReport } from "./design-report.ts";
 import { DesignSkipped } from "./design-skipped.ts";
 import { DesignSkips } from "./design-skips.ts";
 import type { DesignUnit } from "./design-unit.ts";
-import { DesignWitness } from "./design-witness.ts";
 import type { LoweredUnit } from "./lowered-unit.ts";
 import { RefinementQuintInvariant } from "./refinement-quint-invariant.ts";
 import { RefinementQuintInvariants } from "./refinement-quint-invariants.ts";
 import type { RefinementRequirements } from "./refinement-requirements.ts";
-import { RefinementStatus } from "./refinement-status.ts";
 import type { RefinementUnitMap } from "./refinement-unit-map.ts";
 import type { SiblingVerificationResult } from "./sibling-verification-result.ts";
 import type { TransitionReference } from "./transition-reference.ts";
-
-function exprRefs(e: Expression, out: Set<string>): void {
-  if (e.op === "ref" && typeof e.path === "string") out.add(e.path);
-  for (const a of e.args ?? []) exprRefs(a, out);
-}
 
 // map 検査の結果（被覆分類・alpha 文脈・写像索引・mapping-gap findings）を
 // 閉じ込めた計画。露出 Map は死に、照会・skip 導出は plan 自身の振る舞い。
@@ -53,293 +46,65 @@ export class UnitRefinementPlan {
   readonly #eventTransitions: KeyedIndex<ObligationIdentifier, readonly TransitionReference[]>;
   readonly #gaps: DesignFindings;
 
-  private constructor(props: {
-    unit: DesignUnit;
-    requirements: RefinementRequirements;
-    mappings: AttributeMappings;
-    obligationStatus: KeyedIndex<ObligationIdentifier, RefinementStatus>;
-    scenarioStatus: KeyedIndex<ScenarioIdentifier, RefinementStatus>;
-    eventTransitions: KeyedIndex<ObligationIdentifier, readonly TransitionReference[]>;
-    gaps: DesignFindings;
-  }) {
-    this.#unit = props.unit;
-    this.#requirements = props.requirements;
-    this.#mappings = props.mappings;
-    this.#obligationStatus = props.obligationStatus;
-    this.#scenarioStatus = props.scenarioStatus;
-    this.#eventTransitions = props.eventTransitions;
-    this.#gaps = props.gaps;
+  private constructor(
+    unit: DesignUnit,
+    map: RefinementUnitMap,
+    requirements: RefinementRequirements,
+    artifact: ArtifactPath,
+  ) {
+    if (!map.isForUnit(unit.id())) throw new IllegalArgumentException({ kind: "refinement-unit-mismatch" });
+    const obligations: (readonly [ObligationIdentifier, RefinementStatus])[] = [];
+    const transitions: (readonly [ObligationIdentifier, readonly TransitionReference[]])[] = [];
+    const scenarios: (readonly [ScenarioIdentifier, RefinementStatus])[] = [];
+    const gaps = [...map.attrMap().diagnostics(unit, requirements, map, artifact)];
+    for (const obligation of requirements.obligations().sortedCanonically()) {
+      const status = obligation.coverageIn(map, unit);
+      obligations.push([obligation.id(), status]);
+      if (status.isCheckable() && obligation.isEvent())
+        transitions.push([obligation.id(), obligation.mappedTransitionsIn(map).sortedCanonically()]);
+      const finding = status.findingFor(
+        obligation.id().asTargetId(),
+        obligation.functionalRequirementReferences(),
+        map,
+        artifact,
+      );
+      if (finding !== null) gaps.push(finding);
+    }
+    for (const scenario of requirements.scenarios().sortedCanonically()) {
+      const status = scenario.coverageIn(map);
+      scenarios.push([scenario.id(), status]);
+      const finding = status.findingFor(
+        scenario.id().asTargetId(),
+        scenario.functionalRequirementReferences(),
+        map,
+        artifact,
+      );
+      if (finding !== null) gaps.push(finding);
+    }
+    this.#unit = unit;
+    this.#requirements = requirements;
+    this.#mappings = map.attrMap();
+    this.#obligationStatus = KeyedIndex.of(obligations);
+    this.#scenarioStatus = KeyedIndex.of(scenarios);
+    this.#eventTransitions = KeyedIndex.of(transitions);
+    this.#gaps = DesignFindings.of(gaps);
   }
 
-  // 旧 planUnitRefinement の逐語移植（構築ファクトリ）。
   static of(
-    u: DesignUnit,
-    unitMap: RefinementUnitMap,
-    req: RefinementRequirements,
-    mapArtifact: ArtifactPath,
+    unit: DesignUnit,
+    map: RefinementUnitMap,
+    requirements: RefinementRequirements,
+    artifact: ArtifactPath,
   ): UnitRefinementPlan {
-    const gaps: DesignFinding[] = [];
-    const gap = (
-      targets: string[],
-      detail: string,
-      functionalRequirementReferences: FunctionalRequirementReferences = FunctionalRequirementReferences.of([]),
-    ): void => {
-      gaps.push(
-        DesignFinding.of({
-          kind: FindingKind.mappingGap(),
-          functionalRequirementReferences: functionalRequirementReferences.sortedUnique(),
-          targets: TargetIdentifiers.of(
-            Array.from(targets, (raw) => TargetIdentifier.of(raw)),
-          ).sortedUniqueCanonically(),
-          witness: DesignWitness.refs([
-            { artifact: mapArtifact.asString(), element: `units[${unitMap.unit().asString()}]` },
-          ]),
-          unit: UnitName.of(u.name()),
-          detail,
-        }),
-      );
-    };
-    const byReq = new Map<string, AttributeMapping>();
-    const unmapped = unitMap.unmapped();
-
-    for (const m of unitMap.attrMap()) {
-      const reqPath = m.req().asString();
-      const gapTarget = [`attr:${reqPath.replace(/[^A-Za-z0-9_./-]/g, "-")}`];
-      if (byReq.has(reqPath)) gap(gapTarget, `attrMap maps "${reqPath}" more than once`);
-      byReq.set(reqPath, m);
-      const reqAttr = req.attributes().byPath(AttributePath.of(reqPath));
-      if (!reqAttr) {
-        gap(gapTarget, `attrMap entry "${reqPath}" names no attribute of the requirements IR`);
-        continue;
-      }
-      // 判断は写像へ命じる（波5）——plan は gap 文言（凍結面）だけを所有する。
-      if (m.isEnumCases()) {
-        const from = m.enumFrom() ?? "";
-        if (!reqAttr.isEnum()) {
-          gap(gapTarget, `attrMap entry "${reqPath}" uses enumMap but the requirements attribute is ${reqAttr.kind()}`);
-        }
-        if (!u.attrPaths().has(AttributePath.of(from))) {
-          gap(gapTarget, `enumMap.from "${from}" is not a design attribute of unit ${u.name()}`);
-          continue;
-        }
-        const fromValues = u.declaredEnumValuesOf(from);
-        if (fromValues === null) {
-          gap(gapTarget, `enumMap.from "${from}" is not an enum design attribute`);
-          continue;
-        }
-        const missing = m.missingCasesOver(fromValues);
-        if (missing.length > 0) {
-          gap(gapTarget, `enumMap for "${reqPath}" is not total over "${from}": missing case(s) ${missing.join(", ")}`);
-        }
-        const badResults = m.producedValuesOutside(reqAttr.declaredValues());
-        if (badResults.length > 0) {
-          gap(
-            gapTarget,
-            `enumMap for "${reqPath}" produces value(s) ${badResults.join(", ")} outside the requirements attribute's values`,
-          );
-        }
-      } else if (m.isExpression()) {
-        for (const r of m.referencedPaths()) {
-          if (!u.attrPaths().has(AttributePath.of(r))) {
-            gap(
-              gapTarget,
-              `attrMap expression for "${reqPath}" references "${r}", which is not a design attribute of unit ${u.name()}`,
-            );
-          }
-        }
-      }
-    }
-
-    // 属性の閉包：要件の全属性は写像されるか unmapped[] に居る。
-    for (const a of req.attributes().sortedByPath()) {
-      if (!byReq.has(a.path().asString()) && !unmapped.covers(a.path())) {
-        gap(
-          [
-            `attr:${a
-              .path()
-              .asString()
-              .replace(/[^A-Za-z0-9_./-]/g, "-")}`,
-          ],
-          `requirements attribute "${a.path().asString()}" is neither mapped by attrMap nor listed in unmapped[] — silence is a contract violation`,
-        );
-      }
-    }
-
-    const designIds = new Set<string>([...u.obligations().ids(), ...u.machines().transitionIds()]);
-
-    const attrsCovered = (e: Expression | undefined): { ok: boolean; missing: string[] } => {
-      if (!e) return { ok: true, missing: [] };
-      const refs = new Set<string>();
-      exprRefs(e, refs);
-      const missing = [...refs].filter((r) => !byReq.has(r)).sort();
-      return { ok: missing.length === 0, missing };
-    };
-
-    const obligationStatus = new Map<string, RefinementStatus>();
-    const eventTransitions = new Map<string, readonly TransitionReference[]>();
-    for (const ob of req.obligations()) {
-      if (unmapped.covers(ob.id())) {
-        obligationStatus.set(
-          ob.id().asString(),
-          RefinementStatus.waived(unmapped.reasonOf(ob.id()) ?? "listed in unmapped[]"),
-        );
-        continue;
-      }
-      if (ob.isStateTemporal()) {
-        obligationStatus.set(
-          ob.id().asString(),
-          RefinementStatus.capability("temporal refinement is outside v1 scope"),
-        );
-        continue;
-      }
-      if (ob.isInvariantLike()) {
-        const cov = attrsCovered(ob.assertion());
-        if (cov.ok) obligationStatus.set(ob.id().asString(), RefinementStatus.checkable());
-        else if (unmapped.coversAll(cov.missing)) {
-          obligationStatus.set(
-            ob.id().asString(),
-            RefinementStatus.waived(`depends on unmapped attribute(s) ${cov.missing.join(", ")}`),
-          );
-        } else {
-          obligationStatus.set(
-            ob.id().asString(),
-            RefinementStatus.gap(
-              `depends on attribute(s) ${cov.missing.join(", ")} that are neither mapped nor in unmapped[]`,
-            ),
-          );
-        }
-        continue;
-      }
-      if (ob.isEvent()) {
-        const trigger = ob.trigger();
-        const entry = trigger === undefined ? undefined : unitMap.eventMappingOf(trigger);
-        const waiver = entry?.waiverReason() ?? null;
-        if (waiver !== null) {
-          obligationStatus.set(ob.id().asString(), RefinementStatus.waived(waiver));
-          continue;
-        }
-        const covG = attrsCovered(ob.guard());
-        const covE = attrsCovered(ob.effect());
-        const missing = [...new Set([...covG.missing, ...covE.missing])].sort((a, b) =>
-          AttributePath.of(a).compareTo(AttributePath.of(b)),
-        );
-        if (!entry || entry.transitions().isEmpty()) {
-          obligationStatus.set(
-            ob.id().asString(),
-            RefinementStatus.gap(
-              `requirements event trigger "${trigger === undefined ? "?" : trigger.asString()}" has no eventMap entry (map it to design transitions or waive it)`,
-            ),
-          );
-          continue;
-        }
-        const badIds = entry.transitions().unknownAmong(designIds);
-        if (badIds.length > 0) {
-          obligationStatus.set(
-            ob.id().asString(),
-            RefinementStatus.gap(
-              `eventMap for "${trigger?.asString()}" names unknown design id(s) ${badIds.join(", ")}`,
-            ),
-          );
-          continue;
-        }
-        if (missing.length > 0) {
-          if (unmapped.coversAll(missing)) {
-            obligationStatus.set(
-              ob.id().asString(),
-              RefinementStatus.waived(`depends on unmapped attribute(s) ${missing.join(", ")}`),
-            );
-          } else {
-            obligationStatus.set(
-              ob.id().asString(),
-              RefinementStatus.gap(
-                `depends on attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]`,
-              ),
-            );
-          }
-          continue;
-        }
-        obligationStatus.set(ob.id().asString(), RefinementStatus.checkable());
-        eventTransitions.set(ob.id().asString(), entry.transitions().sortedCanonically());
-        continue;
-      }
-      obligationStatus.set(
-        ob.id().asString(),
-        RefinementStatus.capability(`nature "${ob.nature().asString()}" has no refinement check`),
-      );
-    }
-
-    const scenarioStatus = new Map<string, RefinementStatus>();
-    for (const sc of req.scenarios()) {
-      if (unmapped.covers(sc.id())) {
-        scenarioStatus.set(
-          sc.id().asString(),
-          RefinementStatus.waived(unmapped.reasonOf(sc.id()) ?? "listed in unmapped[]"),
-        );
-        continue;
-      }
-      if (sc.hasEvent()) {
-        scenarioStatus.set(sc.id().asString(), RefinementStatus.capability("event scenarios are not replayed in v1"));
-        continue;
-      }
-      const missing = sc
-        .bindings()
-        .entriesCanonically()
-        .map((binding) => binding.path().asString())
-        .filter((p) => !byReq.has(p))
-        .sort();
-      if (missing.length === 0) scenarioStatus.set(sc.id().asString(), RefinementStatus.checkable());
-      else if (unmapped.coversAll(missing)) {
-        scenarioStatus.set(
-          sc.id().asString(),
-          RefinementStatus.waived(`binds unmapped attribute(s) ${missing.join(", ")}`),
-        );
-      } else {
-        scenarioStatus.set(
-          sc.id().asString(),
-          RefinementStatus.gap(`binds attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]`),
-        );
-      }
-    }
-
-    // 義務/シナリオの gap 分類は mapping-gap finding へ昇格する。
-    for (const [id, st] of [...obligationStatus.entries()].sort((a, b) =>
-      TargetIdentifier.of(a[0]).compareTo(TargetIdentifier.of(b[0])),
-    )) {
-      const gapDetail = st.gapDetail();
-      if (gapDetail !== null) {
-        gap(
-          [id],
-          `${id}: ${gapDetail}`,
-          req.obligationById(id)?.functionalRequirementReferences() ?? FunctionalRequirementReferences.of([]),
-        );
-      }
-    }
-    for (const [id, st] of [...scenarioStatus.entries()].sort((a, b) =>
-      TargetIdentifier.of(a[0]).compareTo(TargetIdentifier.of(b[0])),
-    )) {
-      const gapDetail = st.gapDetail();
-      if (gapDetail !== null) {
-        gap(
-          [id],
-          `${id}: ${gapDetail}`,
-          req.scenarioById(id)?.functionalRequirementReferences() ?? FunctionalRequirementReferences.of([]),
-        );
-      }
-    }
-
-    return new UnitRefinementPlan({
-      unit: u,
-      requirements: req,
-      mappings: unitMap.attrMap(),
-      obligationStatus: KeyedIndex.of(
-        [...obligationStatus].map(([id, st]) => [ObligationIdentifier.of(id), st] as const),
-      ),
-      scenarioStatus: KeyedIndex.of([...scenarioStatus].map(([id, st]) => [ScenarioIdentifier.of(id), st] as const)),
-      eventTransitions: KeyedIndex.of(
-        [...eventTransitions].map(([id, trs]) => [ObligationIdentifier.of(id), trs] as const),
-      ),
-      gaps: DesignFindings.of(gaps),
-    });
+    return new UnitRefinementPlan(unit, map, requirements, artifact);
+  }
+  static parse(
+    unit: DesignUnit,
+    map: RefinementUnitMap,
+    requirements: RefinementRequirements,
+    artifact: ArtifactPath,
+  ): Result<UnitRefinementPlan, ParseError> {
+    return parseConstruction(() => new UnitRefinementPlan(unit, map, requirements, artifact));
   }
 
   // adapterのコンパイル入力。applicationは計画をそのままgatewayへ渡す。
