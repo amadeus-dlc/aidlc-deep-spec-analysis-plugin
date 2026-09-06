@@ -1,5 +1,10 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
-import { SkipReason, UnitName } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase, SkipReason, UnitName } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 // Quint 側の refinement 追加不変量 — checkable な invariant/numeric 要件義務
 // ごとの alpha(P)。ユニットの lowering に追加不変量として合流し、違反成分が
@@ -13,17 +18,27 @@ import { DesignSkips } from "./design-skips.ts";
 import type { RefinementQuintInvariant } from "./refinement-quint-invariant.ts";
 
 // 追加不変量のファーストクラスコレクション（義務 id の正準順で導出される）。
-export class RefinementQuintInvariants
-  implements FirstClassCollection, IterableFirstClassCollection<RefinementQuintInvariant>
-{
+export class RefinementQuintInvariants extends FirstClassCollectionBase<
+  RefinementQuintInvariant,
+  RefinementQuintInvariants
+> {
   readonly #values: readonly RefinementQuintInvariant[];
 
   private constructor(values: readonly RefinementQuintInvariant[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-refinement-quint-invariants");
+  }
+
+  protected rebuild(values: readonly RefinementQuintInvariant[]): RefinementQuintInvariants {
+    return new RefinementQuintInvariants(values);
   }
 
   static of(values: readonly RefinementQuintInvariant[]): RefinementQuintInvariants {
     return new RefinementQuintInvariants(values);
+  }
+
+  static parse(values: readonly RefinementQuintInvariant[]): Result<RefinementQuintInvariants, ParseError> {
+    return parseConstruction(() => new RefinementQuintInvariants(values));
   }
 
   add(value: RefinementQuintInvariant): RefinementQuintInvariants {
@@ -32,10 +47,6 @@ export class RefinementQuintInvariants
 
   *[Symbol.iterator](): Iterator<RefinementQuintInvariant> {
     yield* this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 
   reqIds(): ReadonlySet<string> {

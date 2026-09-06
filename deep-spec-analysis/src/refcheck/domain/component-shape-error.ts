@@ -22,4 +22,8 @@ export class ComponentShapeError {
   detail(): string {
     return this.#detail;
   }
+
+  equals(other: ComponentShapeError): boolean {
+    return this.#element.equals(other.#element) && this.#detail === other.#detail;
+  }
 }

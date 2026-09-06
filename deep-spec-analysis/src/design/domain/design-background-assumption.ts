@@ -5,6 +5,7 @@ import { type ParseError, parseConstruction, type Result } from "@deep-spec-anal
 import type { DesignBackgroundIdentifier } from "./design-background-identifier.ts";
 import { LoweredBackground } from "./lowered-background.ts";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
+import { sameExpression } from "./value-equality.ts";
 
 // 設計ユニットの背景仮定 1 件——id と表明。lowering は正準順（id の compareTo）で
 // 並べ、表明を BG-n へ載せる（#71 波25）。
@@ -25,6 +26,10 @@ export class DesignBackgroundAssumption {
 
   static of(props: DesignBackgroundAssumptionParam): DesignBackgroundAssumption {
     return new DesignBackgroundAssumption(props);
+  }
+
+  equals(other: DesignBackgroundAssumption): boolean {
+    return this.#id.equals(other.#id) && sameExpression(this.#assert, other.#assert);
   }
 
   id(): DesignBackgroundIdentifier {

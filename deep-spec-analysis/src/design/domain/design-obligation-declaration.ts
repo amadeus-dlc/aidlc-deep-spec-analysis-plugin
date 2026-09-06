@@ -5,6 +5,7 @@ import type { BusinessRuleReferences } from "./business-rule-references.ts";
 import type { DesignAttributeCatalog } from "./design-attribute-catalog.ts";
 import type { DesignObligationIdentifier } from "./design-obligation-identifier.ts";
 import type { DesignObligationOrigin } from "./design-obligation-origin.ts";
+import { sameExpression, sameIterable, sameOptional } from "./value-equality.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type DesignObligationDeclarationParam = {
@@ -56,6 +57,27 @@ export class DesignObligationDeclaration {
 
   static of(props: DesignObligationDeclarationParam): DesignObligationDeclaration {
     return new DesignObligationDeclaration(props);
+  }
+
+  equals(other: DesignObligationDeclaration): boolean {
+    return (
+      this.#id.equals(other.#id) &&
+      sameOptional(this.#origin, other.#origin, (left, right) => left.equals(right)) &&
+      sameOptional(this.#businessRuleReferences, other.#businessRuleReferences, (left, right) =>
+        sameIterable(left, right, (a, b) => a.equals(b)),
+      ) &&
+      sameExpression(this.#assert, other.#assert) &&
+      sameExpression(this.#guard, other.#guard) &&
+      sameExpression(this.#effect, other.#effect) &&
+      sameOptional(
+        this.#temporal,
+        other.#temporal,
+        (left, right) =>
+          sameExpression(left.assert, right.assert) &&
+          sameExpression(left.from, right.from) &&
+          sameExpression(left.to, right.to),
+      )
+    );
   }
 
   diagnostics(catalog: DesignAttributeCatalog | null): ErrorMessages {

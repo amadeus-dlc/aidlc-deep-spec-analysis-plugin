@@ -1,5 +1,5 @@
 import {
-  IllegalArgumentException,
+  boundedCollectionSnapshot,
   type ParseError,
   parseConstruction,
   type Result,
@@ -13,9 +13,7 @@ export class CoverageAssessment {
   readonly #scopes: StageScopes;
   /** doctor一回の走査予算は65,536intent。 */
   private constructor(observations: readonly VerificationObservation[], scopes: StageScopes) {
-    if (observations.length > 65_536)
-      throw new IllegalArgumentException({ kind: "too-many-verification-observations", raw: observations.length });
-    this.#observations = Object.freeze([...observations]);
+    this.#observations = boundedCollectionSnapshot(observations, 65_536, "too-many-verification-observations");
     this.#scopes = scopes;
   }
   static of(observations: readonly VerificationObservation[], scopes: StageScopes): CoverageAssessment {

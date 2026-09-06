@@ -30,9 +30,10 @@ export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDocument {
     if (!target.ok) return SiblingVerdictDocument.unreadable(JSON.stringify(target.error));
     skipped.push(SiblingVerdictSkip.of({ ...skip, target: target.value }));
   }
-  return SiblingVerdictDocument.readable(
-    doc.method,
-    SiblingVerdictFindings.of(findings),
-    SiblingVerdictSkips.of(skipped),
-  );
+  const collections = combineResults({
+    findings: SiblingVerdictFindings.parse(findings),
+    skipped: SiblingVerdictSkips.parse(skipped),
+  });
+  if (!collections.ok) return SiblingVerdictDocument.unreadable(JSON.stringify(collections.error));
+  return SiblingVerdictDocument.readable(doc.method, collections.value.findings, collections.value.skipped);
 }

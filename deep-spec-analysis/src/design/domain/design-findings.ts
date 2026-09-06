@@ -1,4 +1,10 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignFinding } from "./design-finding.ts";
 
 // 設計バックエンドの正準順: kind 順位（kernel の FindingKind）→ unit → targets
@@ -18,15 +24,24 @@ function sortDesignFindings(findings: readonly DesignFinding[]): DesignFinding[]
 // finding / skip のファーストクラスコレクション。契約2 拡張（設計 11-kind
 // 順位）の正準ソートという集合の知識を所有する。
 
-export class DesignFindings implements FirstClassCollection, IterableFirstClassCollection<DesignFinding> {
+export class DesignFindings extends FirstClassCollectionBase<DesignFinding, DesignFindings> {
   readonly #values: readonly DesignFinding[];
 
   private constructor(values: readonly DesignFinding[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-findings");
+  }
+
+  protected rebuild(values: readonly DesignFinding[]): DesignFindings {
+    return new DesignFindings(values);
   }
 
   static of(values: readonly DesignFinding[]): DesignFindings {
     return new DesignFindings(values);
+  }
+
+  static parse(values: readonly DesignFinding[]): Result<DesignFindings, ParseError> {
+    return parseConstruction(() => new DesignFindings(values));
   }
 
   add(value: DesignFinding): DesignFindings {
@@ -43,10 +58,6 @@ export class DesignFindings implements FirstClassCollection, IterableFirstClassC
 
   count(): number {
     return this.#values.length;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 
   toArray(): readonly DesignFinding[] {

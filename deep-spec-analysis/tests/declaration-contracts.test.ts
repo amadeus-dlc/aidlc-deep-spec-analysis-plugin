@@ -13,6 +13,8 @@ import {
   AttributePath,
   Declaration,
   DeclaredBindingValue,
+  EnumerationMember,
+  EnumerationMembers,
   ExpressionTree,
   FindingKind,
   FindingsSchema,
@@ -141,7 +143,8 @@ describe("bounded snapshots apply to every owner of raw structured input", () =>
     const mapping = AttributeMapping.parse(path, { kind: "enum-cases", from: AttributePath.of("design.phase"), cases });
     expect(mapping.ok).toBe(true);
     cases.draft = "changed";
-    if (mapping.ok) expect(mapping.value.producedValuesOutside({ includes: (value) => value === "open" })).toEqual([]);
+    if (mapping.ok)
+      expect(mapping.value.producedValuesOutside(EnumerationMembers.of([EnumerationMember.of("open")]))).toEqual([]);
     const invalid = { kind: "expression", expr: { op: "ref", path: "x".repeat(258) } } as const;
     expect(() => AttributeMapping.of(path, invalid)).toThrow(IllegalArgumentException);
     const rejected = AttributeMapping.parse(path, invalid);

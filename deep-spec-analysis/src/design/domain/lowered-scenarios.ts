@@ -1,16 +1,31 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { LoweredScenario } from "./lowered-scenario.ts";
 
 // lowered シナリオのファーストクラスコレクション（SC-n 採番順を保持）。
-export class LoweredScenarios implements FirstClassCollection, IterableFirstClassCollection<LoweredScenario> {
+export class LoweredScenarios extends FirstClassCollectionBase<LoweredScenario, LoweredScenarios> {
   readonly #values: readonly LoweredScenario[];
 
   private constructor(values: readonly LoweredScenario[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-lowered-scenarios");
+  }
+
+  protected rebuild(values: readonly LoweredScenario[]): LoweredScenarios {
+    return new LoweredScenarios(values);
   }
 
   static of(values: readonly LoweredScenario[]): LoweredScenarios {
     return new LoweredScenarios(values);
+  }
+
+  static parse(values: readonly LoweredScenario[]): Result<LoweredScenarios, ParseError> {
+    return parseConstruction(() => new LoweredScenarios(values));
   }
 
   add(value: LoweredScenario): LoweredScenarios {
@@ -27,9 +42,5 @@ export class LoweredScenarios implements FirstClassCollection, IterableFirstClas
 
   toArray(): readonly LoweredScenario[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

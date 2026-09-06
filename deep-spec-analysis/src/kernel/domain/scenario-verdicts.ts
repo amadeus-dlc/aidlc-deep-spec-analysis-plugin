@@ -1,34 +1,37 @@
 import {
+  boundedCollectionSnapshot,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
-import type { FirstClassCollection } from "./first-class-collection.ts";
+import { FirstClassCollectionBase } from "./first-class-collection-base.ts";
 import { KeySet } from "./key-set.ts";
 import { ScenarioComparison } from "./scenario-comparison.ts";
 import type { ScenarioVerdict } from "./scenario-verdict.ts";
 
 // 同じシナリオに対するバックエンドごとの判定。元のバックエンド順で比較する。
-export class ScenarioVerdicts implements FirstClassCollection {
+export class ScenarioVerdicts extends FirstClassCollectionBase<ScenarioVerdict, ScenarioVerdicts> {
   readonly #values: readonly ScenarioVerdict[];
 
   /** 比較入力の予算は128バックエンド（最大8,128組）。コピーと一意性検査より先に確認する。 */
   private constructor(values: readonly ScenarioVerdict[]) {
-    if (values.length > 128)
-      throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: values.length });
-    const snapshot: ScenarioVerdict[] = [];
-    for (const value of values) {
-      if (snapshot.length === 128)
-        throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: snapshot.length + 1 });
-      snapshot.push(value);
-    }
+    super();
+    const snapshot = boundedCollectionSnapshot(values, 128, "too-many-scenario-verdicts");
     const comparable = snapshot.filter((value) => value.isComparable());
     if (comparable.some((value) => !value.sameSubjectAs(comparable[0])))
       throw new IllegalArgumentException({ kind: "different-scenario-subjects" });
     if (KeySet.of(comparable.map((value) => value.backend())).size() !== comparable.length)
       throw new IllegalArgumentException({ kind: "duplicate-scenario-backend" });
     this.#values = [...comparable];
+  }
+
+  protected rebuild(values: readonly ScenarioVerdict[]): ScenarioVerdicts {
+    return new ScenarioVerdicts(values);
+  }
+
+  *[Symbol.iterator](): Iterator<ScenarioVerdict> {
+    yield* this.#values;
   }
   static of(values: readonly ScenarioVerdict[]): ScenarioVerdicts {
     return new ScenarioVerdicts(values);

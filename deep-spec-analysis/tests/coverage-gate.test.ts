@@ -6,6 +6,7 @@ import {
   ABSOLUTE_THRESHOLD,
   failedTestCount,
   geWithTolerance,
+  measureWithBun,
   parseArgs,
   parseLcovLinePercent,
   pinCoverageConfig,
@@ -118,6 +119,36 @@ describe("coverage gate — decisions", () => {
     expect(parseArgs(["-h"]).help).toBe(true);
     expect(() => parseArgs(["--base"])).toThrow("--base には git-ref");
     expect(() => parseArgs(["--nope"])).toThrow("未知の引数");
+  });
+
+  test("measureWithBun rejects a nonzero child status even with zero failed tests and valid lcov", () => {
+    const run = (_command: string, args: readonly string[], _cwd: string) => {
+      const coverageDir = args.find((arg) => arg.startsWith("--coverage-dir="))?.slice("--coverage-dir=".length);
+      if (coverageDir === undefined) throw new Error("coverage directory missing");
+      writeFileSync(`${coverageDir}/lcov.info`, "TN:\nSF:probe.ts\nLF:1\nLH:1\nend_of_record\n");
+      return { status: 7, stdout: " 2 pass\n 0 fail\n", stderr: "" };
+    };
+    expect(() => measureWithBun("/repo", run)).toThrow("終了コード 7");
+  });
+
+  test("measureWithBun rejects a signal termination represented by null status", () => {
+    const run = (_command: string, args: readonly string[], _cwd: string) => {
+      const coverageDir = args.find((arg) => arg.startsWith("--coverage-dir="))?.slice("--coverage-dir=".length);
+      if (coverageDir === undefined) throw new Error("coverage directory missing");
+      writeFileSync(`${coverageDir}/lcov.info`, "TN:\nSF:probe.ts\nLF:1\nLH:1\nend_of_record\n");
+      return { status: null, stdout: " 2 pass\n 0 fail\n", stderr: "" };
+    };
+    expect(() => measureWithBun("/repo", run)).toThrow("終了コード null");
+  });
+
+  test("measureWithBun retains the failed-test diagnostic before status handling", () => {
+    const run = (_command: string, args: readonly string[], _cwd: string) => {
+      const coverageDir = args.find((arg) => arg.startsWith("--coverage-dir="))?.slice("--coverage-dir=".length);
+      if (coverageDir === undefined) throw new Error("coverage directory missing");
+      writeFileSync(`${coverageDir}/lcov.info`, "TN:\nSF:probe.ts\nLF:1\nLH:1\nend_of_record\n");
+      return { status: 1, stdout: " 1 fail\n", stderr: "" };
+    };
+    expect(() => measureWithBun("/repo", run)).toThrow("テストが 1 件失敗しました");
   });
 });
 

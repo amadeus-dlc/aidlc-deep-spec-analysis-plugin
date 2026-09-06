@@ -83,4 +83,22 @@ export class SatisfiabilityModuloTheoriesQueryVerdict {
   witnessModel(): { [path: string]: boolean | number | string } {
     return { ...(this.#decodedModel ?? {}) };
   }
+
+  equals(other: SatisfiabilityModuloTheoriesQueryVerdict): boolean {
+    const leftModel = this.#decodedModel ?? {};
+    const rightModel = other.#decodedModel ?? {};
+    const leftKeys = Object.keys(leftModel).sort();
+    const rightKeys = Object.keys(rightModel).sort();
+    const modelsEqual =
+      leftKeys.length === rightKeys.length &&
+      leftKeys.every((key, index) => key === rightKeys[index] && leftModel[key] === rightModel[key]);
+    const leftCore = this.#core ?? [];
+    const rightCore = other.#core ?? [];
+    return (
+      this.#status === other.#status &&
+      modelsEqual &&
+      leftCore.length === rightCore.length &&
+      leftCore.every((label, index) => label.equals(rightCore[index] as (typeof leftCore)[number]))
+    );
+  }
 }

@@ -1,12 +1,30 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { ComponentEntity } from "./component-entity.ts";
 import type { EntityName } from "./entity-name.ts";
 
-export class ComponentEntities implements FirstClassCollection, IterableFirstClassCollection<ComponentEntity> {
+export class ComponentEntities
+  extends FirstClassCollectionBase<ComponentEntity, ComponentEntities>
+  implements FirstClassCollection<ComponentEntity>
+{
   readonly #values: readonly ComponentEntity[];
 
   private constructor(values: readonly ComponentEntity[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-component-entities");
+  }
+
+  protected rebuild(values: readonly ComponentEntity[]): ComponentEntities {
+    return new ComponentEntities(values);
+  }
+
+  static parse(values: readonly ComponentEntity[]): Result<ComponentEntities, ParseError> {
+    return parseConstruction(() => new ComponentEntities(values));
   }
 
   static of(values: readonly ComponentEntity[]): ComponentEntities {
@@ -28,9 +46,5 @@ export class ComponentEntities implements FirstClassCollection, IterableFirstCla
 
   toArray(): readonly ComponentEntity[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

@@ -1,18 +1,33 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { AttributePath } from "@deep-spec-analysis/requirements-domain";
 import type { RefinementAttribute } from "./refinement-attribute.ts";
 
 // 要件属性のファーストクラスコレクション。path 索引は旧 new Map(...) の
 // 凍結挙動どおり重複 path は最後の宣言が勝つ。
-export class RefinementAttributes implements FirstClassCollection, IterableFirstClassCollection<RefinementAttribute> {
+export class RefinementAttributes extends FirstClassCollectionBase<RefinementAttribute, RefinementAttributes> {
   readonly #values: readonly RefinementAttribute[];
 
   private constructor(values: readonly RefinementAttribute[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-refinement-attributes");
+  }
+
+  protected rebuild(values: readonly RefinementAttribute[]): RefinementAttributes {
+    return new RefinementAttributes(values);
   }
 
   static of(values: readonly RefinementAttribute[]): RefinementAttributes {
     return new RefinementAttributes(values);
+  }
+
+  static parse(values: readonly RefinementAttribute[]): Result<RefinementAttributes, ParseError> {
+    return parseConstruction(() => new RefinementAttributes(values));
   }
 
   add(value: RefinementAttribute): RefinementAttributes {
@@ -48,9 +63,5 @@ export class RefinementAttributes implements FirstClassCollection, IterableFirst
 
   toArray(): readonly RefinementAttribute[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

@@ -3,8 +3,8 @@ import { FenceCount } from "@deep-spec-analysis/refcheck-domain";
 // functional-design三点セットとXS用components.mdのfence・YAML・Jsonを解析し、
 // 型付き宣言と解析結果へ変換する。宣言間の意味的な整合性はドメインが検査する。
 
-import { extractFences, parseYamlSubset } from "@deep-spec-analysis/kernel-adapter";
-import { ErrorMessage, KeyedIndex, RequirementIdentifiers, UnitName } from "@deep-spec-analysis/kernel-domain";
+import { extractFences, parseRequirementIdentifiers, parseYamlSubset } from "@deep-spec-analysis/kernel-adapter";
+import { ErrorMessage, KeyedIndex, UnitName } from "@deep-spec-analysis/kernel-domain";
 import {
   combineResults,
   err,
@@ -98,7 +98,7 @@ function extractRel(
   );
 }
 
-function extractEntities(value: Json): DeclaredEntities {
+function extractEntities(value: Json): Result<DeclaredEntities, string> {
   const collected: { entities: EntityDeclaration[]; rels: RelationshipDeclaration[]; shapeErrors: ShapeError[] } = {
     entities: [],
     rels: [],
@@ -109,35 +109,37 @@ function extractEntities(value: Json): DeclaredEntities {
     model.shapeErrors.push(
       ShapeError.of({ element: ElementPath.of("entities"), detail: "top-level `entities:` list is missing" }),
     );
-    return DeclaredEntities.of({
-      entities: EntityDeclarations.of(collected.entities),
-      rels: RelationshipDeclarations.of(collected.rels),
-      shapeErrors: ShapeErrors.of(collected.shapeErrors),
+    const parsed = combineResults({
+      entities: EntityDeclarations.parse(collected.entities),
+      rels: RelationshipDeclarations.parse(collected.rels),
+      shapeErrors: ShapeErrors.parse(collected.shapeErrors),
     });
+    return parsed.ok ? ok(DeclaredEntities.of(parsed.value)) : err(JSON.stringify(parsed.error));
   }
-  value.entities.forEach((raw, i) => {
+  for (const [i, raw] of value.entities.entries()) {
     const element = `entities[${i}]`;
     if (!isObject(raw)) {
       model.shapeErrors.push(
         ShapeError.of({ element: ElementPath.of(element), detail: "entity entry is not a mapping" }),
       );
-      return;
+      continue;
     }
     const name = str(raw.name);
     if (name === null) {
       model.shapeErrors.push(
         ShapeError.of({ element: ElementPath.of(`${element}.name`), detail: "entity has no string `name`" }),
       );
-      return;
+      continue;
     }
     const entity = EntityName.parse(name);
     if (!entity.ok) {
       model.shapeErrors.push(
         ShapeError.of({ element: ElementPath.of(`${element}.name`), detail: JSON.stringify(entity.error) }),
       );
-      return;
+      continue;
     }
     const attrs: AttributeDeclaration[] = [];
+    let collectionError: string | null = null;
     if (Array.isArray(raw.attributes)) {
       (raw.attributes as Json[]).forEach((a, j) => {
         const ael = `${element}.attributes[${j}]`;
@@ -184,6 +186,11 @@ function extractEntities(value: Json): DeclaredEntities {
           model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(ael), detail: JSON.stringify(fields.error) }));
           return;
         }
+        const parsedAllowed = fields.value.allowed === null ? null : AllowedValues.parse(fields.value.allowed);
+        if (parsedAllowed !== null && !parsedAllowed.ok) {
+          collectionError = JSON.stringify(parsedAllowed.error);
+          return;
+        }
         attrs.push(
           AttributeDeclaration.of({
             name: fields.value.name,
@@ -191,7 +198,7 @@ function extractEntities(value: Json): DeclaredEntities {
             type: fields.value.type,
             uniqueIsTrue: pick(a, ["unique"]) === true,
             references: fields.value.references,
-            allowed: fields.value.allowed === null ? null : AllowedValues.of(fields.value.allowed),
+            allowed: parsedAllowed === null ? null : parsedAllowed.value,
             def: fields.value.def,
             minDeclared: minRaw !== null,
             maxDeclared: maxRaw !== null,
@@ -201,6 +208,7 @@ function extractEntities(value: Json): DeclaredEntities {
         );
       });
     }
+    if (collectionError !== null) return err(collectionError);
     const rels: RelationshipDeclaration[] = [];
     if (Array.isArray(raw.relationships)) {
       (raw.relationships as Json[]).forEach((r, j) => {
@@ -212,15 +220,19 @@ function extractEntities(value: Json): DeclaredEntities {
         else if (rel.value !== null) rels.push(rel.value);
       });
     }
+    const parsedAttributes = AttributeDeclarations.parse(attrs);
+    if (!parsedAttributes.ok) return err(JSON.stringify(parsedAttributes.error));
+    const parsedRelationships = RelationshipDeclarations.parse(rels);
+    if (!parsedRelationships.ok) return err(JSON.stringify(parsedRelationships.error));
     model.entities.push(
       EntityDeclaration.of({
         name: entity.value,
         element: ElementPath.of(element),
-        attrs: AttributeDeclarations.of(attrs),
-        rels: RelationshipDeclarations.of(rels),
+        attrs: parsedAttributes.value,
+        rels: parsedRelationships.value,
       }),
     );
-  });
+  }
   if (Array.isArray(value.relationships)) {
     (value.relationships as Json[]).forEach((r, j) => {
       const rel = extractRel(r, `relationships[${j}]`, null);
@@ -229,11 +241,12 @@ function extractEntities(value: Json): DeclaredEntities {
       else if (rel.value !== null) model.rels.push(rel.value);
     });
   }
-  return DeclaredEntities.of({
-    entities: EntityDeclarations.of(collected.entities),
-    rels: RelationshipDeclarations.of(collected.rels),
-    shapeErrors: ShapeErrors.of(collected.shapeErrors),
+  const parsed = combineResults({
+    entities: EntityDeclarations.parse(collected.entities),
+    rels: RelationshipDeclarations.parse(collected.rels),
+    shapeErrors: ShapeErrors.parse(collected.shapeErrors),
   });
+  return parsed.ok ? ok(DeclaredEntities.of(parsed.value)) : err(JSON.stringify(parsed.error));
 }
 
 export function parseEntitiesDocument(md: string | null): EntitiesOutcome {
@@ -244,7 +257,10 @@ export function parseEntitiesDocument(md: string | null): EntitiesOutcome {
   if (parsed.error !== undefined) {
     return EntitiesOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), parsed.error);
   }
-  return EntitiesOutcome.extracted(extractEntities(parsed.value ?? null));
+  const extracted = extractEntities(parsed.value ?? null);
+  return extracted.ok
+    ? EntitiesOutcome.extracted(extracted.value)
+    : EntitiesOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), extracted.error);
 }
 
 export function parseRulesDocument(md: string | null): RulesOutcome {
@@ -257,6 +273,7 @@ export function parseRulesDocument(md: string | null): RulesOutcome {
   }
   const v = parsed.value ?? null;
   if (!isObject(v) || !Array.isArray(v.rules)) return RulesOutcome.noRulesList();
+  let collectionError: string | null = null;
   const ruleList: RuleDeclaration[] = (v.rules as Json[]).map((raw, i) => {
     const element = `rules[${i}]`;
     if (!isObject(raw)) {
@@ -284,18 +301,36 @@ export function parseRulesDocument(md: string | null): RulesOutcome {
     const parsedAppliesTo = appliesTo === null ? ok(null) : AppliesTo.parse(appliesTo);
     if (!parsedCategory.ok) missing.push("category");
     if (!parsedAppliesTo.ok) missing.push("applies_to");
+    const parsedRequirementIds = parseRequirementIdentifiers(sourceText);
+    let sourceIds: SourceIdentifiers;
+    if (!parsedRequirementIds.ok) {
+      collectionError = JSON.stringify(parsedRequirementIds.error);
+      sourceIds = SourceIdentifiers.of([]);
+    } else {
+      const parsedSourceIds = SourceIdentifiers.parse(
+        [...parsedRequirementIds.value].map((value) => SourceIdentifier.of(value.asString())),
+      );
+      if (!parsedSourceIds.ok) {
+        collectionError = JSON.stringify(parsedSourceIds.error);
+        sourceIds = SourceIdentifiers.of([]);
+      } else {
+        sourceIds = parsedSourceIds.value;
+      }
+    }
     return RuleDeclaration.of({
       id: parsedId.ok ? parsedId.value : null,
       element: ElementPath.of(element),
       category: parsedCategory.ok ? parsedCategory.value : null,
       appliesTo: parsedAppliesTo.ok ? parsedAppliesTo.value : null,
-      sourceIds: SourceIdentifiers.of(
-        [...RequirementIdentifiers.extractFrom(sourceText)].map((v) => SourceIdentifier.of(v.asString())),
-      ),
+      sourceIds,
       missing,
     });
   });
-  return RulesOutcome.extracted(RuleDeclarations.of(ruleList));
+  if (collectionError !== null) return RulesOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), collectionError);
+  const parsedRules = RuleDeclarations.parse(ruleList);
+  return parsedRules.ok
+    ? RulesOutcome.extracted(parsedRules.value)
+    : RulesOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), JSON.stringify(parsedRules.error));
 }
 
 export function parseFunctionalSpecDocument(md: string | null): FunctionalSpecificationOutcome {
@@ -352,10 +387,20 @@ export function parseFunctionalSpecDocument(md: string | null): FunctionalSpecif
         );
         break;
       }
+      const stateNames = StateNames.parse(parsedStates.value);
+      if (!stateNames.ok) {
+        machines.push(
+          StateMachineSketch.unrecognized(
+            LineNumber.of(j + 1),
+            ErrorMessage.of(`state collection is too large: ${stateNames.error.kind}`),
+          ),
+        );
+        break;
+      }
       machines.push(
         StateMachineSketch.of({
           spec: spec.value,
-          states: StateNames.of(parsedStates.value),
+          states: stateNames.value,
           fenceLine: LineNumber.of(j + 1),
           unsupported,
         }),
@@ -388,17 +433,22 @@ export function parseDomainEntitiesDocument(md: string | null): DomainEntitiesOu
           attributes: traverseResult(attributes, AttributeName.parse),
         });
         if (!fields.ok) return DomainEntitiesOutcome.unusable(JSON.stringify(fields.error));
+        const parsedAttributes = AttributeNames.parse(fields.value.attributes);
+        if (!parsedAttributes.ok) return DomainEntitiesOutcome.unusable(JSON.stringify(parsedAttributes.error));
         out.push(
           DomainEntitySketch.of({
             name: fields.value.name,
             component: fields.value.component,
-            attributes: AttributeNames.of(fields.value.attributes),
+            attributes: parsedAttributes.value,
           }),
         );
       }
     }
   }
-  return DomainEntitiesOutcome.extracted(DomainEntitySketches.of(out));
+  const parsedEntities = DomainEntitySketches.parse(out);
+  return parsedEntities.ok
+    ? DomainEntitiesOutcome.extracted(parsedEntities.value)
+    : DomainEntitiesOutcome.unusable(JSON.stringify(parsedEntities.error));
 }
 
 // 兄弟ユニットの entities.md 群を XS 用の索引へ。fence 無し・解析不能な
@@ -413,9 +463,10 @@ export function buildSiblingUnitEntities(
     const parsed = parseYamlSubset(fence.body);
     if (parsed.error !== undefined) continue; // its own unit's run reports the parse error
     const model = extractEntities(parsed.value ?? null);
+    if (!model.ok) return err({ kind: "invalid-entities", raw: model.error });
     const name = UnitName.parse(unit);
     if (!name.ok) return name;
-    unitEntities.push([name.value, model.entities()]);
+    unitEntities.push([name.value, model.value.entities()]);
   }
   return SiblingUnitIndex.parse(KeyedIndex.of(unitEntities));
 }

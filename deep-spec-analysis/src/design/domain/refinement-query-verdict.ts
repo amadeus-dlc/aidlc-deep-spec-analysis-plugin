@@ -1,5 +1,6 @@
 import { QueryLabel } from "@deep-spec-analysis/kernel-domain";
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import { sameArray, sameRecord } from "./value-equality.ts";
 
 // refinement クエリ 1 件の判定。主従の裁定（#71 波2）: interpret が吸い出して
 // いた status 分類と witness 材料面（pre/post の 2 状態トレース込み）を判定
@@ -39,6 +40,15 @@ export class RefinementQueryVerdict {
 
   static of(props: RefinementQueryVerdictParam): RefinementQueryVerdict {
     return new RefinementQueryVerdict(props);
+  }
+
+  equals(other: RefinementQueryVerdict): boolean {
+    return (
+      this.#status === other.#status &&
+      sameArray(this.#core ?? [], other.#core ?? [], (left, right) => left.equals(right)) &&
+      sameRecord(this.#decodedModel ?? {}, other.#decodedModel ?? {}) &&
+      sameRecord(this.#decodedPostModel ?? {}, other.#decodedPostModel ?? {})
+    );
   }
 
   isSat(): boolean {

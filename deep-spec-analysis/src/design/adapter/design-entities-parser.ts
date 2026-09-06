@@ -16,7 +16,7 @@ import {
   DesignEntityName,
 } from "@deep-spec-analysis/design-domain";
 import { DeclaredBound } from "@deep-spec-analysis/kernel-domain";
-import { isObject, type Json, ok, type Result, traverseResult } from "@deep-spec-analysis/kernel-infrastructure";
+import { isObject, type Json, type Result, traverseResult } from "@deep-spec-analysis/kernel-infrastructure";
 
 export function parseDesignEntities(schema: {
   readonly [k: string]: Json;
@@ -53,15 +53,17 @@ export function parseDesignEntities(schema: {
         }),
       );
     }
+    const declarations = DesignAttributeDeclarations.parse(attributes);
+    if (!declarations.ok) return declarations;
     entities.push(
       DesignEntityDeclaration.of({
         name: name.value,
         ...(typeof ent.description === "string" ? { description: ent.description } : {}),
-        attributes: DesignAttributeDeclarations.of(attributes),
+        attributes: declarations.value,
       }),
     );
   }
-  return ok(DesignEntityDeclarations.of(entities));
+  return DesignEntityDeclarations.parse(entities);
 }
 
 export function renderDesignEntities(entities: DesignEntityDeclarations): Json {

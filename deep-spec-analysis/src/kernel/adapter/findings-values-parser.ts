@@ -80,13 +80,13 @@ export function parseFindingsValues(raw: Json) {
             const fields = combineResults({
               backend: BackendName.parse(entry.backend),
               unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit),
-              targets: traverseResult(entry.targets, TargetIdentifier.parse),
+              targets: flatMapResult(traverseResult(entry.targets, TargetIdentifier.parse), TargetIdentifiers.parse),
             });
             if (!fields.ok) return fields;
             return ok({
               backend: fields.value.backend,
               unit: fields.value.unit,
-              targets: TargetIdentifiers.of(fields.value.targets),
+              targets: fields.value.targets,
             });
           }),
   });

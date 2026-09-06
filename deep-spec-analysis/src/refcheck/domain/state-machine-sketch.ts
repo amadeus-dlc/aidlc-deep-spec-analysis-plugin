@@ -58,6 +58,24 @@ export class StateMachineSketch {
       : `State Machine: ${state.declaration.spec.asString()} (fence line ${state.declaration.fenceLine.asNumber()})`;
   }
 
+  equals(other: StateMachineSketch): boolean {
+    if (this.#state.kind !== other.#state.kind) return false;
+    if (this.#state.kind === "unrecognized" && other.#state.kind === "unrecognized")
+      return this.#state.line.equals(other.#state.line) && this.#state.reason.equals(other.#state.reason);
+    if (this.#state.kind !== "declared" || other.#state.kind !== "declared") return false;
+    const left = this.#state.declaration;
+    const right = other.#state.declaration;
+    const states = left.states.toArray();
+    const otherStates = right.states.toArray();
+    return (
+      left.spec.equals(right.spec) &&
+      states.length === otherStates.length &&
+      states.every((state, index) => state.equals(otherStates[index] as (typeof states)[number])) &&
+      left.fenceLine.equals(right.fenceLine) &&
+      left.unsupported === right.unsupported
+    );
+  }
+
   // FD-S1／S2 の不変条件（種別規律の裁定 13）: 図の状態は実体のライフサイクル
   // 属性の allowed values に含まれ（S1）、allowed values は図のどこかに現れる
   // （S2）。支持外の図・未宣言の実体・属性不明は skip／finding。文言は golden 凍結。

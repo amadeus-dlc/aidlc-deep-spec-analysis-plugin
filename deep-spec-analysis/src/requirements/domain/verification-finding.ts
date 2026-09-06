@@ -66,6 +66,18 @@ export class VerificationFinding {
     return this.#detail;
   }
 
+  equals(other: VerificationFinding): boolean {
+    const sameValues = <T extends { equals(value: T): boolean }>(left: readonly T[], right: readonly T[]): boolean =>
+      left.length === right.length && left.every((value, index) => value.equals(right[index] as T));
+    return (
+      this.#kind.equals(other.#kind) &&
+      sameValues(this.#functionalRequirementReferences.toArray(), other.#functionalRequirementReferences.toArray()) &&
+      sameValues(this.#targets.toArray(), other.#targets.toArray()) &&
+      this.#witness.equals(other.#witness) &&
+      this.#detail === other.#detail
+    );
+  }
+
   // 呼び手はすべて domain 判定ロジックが持つ既知の閉集合リテラル
   // （"scenario-violation" 等）——parse の閉集合の門を通す（種別規律の裁定
   // 3-2、2026-09-04）。未知の literal は defect であって finding の #kind とは
@@ -76,7 +88,7 @@ export class VerificationFinding {
   }
 
   implicates(target: TargetIdentifier): boolean {
-    return this.#targets.includes(target);
+    return this.#targets.include(target);
   }
 
   // 正準順の材料: kind 順位は所有者（コレクション）が引き、同順位なら targets の

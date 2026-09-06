@@ -12,6 +12,7 @@ import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredObligation } from "./lowered-obligation.ts";
 import { LoweredOrigin } from "./lowered-origin.ts";
 import { LoweredOriginReference } from "./lowered-origin-reference.ts";
+import { sameExpression } from "./value-equality.ts";
 
 // quint 側の refinement 追加不変量——検査可能な要件義務の alpha 置換済み
 // 表明。quint ユースケースは対象 id を問い、lowering へ載せる義務を
@@ -45,6 +46,10 @@ export class RefinementQuintInvariant {
     expr: Expression,
   ): RefinementQuintInvariant {
     return new RefinementQuintInvariant(reqId, functionalRequirementReferences, expr);
+  }
+
+  equals(other: RefinementQuintInvariant): boolean {
+    return this.#reqId.equals(other.#reqId) && sameExpression(this.#expr, other.#expr);
   }
 
   reqId(): ObligationIdentifier {

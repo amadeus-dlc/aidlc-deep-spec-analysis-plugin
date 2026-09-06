@@ -1,0 +1,2494 @@
+{
+  "generatedAt": "2026-09-06T14:27:28.883Z",
+  "sourceDomainFingerprint": "abff766799d574c86fdf769336049e24420bf9c38fc282c1fcd4367648341020",
+  "method": "TypeScript 7 checker.getDeclaredTypeOfSymbol/getPropertiesOfType: inherited operation signatures and element return types",
+  "baselineCount": 112,
+  "currentCount": 113,
+  "absent": [],
+  "failures": [],
+  "entries": [
+    {
+      "name": "AttributeMappings",
+      "path": "src/design/domain/attribute-mappings.ts",
+      "nonEmpty": false,
+      "elementType": "AttributeMapping",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => AttributeMapping",
+        "head": "() => AttributeMapping",
+        "tail": "() => AttributeMappings",
+        "include": "(element: AttributeMapping) => boolean",
+        "exists": "(predicate: (element: AttributeMapping) => boolean) => boolean",
+        "filter": "(predicate: (element: AttributeMapping) => boolean) => AttributeMappings",
+        "map": "<U extends Equatable<U>>(transform: (element: AttributeMapping) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly AttributeMapping[]) => AttributeMappings",
+        "parse": "(values: readonly AttributeMapping[]) => Result<AttributeMappings, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "AttributePaths",
+      "path": "src/design/domain/attribute-paths.ts",
+      "nonEmpty": false,
+      "elementType": "AttributePath",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => AttributePath",
+        "head": "() => AttributePath",
+        "tail": "() => AttributePaths",
+        "include": "(element: AttributePath) => boolean",
+        "exists": "(predicate: (element: AttributePath) => boolean) => boolean",
+        "filter": "(predicate: (element: AttributePath) => boolean) => AttributePaths",
+        "map": "<U extends Equatable<U>>(transform: (element: AttributePath) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly AttributePath[]) => AttributePaths",
+        "parse": "(values: readonly AttributePath[]) => Result<AttributePaths, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "BusinessRuleReferenceIndex",
+      "path": "src/design/domain/business-rule-reference-index.ts",
+      "nonEmpty": false,
+      "elementType": "BusinessRuleReference",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => BusinessRuleReference",
+        "head": "() => BusinessRuleReference",
+        "tail": "() => BusinessRuleReferenceIndex",
+        "include": "(element: BusinessRuleReference) => boolean",
+        "exists": "(predicate: (element: BusinessRuleReference) => boolean) => boolean",
+        "filter": "(predicate: (element: BusinessRuleReference) => boolean) => BusinessRuleReferenceIndex",
+        "map": "<U extends Equatable<U>>(transform: (element: BusinessRuleReference) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(ids: BusinessRuleReferences) => BusinessRuleReferenceIndex",
+        "parse": "(ids: BusinessRuleReferences) => Result<BusinessRuleReferenceIndex, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "BusinessRuleReferences",
+      "path": "src/design/domain/business-rule-references.ts",
+      "nonEmpty": false,
+      "elementType": "BusinessRuleReference",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => BusinessRuleReference",
+        "head": "() => BusinessRuleReference",
+        "tail": "() => BusinessRuleReferences",
+        "include": "(element: BusinessRuleReference) => boolean",
+        "exists": "(predicate: (element: BusinessRuleReference) => boolean) => boolean",
+        "filter": "(predicate: (element: BusinessRuleReference) => boolean) => BusinessRuleReferences",
+        "map": "<U extends Equatable<U>>(transform: (element: BusinessRuleReference) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly BusinessRuleReference[]) => BusinessRuleReferences",
+        "parse": "(values: readonly BusinessRuleReference[]) => Result<BusinessRuleReferences, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "CheckedUnits",
+      "path": "src/design/domain/checked-units.ts",
+      "nonEmpty": false,
+      "elementType": "UnitName",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => UnitName",
+        "head": "() => UnitName",
+        "tail": "() => CheckedUnits",
+        "include": "(element: UnitName) => boolean",
+        "exists": "(predicate: (element: UnitName) => boolean) => boolean",
+        "filter": "(predicate: (element: UnitName) => boolean) => CheckedUnits",
+        "map": "<U extends Equatable<U>>(transform: (element: UnitName) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly UnitName[]) => CheckedUnits",
+        "parse": "(values: readonly UnitName[]) => Result<CheckedUnits, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignAssignments",
+      "path": "src/design/domain/design-assignments.ts",
+      "nonEmpty": false,
+      "elementType": "DesignAssignment",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignAssignment",
+        "head": "() => DesignAssignment",
+        "tail": "() => DesignAssignments",
+        "include": "(element: DesignAssignment) => boolean",
+        "exists": "(predicate: (element: DesignAssignment) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignAssignment) => boolean) => DesignAssignments",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignAssignment) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignAssignment[]) => DesignAssignments",
+        "parse": "(values: readonly DesignAssignment[]) => Result<DesignAssignments, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignAttributeCatalog",
+      "path": "src/design/domain/design-attribute-catalog.ts",
+      "nonEmpty": false,
+      "elementType": "DesignAttributeCatalogEntry",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignAttributeCatalogEntry",
+        "head": "() => DesignAttributeCatalogEntry",
+        "tail": "() => DesignAttributeCatalog",
+        "include": "(element: DesignAttributeCatalogEntry) => boolean",
+        "exists": "(predicate: (element: DesignAttributeCatalogEntry) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignAttributeCatalogEntry) => boolean) => DesignAttributeCatalog",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignAttributeCatalogEntry) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(declarations: DesignEntityDeclarations) => DesignAttributeCatalog",
+        "parse": "(declarations: DesignEntityDeclarations) => Result<DesignAttributeCatalog, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignAttributeDeclarations",
+      "path": "src/design/domain/design-attribute-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "DesignAttributeDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignAttributeDeclaration",
+        "head": "() => DesignAttributeDeclaration",
+        "tail": "() => DesignAttributeDeclarations",
+        "include": "(element: DesignAttributeDeclaration) => boolean",
+        "exists": "(predicate: (element: DesignAttributeDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignAttributeDeclaration) => boolean) => DesignAttributeDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignAttributeDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignAttributeDeclaration[]) => DesignAttributeDeclarations",
+        "parse": "(values: readonly DesignAttributeDeclaration[]) => Result<DesignAttributeDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignBackgroundAssumptions",
+      "path": "src/design/domain/design-background-assumptions.ts",
+      "nonEmpty": false,
+      "elementType": "DesignBackgroundAssumption",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignBackgroundAssumption",
+        "head": "() => DesignBackgroundAssumption",
+        "tail": "() => DesignBackgroundAssumptions",
+        "include": "(element: DesignBackgroundAssumption) => boolean",
+        "exists": "(predicate: (element: DesignBackgroundAssumption) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignBackgroundAssumption) => boolean) => DesignBackgroundAssumptions",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignBackgroundAssumption) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignBackgroundAssumption[]) => DesignBackgroundAssumptions",
+        "parse": "(values: readonly DesignBackgroundAssumption[]) => Result<DesignBackgroundAssumptions, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignBackgroundDeclarations",
+      "path": "src/design/domain/design-background-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "DesignBackgroundDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignBackgroundDeclaration",
+        "head": "() => DesignBackgroundDeclaration",
+        "tail": "() => DesignBackgroundDeclarations",
+        "include": "(element: DesignBackgroundDeclaration) => boolean",
+        "exists": "(predicate: (element: DesignBackgroundDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignBackgroundDeclaration) => boolean) => DesignBackgroundDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignBackgroundDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignBackgroundDeclaration[]) => DesignBackgroundDeclarations",
+        "parse": "(values: readonly DesignBackgroundDeclaration[]) => Result<DesignBackgroundDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignCrossCheckedEntries",
+      "path": "src/design/domain/design-cross-checked-entries.ts",
+      "nonEmpty": false,
+      "elementType": "DesignCrossCheckedEntry",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignCrossCheckedEntry",
+        "head": "() => DesignCrossCheckedEntry",
+        "tail": "() => DesignCrossCheckedEntries",
+        "include": "(element: DesignCrossCheckedEntry) => boolean",
+        "exists": "(predicate: (element: DesignCrossCheckedEntry) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignCrossCheckedEntry) => boolean) => DesignCrossCheckedEntries",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignCrossCheckedEntry) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignCrossCheckedEntry[]) => DesignCrossCheckedEntries",
+        "parse": "(values: readonly DesignCrossCheckedEntry[]) => Result<DesignCrossCheckedEntries, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignEntityDeclarations",
+      "path": "src/design/domain/design-entity-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "DesignEntityDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignEntityDeclaration",
+        "head": "() => DesignEntityDeclaration",
+        "tail": "() => DesignEntityDeclarations",
+        "include": "(element: DesignEntityDeclaration) => boolean",
+        "exists": "(predicate: (element: DesignEntityDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignEntityDeclaration) => boolean) => DesignEntityDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignEntityDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignEntityDeclaration[]) => DesignEntityDeclarations",
+        "parse": "(values: readonly DesignEntityDeclaration[]) => Result<DesignEntityDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignEventRuleCatalog",
+      "path": "src/design/domain/design-event-rule-catalog.ts",
+      "nonEmpty": false,
+      "elementType": "DesignEventRule",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignEventRule",
+        "head": "() => DesignEventRule",
+        "tail": "() => DesignEventRuleCatalog",
+        "include": "(element: DesignEventRule) => boolean",
+        "exists": "(predicate: (element: DesignEventRule) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignEventRule) => boolean) => DesignEventRuleCatalog",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignEventRule) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(unit: DesignUnit) => DesignEventRuleCatalog",
+        "parse": "(unit: DesignUnit) => Result<DesignEventRuleCatalog, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignFindings",
+      "path": "src/design/domain/design-findings.ts",
+      "nonEmpty": false,
+      "elementType": "DesignFinding",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignFinding",
+        "head": "() => DesignFinding",
+        "tail": "() => DesignFindings",
+        "include": "(element: DesignFinding) => boolean",
+        "exists": "(predicate: (element: DesignFinding) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignFinding) => boolean) => DesignFindings",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignFinding) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignFinding[]) => DesignFindings",
+        "parse": "(values: readonly DesignFinding[]) => Result<DesignFindings, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignIgnoreDeclarations",
+      "path": "src/design/domain/design-ignore-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "DesignIgnoreDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignIgnoreDeclaration",
+        "head": "() => DesignIgnoreDeclaration",
+        "tail": "() => DesignIgnoreDeclarations",
+        "include": "(element: DesignIgnoreDeclaration) => boolean",
+        "exists": "(predicate: (element: DesignIgnoreDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignIgnoreDeclaration) => boolean) => DesignIgnoreDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignIgnoreDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignIgnoreDeclaration[]) => DesignIgnoreDeclarations",
+        "parse": "(values: readonly DesignIgnoreDeclaration[]) => Result<DesignIgnoreDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignIgnores",
+      "path": "src/design/domain/design-ignores.ts",
+      "nonEmpty": false,
+      "elementType": "DesignIgnore",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignIgnore",
+        "head": "() => DesignIgnore",
+        "tail": "() => DesignIgnores",
+        "include": "(element: DesignIgnore) => boolean",
+        "exists": "(predicate: (element: DesignIgnore) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignIgnore) => boolean) => DesignIgnores",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignIgnore) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignIgnore[]) => DesignIgnores",
+        "parse": "(values: readonly DesignIgnore[]) => Result<DesignIgnores, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignInputAnchors",
+      "path": "src/design/domain/design-input-anchors.ts",
+      "nonEmpty": false,
+      "elementType": "DesignInputAnchor",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignInputAnchor",
+        "head": "() => DesignInputAnchor",
+        "tail": "() => DesignInputAnchors",
+        "include": "(element: DesignInputAnchor) => boolean",
+        "exists": "(predicate: (element: DesignInputAnchor) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignInputAnchor) => boolean) => DesignInputAnchors",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignInputAnchor) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignInputAnchor[]) => DesignInputAnchors",
+        "parse": "(values: readonly DesignInputAnchor[]) => Result<DesignInputAnchors, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignMachineDeclarations",
+      "path": "src/design/domain/design-machine-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "DesignMachineDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignMachineDeclaration",
+        "head": "() => DesignMachineDeclaration",
+        "tail": "() => DesignMachineDeclarations",
+        "include": "(element: DesignMachineDeclaration) => boolean",
+        "exists": "(predicate: (element: DesignMachineDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignMachineDeclaration) => boolean) => DesignMachineDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignMachineDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignMachineDeclaration[]) => DesignMachineDeclarations",
+        "parse": "(values: readonly DesignMachineDeclaration[]) => Result<DesignMachineDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignMachines",
+      "path": "src/design/domain/design-machines.ts",
+      "nonEmpty": false,
+      "elementType": "DesignMachine",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignMachine",
+        "head": "() => DesignMachine",
+        "tail": "() => DesignMachines",
+        "include": "(element: DesignMachine) => boolean",
+        "exists": "(predicate: (element: DesignMachine) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignMachine) => boolean) => DesignMachines",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignMachine) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignMachine[]) => DesignMachines",
+        "parse": "(values: readonly DesignMachine[]) => Result<DesignMachines, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignObligationDeclarations",
+      "path": "src/design/domain/design-obligation-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "DesignObligationDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignObligationDeclaration",
+        "head": "() => DesignObligationDeclaration",
+        "tail": "() => DesignObligationDeclarations",
+        "include": "(element: DesignObligationDeclaration) => boolean",
+        "exists": "(predicate: (element: DesignObligationDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignObligationDeclaration) => boolean) => DesignObligationDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignObligationDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignObligationDeclaration[]) => DesignObligationDeclarations",
+        "parse": "(values: readonly DesignObligationDeclaration[]) => Result<DesignObligationDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignObligations",
+      "path": "src/design/domain/design-obligations.ts",
+      "nonEmpty": false,
+      "elementType": "DesignObligation",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignObligation",
+        "head": "() => DesignObligation",
+        "tail": "() => DesignObligations",
+        "include": "(element: DesignObligation) => boolean",
+        "exists": "(predicate: (element: DesignObligation) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignObligation) => boolean) => DesignObligations",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignObligation) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignObligation[]) => DesignObligations",
+        "parse": "(values: readonly DesignObligation[]) => Result<DesignObligations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignReports",
+      "path": "src/design/domain/design-reports.ts",
+      "nonEmpty": false,
+      "elementType": "DesignReport",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignReport",
+        "head": "() => DesignReport",
+        "tail": "() => DesignReports",
+        "include": "(element: DesignReport) => boolean",
+        "exists": "(predicate: (element: DesignReport) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignReport) => boolean) => DesignReports",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignReport) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignReport[]) => DesignReports",
+        "parse": "(values: readonly DesignReport[]) => Result<DesignReports, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignScenarioDeclarations",
+      "path": "src/design/domain/design-scenario-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "DesignScenarioDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignScenarioDeclaration",
+        "head": "() => DesignScenarioDeclaration",
+        "tail": "() => DesignScenarioDeclarations",
+        "include": "(element: DesignScenarioDeclaration) => boolean",
+        "exists": "(predicate: (element: DesignScenarioDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignScenarioDeclaration) => boolean) => DesignScenarioDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignScenarioDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignScenarioDeclaration[]) => DesignScenarioDeclarations",
+        "parse": "(values: readonly DesignScenarioDeclaration[]) => Result<DesignScenarioDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignScenarios",
+      "path": "src/design/domain/design-scenarios.ts",
+      "nonEmpty": false,
+      "elementType": "DesignScenario",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignScenario",
+        "head": "() => DesignScenario",
+        "tail": "() => DesignScenarios",
+        "include": "(element: DesignScenario) => boolean",
+        "exists": "(predicate: (element: DesignScenario) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignScenario) => boolean) => DesignScenarios",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignScenario) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignScenario[]) => DesignScenarios",
+        "parse": "(values: readonly DesignScenario[]) => Result<DesignScenarios, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignSkips",
+      "path": "src/design/domain/design-skips.ts",
+      "nonEmpty": false,
+      "elementType": "DesignSkipped",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignSkipped",
+        "head": "() => DesignSkipped",
+        "tail": "() => DesignSkips",
+        "include": "(element: DesignSkipped) => boolean",
+        "exists": "(predicate: (element: DesignSkipped) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignSkipped) => boolean) => DesignSkips",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignSkipped) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignSkipped[]) => DesignSkips",
+        "parse": "(values: readonly DesignSkipped[]) => Result<DesignSkips, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignTransitionDeclarations",
+      "path": "src/design/domain/design-transition-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "DesignTransitionDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignTransitionDeclaration",
+        "head": "() => DesignTransitionDeclaration",
+        "tail": "() => DesignTransitionDeclarations",
+        "include": "(element: DesignTransitionDeclaration) => boolean",
+        "exists": "(predicate: (element: DesignTransitionDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignTransitionDeclaration) => boolean) => DesignTransitionDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignTransitionDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignTransitionDeclaration[]) => DesignTransitionDeclarations",
+        "parse": "(values: readonly DesignTransitionDeclaration[]) => Result<DesignTransitionDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignTransitions",
+      "path": "src/design/domain/design-transitions.ts",
+      "nonEmpty": false,
+      "elementType": "DesignTransition",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignTransition",
+        "head": "() => DesignTransition",
+        "tail": "() => DesignTransitions",
+        "include": "(element: DesignTransition) => boolean",
+        "exists": "(predicate: (element: DesignTransition) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignTransition) => boolean) => DesignTransitions",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignTransition) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignTransition[]) => DesignTransitions",
+        "parse": "(values: readonly DesignTransition[]) => Result<DesignTransitions, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignUnitDeclarations",
+      "path": "src/design/domain/design-unit-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "DesignUnitDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignUnitDeclaration",
+        "head": "() => DesignUnitDeclaration",
+        "tail": "() => DesignUnitDeclarations",
+        "include": "(element: DesignUnitDeclaration) => boolean",
+        "exists": "(predicate: (element: DesignUnitDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignUnitDeclaration) => boolean) => DesignUnitDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignUnitDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignUnitDeclaration[]) => DesignUnitDeclarations",
+        "parse": "(values: readonly DesignUnitDeclaration[]) => Result<DesignUnitDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignUnits",
+      "path": "src/design/domain/design-units.ts",
+      "nonEmpty": false,
+      "elementType": "DesignUnit",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignUnit",
+        "head": "() => DesignUnit",
+        "tail": "() => DesignUnits",
+        "include": "(element: DesignUnit) => boolean",
+        "exists": "(predicate: (element: DesignUnit) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignUnit) => boolean) => DesignUnits",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignUnit) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignUnit[]) => DesignUnits",
+        "parse": "(values: readonly DesignUnit[]) => Result<DesignUnits, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "EffectAssignments",
+      "path": "src/design/domain/effect-assignments.ts",
+      "nonEmpty": false,
+      "elementType": "EffectAssignment",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => EffectAssignment",
+        "head": "() => EffectAssignment",
+        "tail": "() => EffectAssignments",
+        "include": "(element: EffectAssignment) => boolean",
+        "exists": "(predicate: (element: EffectAssignment) => boolean) => boolean",
+        "filter": "(predicate: (element: EffectAssignment) => boolean) => EffectAssignments",
+        "map": "<U extends Equatable<U>>(transform: (element: EffectAssignment) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly EffectAssignment[]) => EffectAssignments",
+        "parse": "(values: readonly EffectAssignment[]) => Result<EffectAssignments, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "EventMappings",
+      "path": "src/design/domain/event-mappings.ts",
+      "nonEmpty": false,
+      "elementType": "EventMapping",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => EventMapping",
+        "head": "() => EventMapping",
+        "tail": "() => EventMappings",
+        "include": "(element: EventMapping) => boolean",
+        "exists": "(predicate: (element: EventMapping) => boolean) => boolean",
+        "filter": "(predicate: (element: EventMapping) => boolean) => EventMappings",
+        "map": "<U extends Equatable<U>>(transform: (element: EventMapping) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly EventMapping[]) => EventMappings",
+        "parse": "(values: readonly EventMapping[]) => Result<EventMappings, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "InitialStates",
+      "path": "src/design/domain/initial-states.ts",
+      "nonEmpty": false,
+      "elementType": "InitialState",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => InitialState",
+        "head": "() => InitialState",
+        "tail": "() => InitialStates",
+        "include": "(element: InitialState) => boolean",
+        "exists": "(predicate: (element: InitialState) => boolean) => boolean",
+        "filter": "(predicate: (element: InitialState) => boolean) => InitialStates",
+        "map": "<U extends Equatable<U>>(transform: (element: InitialState) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly InitialState[]) => InitialStates",
+        "parse": "(values: readonly InitialState[]) => Result<InitialStates, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "IssuedLoweredIdentifiers",
+      "path": "src/design/domain/issued-lowered-identifiers.ts",
+      "nonEmpty": false,
+      "elementType": "LoweredIdentifier",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => LoweredIdentifier",
+        "head": "() => LoweredIdentifier",
+        "tail": "() => IssuedLoweredIdentifiers",
+        "include": "(element: LoweredIdentifier) => boolean",
+        "exists": "(predicate: (element: LoweredIdentifier) => boolean) => boolean",
+        "filter": "(predicate: (element: LoweredIdentifier) => boolean) => IssuedLoweredIdentifiers",
+        "map": "<U extends Equatable<U>>(transform: (element: LoweredIdentifier) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly LoweredIdentifier[]) => IssuedLoweredIdentifiers",
+        "parse": "(values: readonly LoweredIdentifier[]) => Result<IssuedLoweredIdentifiers, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "LoweredBackgrounds",
+      "path": "src/design/domain/lowered-backgrounds.ts",
+      "nonEmpty": false,
+      "elementType": "LoweredBackground",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => LoweredBackground",
+        "head": "() => LoweredBackground",
+        "tail": "() => LoweredBackgrounds",
+        "include": "(element: LoweredBackground) => boolean",
+        "exists": "(predicate: (element: LoweredBackground) => boolean) => boolean",
+        "filter": "(predicate: (element: LoweredBackground) => boolean) => LoweredBackgrounds",
+        "map": "<U extends Equatable<U>>(transform: (element: LoweredBackground) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly LoweredBackground[]) => LoweredBackgrounds",
+        "parse": "(values: readonly LoweredBackground[]) => Result<LoweredBackgrounds, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "LoweredObligations",
+      "path": "src/design/domain/lowered-obligations.ts",
+      "nonEmpty": false,
+      "elementType": "LoweredObligation",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => LoweredObligation",
+        "head": "() => LoweredObligation",
+        "tail": "() => LoweredObligations",
+        "include": "(element: LoweredObligation) => boolean",
+        "exists": "(predicate: (element: LoweredObligation) => boolean) => boolean",
+        "filter": "(predicate: (element: LoweredObligation) => boolean) => LoweredObligations",
+        "map": "<U extends Equatable<U>>(transform: (element: LoweredObligation) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly LoweredObligation[]) => LoweredObligations",
+        "parse": "(values: readonly LoweredObligation[]) => Result<LoweredObligations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "LoweredScenarios",
+      "path": "src/design/domain/lowered-scenarios.ts",
+      "nonEmpty": false,
+      "elementType": "LoweredScenario",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => LoweredScenario",
+        "head": "() => LoweredScenario",
+        "tail": "() => LoweredScenarios",
+        "include": "(element: LoweredScenario) => boolean",
+        "exists": "(predicate: (element: LoweredScenario) => boolean) => boolean",
+        "filter": "(predicate: (element: LoweredScenario) => boolean) => LoweredScenarios",
+        "map": "<U extends Equatable<U>>(transform: (element: LoweredScenario) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly LoweredScenario[]) => LoweredScenarios",
+        "parse": "(values: readonly LoweredScenario[]) => Result<LoweredScenarios, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "ReachabilityPlan",
+      "path": "src/design/domain/reachability-plan.ts",
+      "nonEmpty": false,
+      "elementType": "MachineReachability",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => MachineReachability",
+        "head": "() => MachineReachability",
+        "tail": "() => ReachabilityPlan",
+        "include": "(element: MachineReachability) => boolean",
+        "exists": "(predicate: (element: MachineReachability) => boolean) => boolean",
+        "filter": "(predicate: (element: MachineReachability) => boolean) => ReachabilityPlan",
+        "map": "<U extends Equatable<U>>(transform: (element: MachineReachability) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(machines: readonly MachineReachability[]) => ReachabilityPlan",
+        "parse": "(machines: readonly MachineReachability[]) => Result<ReachabilityPlan, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "RefinementAttributes",
+      "path": "src/design/domain/refinement-attributes.ts",
+      "nonEmpty": false,
+      "elementType": "RefinementAttribute",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => RefinementAttribute",
+        "head": "() => RefinementAttribute",
+        "tail": "() => RefinementAttributes",
+        "include": "(element: RefinementAttribute) => boolean",
+        "exists": "(predicate: (element: RefinementAttribute) => boolean) => boolean",
+        "filter": "(predicate: (element: RefinementAttribute) => boolean) => RefinementAttributes",
+        "map": "<U extends Equatable<U>>(transform: (element: RefinementAttribute) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly RefinementAttribute[]) => RefinementAttributes",
+        "parse": "(values: readonly RefinementAttribute[]) => Result<RefinementAttributes, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "RefinementObligations",
+      "path": "src/design/domain/refinement-obligations.ts",
+      "nonEmpty": false,
+      "elementType": "RefinementObligation",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => RefinementObligation",
+        "head": "() => RefinementObligation",
+        "tail": "() => RefinementObligations",
+        "include": "(element: RefinementObligation) => boolean",
+        "exists": "(predicate: (element: RefinementObligation) => boolean) => boolean",
+        "filter": "(predicate: (element: RefinementObligation) => boolean) => RefinementObligations",
+        "map": "<U extends Equatable<U>>(transform: (element: RefinementObligation) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly RefinementObligation[]) => RefinementObligations",
+        "parse": "(values: readonly RefinementObligation[]) => Result<RefinementObligations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "RefinementQueryVerdicts",
+      "path": "src/design/domain/refinement-query-verdicts.ts",
+      "nonEmpty": false,
+      "elementType": "RefinementQueryVerdictEntry",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => RefinementQueryVerdictEntry",
+        "head": "() => RefinementQueryVerdictEntry",
+        "tail": "() => RefinementQueryVerdicts",
+        "include": "(element: RefinementQueryVerdictEntry) => boolean",
+        "exists": "(predicate: (element: RefinementQueryVerdictEntry) => boolean) => boolean",
+        "filter": "(predicate: (element: RefinementQueryVerdictEntry) => boolean) => RefinementQueryVerdicts",
+        "map": "<U extends Equatable<U>>(transform: (element: RefinementQueryVerdictEntry) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly RefinementQueryVerdictEntry[]) => RefinementQueryVerdicts",
+        "parse": "(values: readonly RefinementQueryVerdictEntry[]) => Result<RefinementQueryVerdicts, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "RefinementQuintInvariants",
+      "path": "src/design/domain/refinement-quint-invariants.ts",
+      "nonEmpty": false,
+      "elementType": "RefinementQuintInvariant",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => RefinementQuintInvariant",
+        "head": "() => RefinementQuintInvariant",
+        "tail": "() => RefinementQuintInvariants",
+        "include": "(element: RefinementQuintInvariant) => boolean",
+        "exists": "(predicate: (element: RefinementQuintInvariant) => boolean) => boolean",
+        "filter": "(predicate: (element: RefinementQuintInvariant) => boolean) => RefinementQuintInvariants",
+        "map": "<U extends Equatable<U>>(transform: (element: RefinementQuintInvariant) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly RefinementQuintInvariant[]) => RefinementQuintInvariants",
+        "parse": "(values: readonly RefinementQuintInvariant[]) => Result<RefinementQuintInvariants, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "RefinementScenarios",
+      "path": "src/design/domain/refinement-scenarios.ts",
+      "nonEmpty": false,
+      "elementType": "RefinementScenario",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => RefinementScenario",
+        "head": "() => RefinementScenario",
+        "tail": "() => RefinementScenarios",
+        "include": "(element: RefinementScenario) => boolean",
+        "exists": "(predicate: (element: RefinementScenario) => boolean) => boolean",
+        "filter": "(predicate: (element: RefinementScenario) => boolean) => RefinementScenarios",
+        "map": "<U extends Equatable<U>>(transform: (element: RefinementScenario) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly RefinementScenario[]) => RefinementScenarios",
+        "parse": "(values: readonly RefinementScenario[]) => Result<RefinementScenarios, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "RefinementUnitMaps",
+      "path": "src/design/domain/refinement-unit-maps.ts",
+      "nonEmpty": false,
+      "elementType": "RefinementUnitMap",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => RefinementUnitMap",
+        "head": "() => RefinementUnitMap",
+        "tail": "() => RefinementUnitMaps",
+        "include": "(element: RefinementUnitMap) => boolean",
+        "exists": "(predicate: (element: RefinementUnitMap) => boolean) => boolean",
+        "filter": "(predicate: (element: RefinementUnitMap) => boolean) => RefinementUnitMaps",
+        "map": "<U extends Equatable<U>>(transform: (element: RefinementUnitMap) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly RefinementUnitMap[]) => RefinementUnitMaps",
+        "parse": "(values: readonly RefinementUnitMap[]) => Result<RefinementUnitMaps, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "RuleSubsumptions",
+      "path": "src/design/domain/rule-subsumptions.ts",
+      "nonEmpty": false,
+      "elementType": "RuleSubsumption",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => RuleSubsumption",
+        "head": "() => RuleSubsumption",
+        "tail": "() => RuleSubsumptions",
+        "include": "(element: RuleSubsumption) => boolean",
+        "exists": "(predicate: (element: RuleSubsumption) => boolean) => boolean",
+        "filter": "(predicate: (element: RuleSubsumption) => boolean) => RuleSubsumptions",
+        "map": "<U extends Equatable<U>>(transform: (element: RuleSubsumption) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly RuleSubsumption[]) => RuleSubsumptions",
+        "parse": "(values: readonly RuleSubsumption[]) => Result<RuleSubsumptions, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "SiblingVerdictFindings",
+      "path": "src/design/domain/sibling-verdict-findings.ts",
+      "nonEmpty": false,
+      "elementType": "SiblingVerdictFinding",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => SiblingVerdictFinding",
+        "head": "() => SiblingVerdictFinding",
+        "tail": "() => SiblingVerdictFindings",
+        "include": "(element: SiblingVerdictFinding) => boolean",
+        "exists": "(predicate: (element: SiblingVerdictFinding) => boolean) => boolean",
+        "filter": "(predicate: (element: SiblingVerdictFinding) => boolean) => SiblingVerdictFindings",
+        "map": "<U extends Equatable<U>>(transform: (element: SiblingVerdictFinding) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly SiblingVerdictFinding[]) => SiblingVerdictFindings",
+        "parse": "(values: readonly SiblingVerdictFinding[]) => Result<SiblingVerdictFindings, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "SiblingVerdictSkips",
+      "path": "src/design/domain/sibling-verdict-skips.ts",
+      "nonEmpty": false,
+      "elementType": "SiblingVerdictSkip",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => SiblingVerdictSkip",
+        "head": "() => SiblingVerdictSkip",
+        "tail": "() => SiblingVerdictSkips",
+        "include": "(element: SiblingVerdictSkip) => boolean",
+        "exists": "(predicate: (element: SiblingVerdictSkip) => boolean) => boolean",
+        "filter": "(predicate: (element: SiblingVerdictSkip) => boolean) => SiblingVerdictSkips",
+        "map": "<U extends Equatable<U>>(transform: (element: SiblingVerdictSkip) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly SiblingVerdictSkip[]) => SiblingVerdictSkips",
+        "parse": "(values: readonly SiblingVerdictSkip[]) => Result<SiblingVerdictSkips, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "TransitionReferences",
+      "path": "src/design/domain/transition-references.ts",
+      "nonEmpty": false,
+      "elementType": "TransitionReference",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => TransitionReference",
+        "head": "() => TransitionReference",
+        "tail": "() => TransitionReferences",
+        "include": "(element: TransitionReference) => boolean",
+        "exists": "(predicate: (element: TransitionReference) => boolean) => boolean",
+        "filter": "(predicate: (element: TransitionReference) => boolean) => TransitionReferences",
+        "map": "<U extends Equatable<U>>(transform: (element: TransitionReference) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly TransitionReference[]) => TransitionReferences",
+        "parse": "(values: readonly TransitionReference[]) => Result<TransitionReferences, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "UnformalizedTargets",
+      "path": "src/design/domain/unformalized-targets.ts",
+      "nonEmpty": false,
+      "elementType": "TargetIdentifier",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => TargetIdentifier",
+        "head": "() => TargetIdentifier",
+        "tail": "() => UnformalizedTargets",
+        "include": "(element: TargetIdentifier) => boolean",
+        "exists": "(predicate: (element: TargetIdentifier) => boolean) => boolean",
+        "filter": "(predicate: (element: TargetIdentifier) => boolean) => UnformalizedTargets",
+        "map": "<U extends Equatable<U>>(transform: (element: TargetIdentifier) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly TargetIdentifier[]) => UnformalizedTargets",
+        "parse": "(values: readonly TargetIdentifier[]) => Result<UnformalizedTargets, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "UnmappedDeclarations",
+      "path": "src/design/domain/unmapped-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "UnmappedTarget",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => UnmappedTarget",
+        "head": "() => UnmappedTarget",
+        "tail": "() => UnmappedDeclarations",
+        "include": "(element: UnmappedTarget) => boolean",
+        "exists": "(predicate: (element: UnmappedTarget) => boolean) => boolean",
+        "filter": "(predicate: (element: UnmappedTarget) => boolean) => UnmappedDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: UnmappedTarget) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly UnmappedTarget[]) => UnmappedDeclarations",
+        "parse": "(values: readonly UnmappedTarget[]) => Result<UnmappedDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DesignArtifacts",
+      "path": "src/doctor/domain/design-artifacts.ts",
+      "nonEmpty": false,
+      "elementType": "DesignArtifactReference",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DesignArtifactReference",
+        "head": "() => DesignArtifactReference",
+        "tail": "() => DesignArtifacts",
+        "include": "(element: DesignArtifactReference) => boolean",
+        "exists": "(predicate: (element: DesignArtifactReference) => boolean) => boolean",
+        "filter": "(predicate: (element: DesignArtifactReference) => boolean) => DesignArtifacts",
+        "map": "<U extends Equatable<U>>(transform: (element: DesignArtifactReference) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DesignArtifactReference[]) => DesignArtifacts",
+        "parse": "(values: readonly DesignArtifactReference[]) => Result<DesignArtifacts, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "HealthVerdict",
+      "path": "src/doctor/domain/health-verdict.ts",
+      "nonEmpty": false,
+      "elementType": "Check",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => Check",
+        "head": "() => Check",
+        "tail": "() => HealthVerdict",
+        "include": "(element: Check) => boolean",
+        "exists": "(predicate: (element: Check) => boolean) => boolean",
+        "filter": "(predicate: (element: Check) => boolean) => HealthVerdict",
+        "map": "<U extends Equatable<U>>(transform: (element: Check) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly Check[]) => HealthVerdict",
+        "parse": "(values: readonly Check[]) => Result<HealthVerdict, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "InstallationManifest",
+      "path": "src/doctor/domain/installation-manifest.ts",
+      "nonEmpty": true,
+      "elementType": "ManifestEntry",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => ManifestEntry",
+        "head": "() => ManifestEntry",
+        "tail": "() => FirstClassCollection<ManifestEntry>",
+        "include": "(element: ManifestEntry) => boolean",
+        "exists": "(predicate: (element: ManifestEntry) => boolean) => boolean",
+        "filter": "(predicate: (element: ManifestEntry) => boolean) => FirstClassCollection<ManifestEntry>",
+        "map": "<U extends Equatable<U>>(transform: (element: ManifestEntry) => U) => FirstClassCollection<U>"
+      },
+      "factories": {
+        "standard": "() => InstallationManifest"
+      },
+      "missing": []
+    },
+    {
+      "name": "StableReleases",
+      "path": "src/doctor/domain/stable-releases.ts",
+      "nonEmpty": false,
+      "elementType": "PluginVersion",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => PluginVersion",
+        "head": "() => PluginVersion",
+        "tail": "() => StableReleases",
+        "include": "(element: PluginVersion) => boolean",
+        "exists": "(predicate: (element: PluginVersion) => boolean) => boolean",
+        "filter": "(predicate: (element: PluginVersion) => boolean) => StableReleases",
+        "map": "<U extends Equatable<U>>(transform: (element: PluginVersion) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(versions: readonly PluginVersion[]) => StableReleases",
+        "parse": "(versions: readonly PluginVersion[]) => Result<StableReleases, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "StageScopes",
+      "path": "src/doctor/domain/stage-scopes.ts",
+      "nonEmpty": false,
+      "elementType": "StageScope",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => StageScope",
+        "head": "() => StageScope",
+        "tail": "() => StageScopes",
+        "include": "(element: StageScope) => boolean",
+        "exists": "(predicate: (element: StageScope) => boolean) => boolean",
+        "filter": "(predicate: (element: StageScope) => boolean) => StageScopes",
+        "map": "<U extends Equatable<U>>(transform: (element: StageScope) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly StageScope[]) => StageScopes",
+        "parse": "(values: readonly StageScope[]) => Result<StageScopes, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "StructuralDebt",
+      "path": "src/doctor/domain/structural-debt.ts",
+      "nonEmpty": false,
+      "elementType": "StructuralObservation",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => StructuralObservation",
+        "head": "() => StructuralObservation",
+        "tail": "() => StructuralDebt",
+        "include": "(element: StructuralObservation) => boolean",
+        "exists": "(predicate: (element: StructuralObservation) => boolean) => boolean",
+        "filter": "(predicate: (element: StructuralObservation) => boolean) => StructuralDebt",
+        "map": "<U extends Equatable<U>>(transform: (element: StructuralObservation) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(observations: readonly StructuralObservation[]) => StructuralDebt",
+        "parse": "(observations: readonly StructuralObservation[]) => Result<StructuralDebt, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DeclaredBindings",
+      "path": "src/kernel/domain/declared-bindings.ts",
+      "nonEmpty": false,
+      "elementType": "BindingDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => BindingDeclaration",
+        "head": "() => BindingDeclaration",
+        "tail": "() => DeclaredBindings",
+        "include": "(element: BindingDeclaration) => boolean",
+        "exists": "(predicate: (element: BindingDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: BindingDeclaration) => boolean) => DeclaredBindings",
+        "map": "<U extends Equatable<U>>(transform: (element: BindingDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly BindingDeclaration[]) => DeclaredBindings",
+        "parse": "(values: readonly BindingDeclaration[]) => Result<DeclaredBindings, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "EnumerationMembers",
+      "path": "src/kernel/domain/enumeration-members.ts",
+      "nonEmpty": false,
+      "elementType": "EnumerationMember",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => EnumerationMember",
+        "head": "() => EnumerationMember",
+        "tail": "() => EnumerationMembers",
+        "include": "(element: EnumerationMember) => boolean",
+        "exists": "(predicate: (element: EnumerationMember) => boolean) => boolean",
+        "filter": "(predicate: (element: EnumerationMember) => boolean) => EnumerationMembers",
+        "map": "<U extends Equatable<U>>(transform: (element: EnumerationMember) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly EnumerationMember[]) => EnumerationMembers",
+        "parse": "(values: readonly EnumerationMember[]) => Result<EnumerationMembers, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "ErrorMessages",
+      "path": "src/kernel/domain/error-messages.ts",
+      "nonEmpty": false,
+      "elementType": "ErrorMessage",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => ErrorMessage",
+        "head": "() => ErrorMessage",
+        "tail": "() => ErrorMessages",
+        "include": "(element: ErrorMessage) => boolean",
+        "exists": "(predicate: (element: ErrorMessage) => boolean) => boolean",
+        "filter": "(predicate: (element: ErrorMessage) => boolean) => ErrorMessages",
+        "map": "<U extends Equatable<U>>(transform: (element: ErrorMessage) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly ErrorMessage[]) => ErrorMessages",
+        "parse": "(values: readonly ErrorMessage[]) => Result<ErrorMessages, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "FindingTargets",
+      "path": "src/kernel/domain/finding-targets.ts",
+      "nonEmpty": true,
+      "elementType": "TargetIdentifier",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => TargetIdentifier",
+        "head": "() => TargetIdentifier",
+        "tail": "() => TargetIdentifiers",
+        "include": "(element: TargetIdentifier) => boolean",
+        "exists": "(predicate: (element: TargetIdentifier) => boolean) => boolean",
+        "filter": "(predicate: (element: TargetIdentifier) => boolean) => TargetIdentifiers",
+        "map": "<U extends Equatable<U>>(transform: (element: TargetIdentifier) => U) => FirstClassCollection<U>"
+      },
+      "factories": {
+        "of": "(head: TargetIdentifier, tail: readonly TargetIdentifier[]) => FindingTargets",
+        "parse": "(head: TargetIdentifier, tail: readonly TargetIdentifier[]) => Result<FindingTargets, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "FunctionalRequirementReferences",
+      "path": "src/kernel/domain/functional-requirement-references.ts",
+      "nonEmpty": false,
+      "elementType": "RequirementIdentifier",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => RequirementIdentifier",
+        "head": "() => RequirementIdentifier",
+        "tail": "() => FunctionalRequirementReferences",
+        "include": "(element: RequirementIdentifier) => boolean",
+        "exists": "(predicate: (element: RequirementIdentifier) => boolean) => boolean",
+        "filter": "(predicate: (element: RequirementIdentifier) => boolean) => FunctionalRequirementReferences",
+        "map": "<U extends Equatable<U>>(transform: (element: RequirementIdentifier) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly RequirementIdentifier[]) => FunctionalRequirementReferences",
+        "parse": "(values: readonly RequirementIdentifier[]) => Result<FunctionalRequirementReferences, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "ImmutableFirstClassCollection",
+      "path": "src/kernel/domain/immutable-first-class-collection.ts",
+      "nonEmpty": false,
+      "elementType": "E",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => E",
+        "head": "() => E",
+        "tail": "() => ImmutableFirstClassCollection<E>",
+        "include": "(element: E) => boolean",
+        "exists": "(predicate: (element: E) => boolean) => boolean",
+        "filter": "(predicate: (element: E) => boolean) => ImmutableFirstClassCollection<E>",
+        "map": "<U extends Equatable<U>>(transform: (element: E) => U) => ImmutableFirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "<E extends Equatable<E>>(values: readonly E[]) => ImmutableFirstClassCollection<E>",
+        "parse": "<E extends Equatable<E>>(values: readonly E[]) => Result<ImmutableFirstClassCollection<E>, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "RequirementIdentifiers",
+      "path": "src/kernel/domain/requirement-identifiers.ts",
+      "nonEmpty": false,
+      "elementType": "RequirementIdentifier",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => RequirementIdentifier",
+        "head": "() => RequirementIdentifier",
+        "tail": "() => RequirementIdentifiers",
+        "include": "(element: RequirementIdentifier) => boolean",
+        "exists": "(predicate: (element: RequirementIdentifier) => boolean) => boolean",
+        "filter": "(predicate: (element: RequirementIdentifier) => boolean) => RequirementIdentifiers",
+        "map": "<U extends Equatable<U>>(transform: (element: RequirementIdentifier) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly RequirementIdentifier[]) => RequirementIdentifiers",
+        "parse": "(values: readonly RequirementIdentifier[]) => Result<RequirementIdentifiers, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "ScenarioBindings",
+      "path": "src/kernel/domain/scenario-bindings.ts",
+      "nonEmpty": false,
+      "elementType": "ScenarioBinding",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => ScenarioBinding",
+        "head": "() => ScenarioBinding",
+        "tail": "() => ScenarioBindings",
+        "include": "(element: ScenarioBinding) => boolean",
+        "exists": "(predicate: (element: ScenarioBinding) => boolean) => boolean",
+        "filter": "(predicate: (element: ScenarioBinding) => boolean) => ScenarioBindings",
+        "map": "<U extends Equatable<U>>(transform: (element: ScenarioBinding) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly ScenarioBinding[]) => ScenarioBindings",
+        "parse": "(values: readonly ScenarioBinding[]) => Result<ScenarioBindings, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "ScenarioVerdicts",
+      "path": "src/kernel/domain/scenario-verdicts.ts",
+      "nonEmpty": false,
+      "elementType": "ScenarioVerdict",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => ScenarioVerdict",
+        "head": "() => ScenarioVerdict",
+        "tail": "() => ScenarioVerdicts",
+        "include": "(element: ScenarioVerdict) => boolean",
+        "exists": "(predicate: (element: ScenarioVerdict) => boolean) => boolean",
+        "filter": "(predicate: (element: ScenarioVerdict) => boolean) => ScenarioVerdicts",
+        "map": "<U extends Equatable<U>>(transform: (element: ScenarioVerdict) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly ScenarioVerdict[]) => ScenarioVerdicts",
+        "parse": "(values: readonly ScenarioVerdict[]) => Result<ScenarioVerdicts, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "TargetIdentifiers",
+      "path": "src/kernel/domain/target-identifiers.ts",
+      "nonEmpty": false,
+      "elementType": "TargetIdentifier",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => TargetIdentifier",
+        "head": "() => TargetIdentifier",
+        "tail": "() => TargetIdentifiers",
+        "include": "(element: TargetIdentifier) => boolean",
+        "exists": "(predicate: (element: TargetIdentifier) => boolean) => boolean",
+        "filter": "(predicate: (element: TargetIdentifier) => boolean) => TargetIdentifiers",
+        "map": "<U extends Equatable<U>>(transform: (element: TargetIdentifier) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly TargetIdentifier[]) => TargetIdentifiers",
+        "parse": "(values: readonly TargetIdentifier[]) => Result<TargetIdentifiers, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "AllowedValues",
+      "path": "src/refcheck/domain/allowed-values.ts",
+      "nonEmpty": false,
+      "elementType": "AllowedValue",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => AllowedValue",
+        "head": "() => AllowedValue",
+        "tail": "() => AllowedValues",
+        "include": "(element: AllowedValue) => boolean",
+        "exists": "(predicate: (element: AllowedValue) => boolean) => boolean",
+        "filter": "(predicate: (element: AllowedValue) => boolean) => AllowedValues",
+        "map": "<U extends Equatable<U>>(transform: (element: AllowedValue) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly AllowedValue[]) => AllowedValues",
+        "parse": "(values: readonly AllowedValue[]) => Result<AllowedValues, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "AttributeDeclarations",
+      "path": "src/refcheck/domain/attribute-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "AttributeDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => AttributeDeclaration",
+        "head": "() => AttributeDeclaration",
+        "tail": "() => AttributeDeclarations",
+        "include": "(element: AttributeDeclaration) => boolean",
+        "exists": "(predicate: (element: AttributeDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: AttributeDeclaration) => boolean) => AttributeDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: AttributeDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly AttributeDeclaration[]) => AttributeDeclarations",
+        "parse": "(values: readonly AttributeDeclaration[]) => Result<AttributeDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "AttributeNames",
+      "path": "src/refcheck/domain/attribute-names.ts",
+      "nonEmpty": false,
+      "elementType": "AttributeName",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => AttributeName",
+        "head": "() => AttributeName",
+        "tail": "() => AttributeNames",
+        "include": "(element: AttributeName) => boolean",
+        "exists": "(predicate: (element: AttributeName) => boolean) => boolean",
+        "filter": "(predicate: (element: AttributeName) => boolean) => AttributeNames",
+        "map": "<U extends Equatable<U>>(transform: (element: AttributeName) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly AttributeName[]) => AttributeNames",
+        "parse": "(values: readonly AttributeName[]) => Result<AttributeNames, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "CheckFamilies",
+      "path": "src/refcheck/domain/check-families.ts",
+      "nonEmpty": false,
+      "elementType": "CheckFamily",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => CheckFamily",
+        "head": "() => CheckFamily",
+        "tail": "() => CheckFamilies",
+        "include": "(element: CheckFamily) => boolean",
+        "exists": "(predicate: (element: CheckFamily) => boolean) => boolean",
+        "filter": "(predicate: (element: CheckFamily) => boolean) => CheckFamilies",
+        "map": "<U extends Equatable<U>>(transform: (element: CheckFamily) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly CheckFamily[]) => CheckFamilies",
+        "parse": "(values: readonly CheckFamily[]) => Result<CheckFamilies, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "ComponentEntities",
+      "path": "src/refcheck/domain/component-entities.ts",
+      "nonEmpty": false,
+      "elementType": "ComponentEntity",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => ComponentEntity",
+        "head": "() => ComponentEntity",
+        "tail": "() => ComponentEntities",
+        "include": "(element: ComponentEntity) => boolean",
+        "exists": "(predicate: (element: ComponentEntity) => boolean) => boolean",
+        "filter": "(predicate: (element: ComponentEntity) => boolean) => ComponentEntities",
+        "map": "<U extends Equatable<U>>(transform: (element: ComponentEntity) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly ComponentEntity[]) => ComponentEntities",
+        "parse": "(values: readonly ComponentEntity[]) => Result<ComponentEntities, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "ComponentReferences",
+      "path": "src/refcheck/domain/component-references.ts",
+      "nonEmpty": false,
+      "elementType": "ComponentReference",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => ComponentReference",
+        "head": "() => ComponentReference",
+        "tail": "() => ComponentReferences",
+        "include": "(element: ComponentReference) => boolean",
+        "exists": "(predicate: (element: ComponentReference) => boolean) => boolean",
+        "filter": "(predicate: (element: ComponentReference) => boolean) => ComponentReferences",
+        "map": "<U extends Equatable<U>>(transform: (element: ComponentReference) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly ComponentReference[]) => ComponentReferences",
+        "parse": "(values: readonly ComponentReference[]) => Result<ComponentReferences, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "ComponentShapeErrors",
+      "path": "src/refcheck/domain/component-shape-errors.ts",
+      "nonEmpty": false,
+      "elementType": "ComponentShapeError",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => ComponentShapeError",
+        "head": "() => ComponentShapeError",
+        "tail": "() => ComponentShapeErrors",
+        "include": "(element: ComponentShapeError) => boolean",
+        "exists": "(predicate: (element: ComponentShapeError) => boolean) => boolean",
+        "filter": "(predicate: (element: ComponentShapeError) => boolean) => ComponentShapeErrors",
+        "map": "<U extends Equatable<U>>(transform: (element: ComponentShapeError) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly ComponentShapeError[]) => ComponentShapeErrors",
+        "parse": "(values: readonly ComponentShapeError[]) => Result<ComponentShapeErrors, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "Components",
+      "path": "src/refcheck/domain/components.ts",
+      "nonEmpty": false,
+      "elementType": "Component",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => Component",
+        "head": "() => Component",
+        "tail": "() => Components",
+        "include": "(element: Component) => boolean",
+        "exists": "(predicate: (element: Component) => boolean) => boolean",
+        "filter": "(predicate: (element: Component) => boolean) => Components",
+        "map": "<U extends Equatable<U>>(transform: (element: Component) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly Component[]) => Components",
+        "parse": "(values: readonly Component[]) => Result<Components, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "ContractRows",
+      "path": "src/refcheck/domain/contract-rows.ts",
+      "nonEmpty": false,
+      "elementType": "ContractRow",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => ContractRow",
+        "head": "() => ContractRow",
+        "tail": "() => ContractRows",
+        "include": "(element: ContractRow) => boolean",
+        "exists": "(predicate: (element: ContractRow) => boolean) => boolean",
+        "filter": "(predicate: (element: ContractRow) => boolean) => ContractRows",
+        "map": "<U extends Equatable<U>>(transform: (element: ContractRow) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly ContractRow[]) => ContractRows",
+        "parse": "(values: readonly ContractRow[]) => Result<ContractRows, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "DomainEntitySketches",
+      "path": "src/refcheck/domain/domain-entity-sketches.ts",
+      "nonEmpty": false,
+      "elementType": "DomainEntitySketch",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => DomainEntitySketch",
+        "head": "() => DomainEntitySketch",
+        "tail": "() => DomainEntitySketches",
+        "include": "(element: DomainEntitySketch) => boolean",
+        "exists": "(predicate: (element: DomainEntitySketch) => boolean) => boolean",
+        "filter": "(predicate: (element: DomainEntitySketch) => boolean) => DomainEntitySketches",
+        "map": "<U extends Equatable<U>>(transform: (element: DomainEntitySketch) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly DomainEntitySketch[]) => DomainEntitySketches",
+        "parse": "(values: readonly DomainEntitySketch[]) => Result<DomainEntitySketches, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "EntityDeclarations",
+      "path": "src/refcheck/domain/entity-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "EntityDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => EntityDeclaration",
+        "head": "() => EntityDeclaration",
+        "tail": "() => EntityDeclarations",
+        "include": "(element: EntityDeclaration) => boolean",
+        "exists": "(predicate: (element: EntityDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: EntityDeclaration) => boolean) => EntityDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: EntityDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly EntityDeclaration[]) => EntityDeclarations",
+        "parse": "(values: readonly EntityDeclaration[]) => Result<EntityDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "EntityReferences",
+      "path": "src/refcheck/domain/entity-references.ts",
+      "nonEmpty": false,
+      "elementType": "EntityReference",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => EntityReference",
+        "head": "() => EntityReference",
+        "tail": "() => EntityReferences",
+        "include": "(element: EntityReference) => boolean",
+        "exists": "(predicate: (element: EntityReference) => boolean) => boolean",
+        "filter": "(predicate: (element: EntityReference) => boolean) => EntityReferences",
+        "map": "<U extends Equatable<U>>(transform: (element: EntityReference) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly EntityReference[]) => EntityReferences",
+        "parse": "(values: readonly EntityReference[]) => Result<EntityReferences, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "Findings",
+      "path": "src/refcheck/domain/findings.ts",
+      "nonEmpty": false,
+      "elementType": "Finding",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => Finding",
+        "head": "() => Finding",
+        "tail": "() => Findings",
+        "include": "(element: Finding) => boolean",
+        "exists": "(predicate: (element: Finding) => boolean) => boolean",
+        "filter": "(predicate: (element: Finding) => boolean) => Findings",
+        "map": "<U extends Equatable<U>>(transform: (element: Finding) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly Finding[]) => Findings",
+        "parse": "(values: readonly Finding[]) => Result<Findings, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "InputAnchors",
+      "path": "src/refcheck/domain/input-anchors.ts",
+      "nonEmpty": false,
+      "elementType": "InputAnchor",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => InputAnchor",
+        "head": "() => InputAnchor",
+        "tail": "() => InputAnchors",
+        "include": "(element: InputAnchor) => boolean",
+        "exists": "(predicate: (element: InputAnchor) => boolean) => boolean",
+        "filter": "(predicate: (element: InputAnchor) => boolean) => InputAnchors",
+        "map": "<U extends Equatable<U>>(transform: (element: InputAnchor) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly InputAnchor[]) => InputAnchors",
+        "parse": "(values: readonly InputAnchor[]) => Result<InputAnchors, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "RelationshipDeclarations",
+      "path": "src/refcheck/domain/relationship-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "RelationshipDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => RelationshipDeclaration",
+        "head": "() => RelationshipDeclaration",
+        "tail": "() => RelationshipDeclarations",
+        "include": "(element: RelationshipDeclaration) => boolean",
+        "exists": "(predicate: (element: RelationshipDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: RelationshipDeclaration) => boolean) => RelationshipDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: RelationshipDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly RelationshipDeclaration[]) => RelationshipDeclarations",
+        "parse": "(values: readonly RelationshipDeclaration[]) => Result<RelationshipDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "RuleDeclarations",
+      "path": "src/refcheck/domain/rule-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "RuleDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => RuleDeclaration",
+        "head": "() => RuleDeclaration",
+        "tail": "() => RuleDeclarations",
+        "include": "(element: RuleDeclaration) => boolean",
+        "exists": "(predicate: (element: RuleDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: RuleDeclaration) => boolean) => RuleDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: RuleDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly RuleDeclaration[]) => RuleDeclarations",
+        "parse": "(values: readonly RuleDeclaration[]) => Result<RuleDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "ShapeErrors",
+      "path": "src/refcheck/domain/shape-errors.ts",
+      "nonEmpty": false,
+      "elementType": "ShapeError",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => ShapeError",
+        "head": "() => ShapeError",
+        "tail": "() => ShapeErrors",
+        "include": "(element: ShapeError) => boolean",
+        "exists": "(predicate: (element: ShapeError) => boolean) => boolean",
+        "filter": "(predicate: (element: ShapeError) => boolean) => ShapeErrors",
+        "map": "<U extends Equatable<U>>(transform: (element: ShapeError) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly ShapeError[]) => ShapeErrors",
+        "parse": "(values: readonly ShapeError[]) => Result<ShapeErrors, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "SiblingUnitIndex",
+      "path": "src/refcheck/domain/sibling-unit-index.ts",
+      "nonEmpty": false,
+      "elementType": "SiblingUnitIndexEntry",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => SiblingUnitIndexEntry",
+        "head": "() => SiblingUnitIndexEntry",
+        "tail": "() => SiblingUnitIndex",
+        "include": "(element: SiblingUnitIndexEntry) => boolean",
+        "exists": "(predicate: (element: SiblingUnitIndexEntry) => boolean) => boolean",
+        "filter": "(predicate: (element: SiblingUnitIndexEntry) => boolean) => SiblingUnitIndex",
+        "map": "<U extends Equatable<U>>(transform: (element: SiblingUnitIndexEntry) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(units: KeyedIndex<UnitName, EntityDeclarations>) => SiblingUnitIndex",
+        "parse": "(units: KeyedIndex<UnitName, EntityDeclarations>) => Result<SiblingUnitIndex, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "Skips",
+      "path": "src/refcheck/domain/skips.ts",
+      "nonEmpty": false,
+      "elementType": "Skipped",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => Skipped",
+        "head": "() => Skipped",
+        "tail": "() => Skips",
+        "include": "(element: Skipped) => boolean",
+        "exists": "(predicate: (element: Skipped) => boolean) => boolean",
+        "filter": "(predicate: (element: Skipped) => boolean) => Skips",
+        "map": "<U extends Equatable<U>>(transform: (element: Skipped) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly Skipped[]) => Skips",
+        "parse": "(values: readonly Skipped[]) => Result<Skips, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "SourceIdentifiers",
+      "path": "src/refcheck/domain/source-identifiers.ts",
+      "nonEmpty": false,
+      "elementType": "SourceIdentifier",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => SourceIdentifier",
+        "head": "() => SourceIdentifier",
+        "tail": "() => SourceIdentifiers",
+        "include": "(element: SourceIdentifier) => boolean",
+        "exists": "(predicate: (element: SourceIdentifier) => boolean) => boolean",
+        "filter": "(predicate: (element: SourceIdentifier) => boolean) => SourceIdentifiers",
+        "map": "<U extends Equatable<U>>(transform: (element: SourceIdentifier) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly SourceIdentifier[]) => SourceIdentifiers",
+        "parse": "(values: readonly SourceIdentifier[]) => Result<SourceIdentifiers, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "SpecificationBlockAssessments",
+      "path": "src/refcheck/domain/specification-block-assessments.ts",
+      "nonEmpty": false,
+      "elementType": "SpecificationBlockAssessment",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => SpecificationBlockAssessment",
+        "head": "() => SpecificationBlockAssessment",
+        "tail": "() => SpecificationBlockAssessments",
+        "include": "(element: SpecificationBlockAssessment) => boolean",
+        "exists": "(predicate: (element: SpecificationBlockAssessment) => boolean) => boolean",
+        "filter": "(predicate: (element: SpecificationBlockAssessment) => boolean) => SpecificationBlockAssessments",
+        "map": "<U extends Equatable<U>>(transform: (element: SpecificationBlockAssessment) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly SpecificationBlockAssessment[]) => SpecificationBlockAssessments",
+        "parse": "(values: readonly SpecificationBlockAssessment[]) => Result<SpecificationBlockAssessments, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "StateMachineSketches",
+      "path": "src/refcheck/domain/state-machine-sketches.ts",
+      "nonEmpty": false,
+      "elementType": "StateMachineSketch",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => StateMachineSketch",
+        "head": "() => StateMachineSketch",
+        "tail": "() => StateMachineSketches",
+        "include": "(element: StateMachineSketch) => boolean",
+        "exists": "(predicate: (element: StateMachineSketch) => boolean) => boolean",
+        "filter": "(predicate: (element: StateMachineSketch) => boolean) => StateMachineSketches",
+        "map": "<U extends Equatable<U>>(transform: (element: StateMachineSketch) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly StateMachineSketch[]) => StateMachineSketches",
+        "parse": "(values: readonly StateMachineSketch[]) => Result<StateMachineSketches, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "StateNames",
+      "path": "src/refcheck/domain/state-names.ts",
+      "nonEmpty": false,
+      "elementType": "StateName",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => StateName",
+        "head": "() => StateName",
+        "tail": "() => StateNames",
+        "include": "(element: StateName) => boolean",
+        "exists": "(predicate: (element: StateName) => boolean) => boolean",
+        "filter": "(predicate: (element: StateName) => boolean) => StateNames",
+        "map": "<U extends Equatable<U>>(transform: (element: StateName) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly StateName[]) => StateNames",
+        "parse": "(values: readonly StateName[]) => Result<StateNames, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "UnitDeclarations",
+      "path": "src/refcheck/domain/unit-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "UnitDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => UnitDeclaration",
+        "head": "() => UnitDeclaration",
+        "tail": "() => UnitDeclarations",
+        "include": "(element: UnitDeclaration) => boolean",
+        "exists": "(predicate: (element: UnitDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: UnitDeclaration) => boolean) => UnitDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: UnitDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly UnitDeclaration[]) => UnitDeclarations",
+        "parse": "(values: readonly UnitDeclaration[]) => Result<UnitDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "UnitNames",
+      "path": "src/refcheck/domain/unit-names.ts",
+      "nonEmpty": false,
+      "elementType": "UnitName",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => UnitName",
+        "head": "() => UnitName",
+        "tail": "() => UnitNames",
+        "include": "(element: UnitName) => boolean",
+        "exists": "(predicate: (element: UnitName) => boolean) => boolean",
+        "filter": "(predicate: (element: UnitName) => boolean) => UnitNames",
+        "map": "<U extends Equatable<U>>(transform: (element: UnitName) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly UnitName[]) => UnitNames",
+        "parse": "(values: readonly UnitName[]) => Result<UnitNames, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "WitnessReferences",
+      "path": "src/refcheck/domain/witness-references.ts",
+      "nonEmpty": false,
+      "elementType": "WitnessReference",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => WitnessReference",
+        "head": "() => WitnessReference",
+        "tail": "() => WitnessReferences",
+        "include": "(element: WitnessReference) => boolean",
+        "exists": "(predicate: (element: WitnessReference) => boolean) => boolean",
+        "filter": "(predicate: (element: WitnessReference) => boolean) => WitnessReferences",
+        "map": "<U extends Equatable<U>>(transform: (element: WitnessReference) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly WitnessReference[]) => WitnessReferences",
+        "parse": "(values: readonly WitnessReference[]) => Result<WitnessReferences, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "BackgroundAssumptions",
+      "path": "src/requirements/domain/background-assumptions.ts",
+      "nonEmpty": false,
+      "elementType": "BackgroundAssumption",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => BackgroundAssumption",
+        "head": "() => BackgroundAssumption",
+        "tail": "() => BackgroundAssumptions",
+        "include": "(element: BackgroundAssumption) => boolean",
+        "exists": "(predicate: (element: BackgroundAssumption) => boolean) => boolean",
+        "filter": "(predicate: (element: BackgroundAssumption) => boolean) => BackgroundAssumptions",
+        "map": "<U extends Equatable<U>>(transform: (element: BackgroundAssumption) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly BackgroundAssumption[]) => BackgroundAssumptions",
+        "parse": "(values: readonly BackgroundAssumption[]) => Result<BackgroundAssumptions, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "CrossCheckedEntries",
+      "path": "src/requirements/domain/cross-checked-entries.ts",
+      "nonEmpty": false,
+      "elementType": "CrossCheckedEntry",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => CrossCheckedEntry",
+        "head": "() => CrossCheckedEntry",
+        "tail": "() => CrossCheckedEntries",
+        "include": "(element: CrossCheckedEntry) => boolean",
+        "exists": "(predicate: (element: CrossCheckedEntry) => boolean) => boolean",
+        "filter": "(predicate: (element: CrossCheckedEntry) => boolean) => CrossCheckedEntries",
+        "map": "<U extends Equatable<U>>(transform: (element: CrossCheckedEntry) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly CrossCheckedEntry[]) => CrossCheckedEntries",
+        "parse": "(values: readonly CrossCheckedEntry[]) => Result<CrossCheckedEntries, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "FunctionalRequirementReferenceClaims",
+      "path": "src/requirements/domain/functional-requirement-reference-claims.ts",
+      "nonEmpty": false,
+      "elementType": "FunctionalRequirementReferenceClaim",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => FunctionalRequirementReferenceClaim",
+        "head": "() => FunctionalRequirementReferenceClaim",
+        "tail": "() => FunctionalRequirementReferenceClaims",
+        "include": "(element: FunctionalRequirementReferenceClaim) => boolean",
+        "exists": "(predicate: (element: FunctionalRequirementReferenceClaim) => boolean) => boolean",
+        "filter": "(predicate: (element: FunctionalRequirementReferenceClaim) => boolean) => FunctionalRequirementReferenceClaims",
+        "map": "<U extends Equatable<U>>(transform: (element: FunctionalRequirementReferenceClaim) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly FunctionalRequirementReferenceClaim[]) => FunctionalRequirementReferenceClaims",
+        "parse": "(values: readonly FunctionalRequirementReferenceClaim[]) => Result<FunctionalRequirementReferenceClaims, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "FunctionalRequirementReferenceIndex",
+      "path": "src/requirements/domain/functional-requirement-reference-index.ts",
+      "nonEmpty": false,
+      "elementType": "FunctionalRequirementReferenceClaim",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => FunctionalRequirementReferenceClaim",
+        "head": "() => FunctionalRequirementReferenceClaim",
+        "tail": "() => FunctionalRequirementReferenceIndex",
+        "include": "(element: FunctionalRequirementReferenceClaim) => boolean",
+        "exists": "(predicate: (element: FunctionalRequirementReferenceClaim) => boolean) => boolean",
+        "filter": "(predicate: (element: FunctionalRequirementReferenceClaim) => boolean) => FunctionalRequirementReferenceIndex",
+        "map": "<U extends Equatable<U>>(transform: (element: FunctionalRequirementReferenceClaim) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(claims: readonly FunctionalRequirementReferenceClaim[]) => FunctionalRequirementReferenceIndex",
+        "parse": "(claims: readonly FunctionalRequirementReferenceClaim[]) => Result<FunctionalRequirementReferenceIndex, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "IntermediateRepresentationAttributeCatalog",
+      "path": "src/requirements/domain/intermediate-representation-attribute-catalog.ts",
+      "nonEmpty": false,
+      "elementType": "IntermediateRepresentationAttributeEntry",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => IntermediateRepresentationAttributeEntry",
+        "head": "() => IntermediateRepresentationAttributeEntry",
+        "tail": "() => IntermediateRepresentationAttributeCatalog",
+        "include": "(element: IntermediateRepresentationAttributeEntry) => boolean",
+        "exists": "(predicate: (element: IntermediateRepresentationAttributeEntry) => boolean) => boolean",
+        "filter": "(predicate: (element: IntermediateRepresentationAttributeEntry) => boolean) => IntermediateRepresentationAttributeCatalog",
+        "map": "<U extends Equatable<U>>(transform: (element: IntermediateRepresentationAttributeEntry) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(declarations: IntermediateRepresentationEntityDeclarations) => IntermediateRepresentationAttributeCatalog",
+        "parse": "(declarations: IntermediateRepresentationEntityDeclarations) => Result<IntermediateRepresentationAttributeCatalog, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "IntermediateRepresentationAttributeDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-attribute-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "IntermediateRepresentationAttributeDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => IntermediateRepresentationAttributeDeclaration",
+        "head": "() => IntermediateRepresentationAttributeDeclaration",
+        "tail": "() => IntermediateRepresentationAttributeDeclarations",
+        "include": "(element: IntermediateRepresentationAttributeDeclaration) => boolean",
+        "exists": "(predicate: (element: IntermediateRepresentationAttributeDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: IntermediateRepresentationAttributeDeclaration) => boolean) => IntermediateRepresentationAttributeDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: IntermediateRepresentationAttributeDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly IntermediateRepresentationAttributeDeclaration[]) => IntermediateRepresentationAttributeDeclarations",
+        "parse": "(values: readonly IntermediateRepresentationAttributeDeclaration[]) => Result<IntermediateRepresentationAttributeDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "IntermediateRepresentationBackgroundDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-background-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "IntermediateRepresentationBackgroundDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => IntermediateRepresentationBackgroundDeclaration",
+        "head": "() => IntermediateRepresentationBackgroundDeclaration",
+        "tail": "() => IntermediateRepresentationBackgroundDeclarations",
+        "include": "(element: IntermediateRepresentationBackgroundDeclaration) => boolean",
+        "exists": "(predicate: (element: IntermediateRepresentationBackgroundDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: IntermediateRepresentationBackgroundDeclaration) => boolean) => IntermediateRepresentationBackgroundDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: IntermediateRepresentationBackgroundDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly IntermediateRepresentationBackgroundDeclaration[]) => IntermediateRepresentationBackgroundDeclarations",
+        "parse": "(values: readonly IntermediateRepresentationBackgroundDeclaration[]) => Result<IntermediateRepresentationBackgroundDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "IntermediateRepresentationEntityDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-entity-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "IntermediateRepresentationEntityDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => IntermediateRepresentationEntityDeclaration",
+        "head": "() => IntermediateRepresentationEntityDeclaration",
+        "tail": "() => IntermediateRepresentationEntityDeclarations",
+        "include": "(element: IntermediateRepresentationEntityDeclaration) => boolean",
+        "exists": "(predicate: (element: IntermediateRepresentationEntityDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: IntermediateRepresentationEntityDeclaration) => boolean) => IntermediateRepresentationEntityDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: IntermediateRepresentationEntityDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly IntermediateRepresentationEntityDeclaration[]) => IntermediateRepresentationEntityDeclarations",
+        "parse": "(values: readonly IntermediateRepresentationEntityDeclaration[]) => Result<IntermediateRepresentationEntityDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "IntermediateRepresentationObligationDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-obligation-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "IntermediateRepresentationObligationDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => IntermediateRepresentationObligationDeclaration",
+        "head": "() => IntermediateRepresentationObligationDeclaration",
+        "tail": "() => IntermediateRepresentationObligationDeclarations",
+        "include": "(element: IntermediateRepresentationObligationDeclaration) => boolean",
+        "exists": "(predicate: (element: IntermediateRepresentationObligationDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: IntermediateRepresentationObligationDeclaration) => boolean) => IntermediateRepresentationObligationDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: IntermediateRepresentationObligationDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly IntermediateRepresentationObligationDeclaration[]) => IntermediateRepresentationObligationDeclarations",
+        "parse": "(values: readonly IntermediateRepresentationObligationDeclaration[]) => Result<IntermediateRepresentationObligationDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "IntermediateRepresentationScenarioDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-scenario-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "IntermediateRepresentationScenarioDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => IntermediateRepresentationScenarioDeclaration",
+        "head": "() => IntermediateRepresentationScenarioDeclaration",
+        "tail": "() => IntermediateRepresentationScenarioDeclarations",
+        "include": "(element: IntermediateRepresentationScenarioDeclaration) => boolean",
+        "exists": "(predicate: (element: IntermediateRepresentationScenarioDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: IntermediateRepresentationScenarioDeclaration) => boolean) => IntermediateRepresentationScenarioDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: IntermediateRepresentationScenarioDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly IntermediateRepresentationScenarioDeclaration[]) => IntermediateRepresentationScenarioDeclarations",
+        "parse": "(values: readonly IntermediateRepresentationScenarioDeclaration[]) => Result<IntermediateRepresentationScenarioDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "ObligationIdentifiers",
+      "path": "src/requirements/domain/obligation-identifiers.ts",
+      "nonEmpty": false,
+      "elementType": "ObligationIdentifier",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => ObligationIdentifier",
+        "head": "() => ObligationIdentifier",
+        "tail": "() => ObligationIdentifiers",
+        "include": "(element: ObligationIdentifier) => boolean",
+        "exists": "(predicate: (element: ObligationIdentifier) => boolean) => boolean",
+        "filter": "(predicate: (element: ObligationIdentifier) => boolean) => ObligationIdentifiers",
+        "map": "<U extends Equatable<U>>(transform: (element: ObligationIdentifier) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly ObligationIdentifier[]) => ObligationIdentifiers",
+        "parse": "(values: readonly ObligationIdentifier[]) => Result<ObligationIdentifiers, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "Obligations",
+      "path": "src/requirements/domain/obligations.ts",
+      "nonEmpty": false,
+      "elementType": "Obligation",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => Obligation",
+        "head": "() => Obligation",
+        "tail": "() => Obligations",
+        "include": "(element: Obligation) => boolean",
+        "exists": "(predicate: (element: Obligation) => boolean) => boolean",
+        "filter": "(predicate: (element: Obligation) => boolean) => Obligations",
+        "map": "<U extends Equatable<U>>(transform: (element: Obligation) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly Obligation[]) => Obligations",
+        "parse": "(values: readonly Obligation[]) => Result<Obligations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "QuintMachineComponents",
+      "path": "src/requirements/domain/quint-machine-components.ts",
+      "nonEmpty": false,
+      "elementType": "QuintMachineComponent",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => QuintMachineComponent",
+        "head": "() => QuintMachineComponent",
+        "tail": "() => QuintMachineComponents",
+        "include": "(element: QuintMachineComponent) => boolean",
+        "exists": "(predicate: (element: QuintMachineComponent) => boolean) => boolean",
+        "filter": "(predicate: (element: QuintMachineComponent) => boolean) => QuintMachineComponents",
+        "map": "<U extends Equatable<U>>(transform: (element: QuintMachineComponent) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly QuintMachineComponent[]) => QuintMachineComponents",
+        "parse": "(values: readonly QuintMachineComponent[]) => Result<QuintMachineComponents, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "RequirementAttributeDeclarations",
+      "path": "src/requirements/domain/requirement-attribute-declarations.ts",
+      "nonEmpty": false,
+      "elementType": "RequirementAttributeDeclaration",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => RequirementAttributeDeclaration",
+        "head": "() => RequirementAttributeDeclaration",
+        "tail": "() => RequirementAttributeDeclarations",
+        "include": "(element: RequirementAttributeDeclaration) => boolean",
+        "exists": "(predicate: (element: RequirementAttributeDeclaration) => boolean) => boolean",
+        "filter": "(predicate: (element: RequirementAttributeDeclaration) => boolean) => RequirementAttributeDeclarations",
+        "map": "<U extends Equatable<U>>(transform: (element: RequirementAttributeDeclaration) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly RequirementAttributeDeclaration[]) => RequirementAttributeDeclarations",
+        "parse": "(values: readonly RequirementAttributeDeclaration[]) => Result<RequirementAttributeDeclarations, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "SatisfiabilityModuloTheoriesEventPairProbes",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-event-pair-probes.ts",
+      "nonEmpty": false,
+      "elementType": "SatisfiabilityModuloTheoriesEventPairProbe",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => SatisfiabilityModuloTheoriesEventPairProbe",
+        "head": "() => SatisfiabilityModuloTheoriesEventPairProbe",
+        "tail": "() => SatisfiabilityModuloTheoriesEventPairProbes",
+        "include": "(element: SatisfiabilityModuloTheoriesEventPairProbe) => boolean",
+        "exists": "(predicate: (element: SatisfiabilityModuloTheoriesEventPairProbe) => boolean) => boolean",
+        "filter": "(predicate: (element: SatisfiabilityModuloTheoriesEventPairProbe) => boolean) => SatisfiabilityModuloTheoriesEventPairProbes",
+        "map": "<U extends Equatable<U>>(transform: (element: SatisfiabilityModuloTheoriesEventPairProbe) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly SatisfiabilityModuloTheoriesEventPairProbe[]) => SatisfiabilityModuloTheoriesEventPairProbes",
+        "parse": "(values: readonly SatisfiabilityModuloTheoriesEventPairProbe[]) => Result<SatisfiabilityModuloTheoriesEventPairProbes, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "SatisfiabilityModuloTheoriesQueryVerdicts",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-query-verdicts.ts",
+      "nonEmpty": false,
+      "elementType": "SatisfiabilityModuloTheoriesQueryVerdictEntry",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => SatisfiabilityModuloTheoriesQueryVerdictEntry",
+        "head": "() => SatisfiabilityModuloTheoriesQueryVerdictEntry",
+        "tail": "() => SatisfiabilityModuloTheoriesQueryVerdicts",
+        "include": "(element: SatisfiabilityModuloTheoriesQueryVerdictEntry) => boolean",
+        "exists": "(predicate: (element: SatisfiabilityModuloTheoriesQueryVerdictEntry) => boolean) => boolean",
+        "filter": "(predicate: (element: SatisfiabilityModuloTheoriesQueryVerdictEntry) => boolean) => SatisfiabilityModuloTheoriesQueryVerdicts",
+        "map": "<U extends Equatable<U>>(transform: (element: SatisfiabilityModuloTheoriesQueryVerdictEntry) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly SatisfiabilityModuloTheoriesQueryVerdictEntry[]) => SatisfiabilityModuloTheoriesQueryVerdicts",
+        "parse": "(values: readonly SatisfiabilityModuloTheoriesQueryVerdictEntry[]) => Result<SatisfiabilityModuloTheoriesQueryVerdicts, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "Scenarios",
+      "path": "src/requirements/domain/scenarios.ts",
+      "nonEmpty": false,
+      "elementType": "Scenario",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => Scenario",
+        "head": "() => Scenario",
+        "tail": "() => Scenarios",
+        "include": "(element: Scenario) => boolean",
+        "exists": "(predicate: (element: Scenario) => boolean) => boolean",
+        "filter": "(predicate: (element: Scenario) => boolean) => Scenarios",
+        "map": "<U extends Equatable<U>>(transform: (element: Scenario) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly Scenario[]) => Scenarios",
+        "parse": "(values: readonly Scenario[]) => Result<Scenarios, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "TraceState",
+      "path": "src/requirements/domain/trace-state.ts",
+      "nonEmpty": false,
+      "elementType": "TraceStateEntry",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => TraceStateEntry",
+        "head": "() => TraceStateEntry",
+        "tail": "() => TraceState",
+        "include": "(element: TraceStateEntry) => boolean",
+        "exists": "(predicate: (element: TraceStateEntry) => boolean) => boolean",
+        "filter": "(predicate: (element: TraceStateEntry) => boolean) => TraceState",
+        "map": "<U extends Equatable<U>>(transform: (element: TraceStateEntry) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(entries: readonly TraceStateEntry[]) => TraceState",
+        "parse": "(entries: readonly TraceStateEntry[]) => Result<TraceState, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "TraceStates",
+      "path": "src/requirements/domain/trace-states.ts",
+      "nonEmpty": false,
+      "elementType": "TraceState",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => TraceState",
+        "head": "() => TraceState",
+        "tail": "() => TraceStates",
+        "include": "(element: TraceState) => boolean",
+        "exists": "(predicate: (element: TraceState) => boolean) => boolean",
+        "filter": "(predicate: (element: TraceState) => boolean) => TraceStates",
+        "map": "<U extends Equatable<U>>(transform: (element: TraceState) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly TraceState[]) => TraceStates",
+        "parse": "(values: readonly TraceState[]) => Result<TraceStates, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "VerificationFindings",
+      "path": "src/requirements/domain/verification-findings.ts",
+      "nonEmpty": false,
+      "elementType": "VerificationFinding",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => VerificationFinding",
+        "head": "() => VerificationFinding",
+        "tail": "() => VerificationFindings",
+        "include": "(element: VerificationFinding) => boolean",
+        "exists": "(predicate: (element: VerificationFinding) => boolean) => boolean",
+        "filter": "(predicate: (element: VerificationFinding) => boolean) => VerificationFindings",
+        "map": "<U extends Equatable<U>>(transform: (element: VerificationFinding) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly VerificationFinding[]) => VerificationFindings",
+        "parse": "(values: readonly VerificationFinding[]) => Result<VerificationFindings, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "VerificationReports",
+      "path": "src/requirements/domain/verification-reports.ts",
+      "nonEmpty": false,
+      "elementType": "VerificationReport",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => VerificationReport",
+        "head": "() => VerificationReport",
+        "tail": "() => VerificationReports",
+        "include": "(element: VerificationReport) => boolean",
+        "exists": "(predicate: (element: VerificationReport) => boolean) => boolean",
+        "filter": "(predicate: (element: VerificationReport) => boolean) => VerificationReports",
+        "map": "<U extends Equatable<U>>(transform: (element: VerificationReport) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly VerificationReport[]) => VerificationReports",
+        "parse": "(values: readonly VerificationReport[]) => Result<VerificationReports, ParseError>"
+      },
+      "missing": []
+    },
+    {
+      "name": "VerificationSkips",
+      "path": "src/requirements/domain/verification-skips.ts",
+      "nonEmpty": false,
+      "elementType": "VerificationSkipped",
+      "iterator": true,
+      "signatures": {
+        "at": "(index: number) => VerificationSkipped",
+        "head": "() => VerificationSkipped",
+        "tail": "() => VerificationSkips",
+        "include": "(element: VerificationSkipped) => boolean",
+        "exists": "(predicate: (element: VerificationSkipped) => boolean) => boolean",
+        "filter": "(predicate: (element: VerificationSkipped) => boolean) => VerificationSkips",
+        "map": "<U extends Equatable<U>>(transform: (element: VerificationSkipped) => U) => FirstClassCollection<U>",
+        "isEmpty": "() => boolean"
+      },
+      "factories": {
+        "of": "(values: readonly VerificationSkipped[]) => VerificationSkips",
+        "parse": "(values: readonly VerificationSkipped[]) => Result<VerificationSkips, ParseError>"
+      },
+      "missing": []
+    }
+  ]
+}

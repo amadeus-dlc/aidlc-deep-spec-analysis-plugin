@@ -1,12 +1,30 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { CrossCheckedEntry } from "./cross-checked-entry.ts";
 
 // クロスチェック判定表のファーストクラスコレクション。
-export class CrossCheckedEntries implements FirstClassCollection, IterableFirstClassCollection<CrossCheckedEntry> {
+export class CrossCheckedEntries
+  extends FirstClassCollectionBase<CrossCheckedEntry, CrossCheckedEntries>
+  implements FirstClassCollection<CrossCheckedEntry>
+{
   readonly #values: readonly CrossCheckedEntry[];
 
   private constructor(values: readonly CrossCheckedEntry[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-cross-checked-entries");
+  }
+
+  protected rebuild(values: readonly CrossCheckedEntry[]): CrossCheckedEntries {
+    return new CrossCheckedEntries(values);
+  }
+
+  static parse(values: readonly CrossCheckedEntry[]): Result<CrossCheckedEntries, ParseError> {
+    return parseConstruction(() => new CrossCheckedEntries(values));
   }
 
   static of(values: readonly CrossCheckedEntry[]): CrossCheckedEntries {
@@ -23,9 +41,5 @@ export class CrossCheckedEntries implements FirstClassCollection, IterableFirstC
 
   toArray(): readonly CrossCheckedEntry[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

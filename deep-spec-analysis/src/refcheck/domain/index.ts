@@ -66,6 +66,7 @@ export { RulesOutcome } from "./rules-outcome.ts";
 export { ShapeError } from "./shape-error.ts";
 export { ShapeErrors } from "./shape-errors.ts";
 export { SiblingUnitIndex } from "./sibling-unit-index.ts";
+export { SiblingUnitIndexEntry } from "./sibling-unit-index-entry.ts";
 export { Skipped } from "./skipped.ts";
 export { Skips } from "./skips.ts";
 export { SourceIdentifier } from "./source-identifier.ts";

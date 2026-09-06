@@ -82,6 +82,16 @@ export class SatisfiabilityModuloTheoriesEventPairProbe {
     return TargetIdentifiers.of([this.#a.asTargetId(), this.#b.asTargetId()]);
   }
 
+  equals(other: SatisfiabilityModuloTheoriesEventPairProbe): boolean {
+    return (
+      this.#qOverlap.equals(other.#qOverlap) &&
+      this.#qJoint.equals(other.#qJoint) &&
+      this.#a.equals(other.#a) &&
+      this.#b.equals(other.#b) &&
+      this.#trigger.equals(other.#trigger)
+    );
+  }
+
   #overlapVerdictIn(
     results: SatisfiabilityModuloTheoriesQueryVerdicts,
   ): ReturnType<SatisfiabilityModuloTheoriesQueryVerdicts["verdictOf"]> {

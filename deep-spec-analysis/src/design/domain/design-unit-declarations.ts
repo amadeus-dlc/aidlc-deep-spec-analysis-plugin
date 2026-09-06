@@ -1,18 +1,30 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
-import { ErrorMessage, ErrorMessages } from "@deep-spec-analysis/kernel-domain";
+import { ErrorMessage, ErrorMessages, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignUnitDeclaration } from "./design-unit-declaration.ts";
 
-export class DesignUnitDeclarations
-  implements FirstClassCollection, IterableFirstClassCollection<DesignUnitDeclaration>
-{
+export class DesignUnitDeclarations extends FirstClassCollectionBase<DesignUnitDeclaration, DesignUnitDeclarations> {
   readonly #values: readonly DesignUnitDeclaration[];
 
   private constructor(values: readonly DesignUnitDeclaration[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-unit-declarations");
+  }
+
+  protected rebuild(values: readonly DesignUnitDeclaration[]): DesignUnitDeclarations {
+    return new DesignUnitDeclarations(values);
   }
 
   static of(values: readonly DesignUnitDeclaration[]): DesignUnitDeclarations {
     return new DesignUnitDeclarations(values);
+  }
+
+  static parse(values: readonly DesignUnitDeclaration[]): Result<DesignUnitDeclarations, ParseError> {
+    return parseConstruction(() => new DesignUnitDeclarations(values));
   }
 
   add(value: DesignUnitDeclaration): DesignUnitDeclarations {
@@ -39,9 +51,5 @@ export class DesignUnitDeclarations
 
   toArray(): readonly DesignUnitDeclaration[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

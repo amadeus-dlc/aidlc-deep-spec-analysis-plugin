@@ -68,6 +68,26 @@ export class RequirementAttributeDeclaration {
     return this.#max;
   }
 
+  equals(other: RequirementAttributeDeclaration): boolean {
+    const values = this.#values?.toArray();
+    const otherValues = other.#values?.toArray();
+    const valuesEqual =
+      values === undefined
+        ? otherValues === undefined
+        : otherValues !== undefined &&
+          values.length === otherValues.length &&
+          values.every((value, index) => value.equals(otherValues[index] as (typeof values)[number]));
+    const boundsEqual = (left: AttributeBound | undefined, right: AttributeBound | undefined): boolean =>
+      left === undefined ? right === undefined : right !== undefined && left.equals(right);
+    return (
+      this.#path.equals(other.#path) &&
+      this.#kind === other.#kind &&
+      boundsEqual(this.#min, other.#min) &&
+      boundsEqual(this.#max, other.#max) &&
+      valuesEqual
+    );
+  }
+
   // 種類ごとの解釈へ命じる。int には上下限（宣言がなければ undefined）、
   // enum には宣言値（なければ undefined）を渡す。
   match<T>(handlers: {

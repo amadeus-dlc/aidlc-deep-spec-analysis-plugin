@@ -14,7 +14,14 @@ import {
 } from "@deep-spec-analysis/design-domain";
 import { parseFindingsValues } from "@deep-spec-analysis/kernel-adapter";
 import { type ArtifactPath, UnitName } from "@deep-spec-analysis/kernel-domain";
-import { err, type Json, ok, type Result, traverseResult } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  combineResults,
+  err,
+  type Json,
+  ok,
+  type Result,
+  traverseResult,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 export function renderDesignReportBytes(report: DesignReport): string {
   return `${JSON.stringify(report.toDocument(), null, 2)}\n`;
@@ -52,24 +59,28 @@ export function parseSiblingDesignReportDocument(
           return parsed.ok ? ok(parsed.value) : err(JSON.stringify(parsed.error));
         });
   if (!comparisons.ok) return comparisons;
+  const collections = combineResults({
+    findings: DesignFindings.parse(findings),
+    skipped: DesignSkips.parse(skipped),
+    inputs:
+      doc.inputs === undefined
+        ? ok(null)
+        : DesignInputAnchors.parse(
+            doc.inputs.map((entry) =>
+              DesignInputAnchor.of({ artifact: entry.artifact.asString(), sha256: entry.sha256 }),
+            ),
+          ),
+    checked: checked.value === undefined ? ok(null) : CheckedUnits.parse(checked.value),
+    crossChecked: comparisons.value === null ? ok(null) : DesignCrossCheckedEntries.parse(comparisons.value),
+  });
+  if (!collections.ok) return err(JSON.stringify(collections.error));
   return ok(
     DesignReport.of({
       id: DesignReportIdentifier.of(directory, doc.backend.asString()),
       irVersion: doc.irVersion,
       irHash: doc.irHash,
       method: doc.method,
-      findings: DesignFindings.of(findings),
-      skipped: DesignSkips.of(skipped),
-      inputs:
-        doc.inputs === undefined
-          ? null
-          : DesignInputAnchors.of(
-              doc.inputs.map((entry) =>
-                DesignInputAnchor.of({ artifact: entry.artifact.asString(), sha256: entry.sha256 }),
-              ),
-            ),
-      checked: checked.value === undefined ? null : CheckedUnits.of(checked.value),
-      crossChecked: comparisons.value === null ? null : DesignCrossCheckedEntries.of(comparisons.value),
+      ...collections.value,
       unavailableReason: doc.unavailable?.reason ?? null,
     }),
   );

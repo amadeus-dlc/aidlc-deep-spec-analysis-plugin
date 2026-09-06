@@ -10,8 +10,8 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { writeFileAtomically } from "@deep-spec-analysis/kernel-adapter";
-import { ArtifactPath, ContentHash, RequirementIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import { parseRequirementIdentifiers, writeFileAtomically } from "@deep-spec-analysis/kernel-adapter";
+import { ArtifactPath, ContentHash } from "@deep-spec-analysis/kernel-domain";
 import { err, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
 import { RequirementsSource, type RequirementsSourceIdentifier } from "@deep-spec-analysis/requirements-domain";
@@ -58,11 +58,13 @@ export class RequirementsSourceRepositoryImplementation implements RequirementsS
         cause: e instanceof Error ? e.message : String(e),
       });
     }
+    const knownIds = parseRequirementIdentifiers(bytes.toString("utf-8"));
+    if (!knownIds.ok) return err({ kind: "corrupt", path: search.path, cause: JSON.stringify(knownIds.error) });
     return ok(
       RequirementsSource.of({
         id,
         sourcePath: ArtifactPath.of(search.path),
-        knownIds: RequirementIdentifiers.extractFrom(bytes.toString("utf-8")),
+        knownIds: knownIds.value,
         digest: ContentHash.ofBytes(bytes),
         sourceDocument: new Uint8Array(bytes),
       }),

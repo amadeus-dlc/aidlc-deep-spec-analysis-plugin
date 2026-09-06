@@ -40,6 +40,12 @@ export class WitnessReference {
     return this.#value;
   }
 
+  equals(other: WitnessReference): boolean {
+    return (
+      this.#artifact.equals(other.#artifact) && this.#element.equals(other.#element) && this.#value === other.#value
+    );
+  }
+
   pointsAt(artifact: string, element: string): boolean {
     return this.#artifact.asString() === artifact && this.#element.asString() === element;
   }

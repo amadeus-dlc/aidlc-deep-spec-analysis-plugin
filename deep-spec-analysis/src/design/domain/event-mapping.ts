@@ -29,6 +29,17 @@ export class EventMapping {
     });
   }
 
+  equals(other: EventMapping): boolean {
+    const left = [...this.#transitions].map((transition) => transition.asString());
+    const right = [...other.#transitions].map((transition) => transition.asString());
+    return (
+      this.#reqTrigger.equals(other.#reqTrigger) &&
+      this.#reason === other.#reason &&
+      left.length === right.length &&
+      left.every((value, index) => value === right[index])
+    );
+  }
+
   statusIn(unit: DesignUnit): RefinementStatus {
     if (this.#reason !== null) return RefinementStatus.waived(this.#reason);
     if (this.#transitions.isEmpty())

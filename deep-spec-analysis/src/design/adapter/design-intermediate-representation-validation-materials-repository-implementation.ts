@@ -173,13 +173,17 @@ function buildUnitView(
     if (!states.ok) return err(JSON.stringify(states.error));
     const id = DesignMachineIdentifier.parse(sm.id);
     if (!id.ok) return err(JSON.stringify(id.error));
+    const children = combineResults({
+      transitions: DesignTransitionDeclarations.parse(transitions),
+      ignores: DesignIgnoreDeclarations.parse(ignores),
+    });
+    if (!children.ok) return err(JSON.stringify(children.error));
     stateMachines.push(
       DesignMachineDeclaration.of({
         id: id.value,
         attrPath,
         initial: states.value,
-        transitions: DesignTransitionDeclarations.of(transitions),
-        ignores: DesignIgnoreDeclarations.of(ignores),
+        ...children.value,
       }),
     );
   }
@@ -232,15 +236,19 @@ function buildUnitView(
 
   const targets = traverseResult(unformalizedTargets, TargetIdentifier.parse);
   if (!targets.ok) return err(JSON.stringify(targets.error));
+  const declarations = combineResults({
+    obligations: DesignObligationDeclarations.parse(obligations),
+    stateMachines: DesignMachineDeclarations.parse(stateMachines),
+    scenarios: DesignScenarioDeclarations.parse(scenarios),
+    background: DesignBackgroundDeclarations.parse(background),
+    unformalizedTargets: UnformalizedTargets.parse(targets.value),
+  });
+  if (!declarations.ok) return err(JSON.stringify(declarations.error));
   return ok(
     DesignUnitDeclaration.of({
       unit: unit.value,
       entities: entities.value,
-      obligations: DesignObligationDeclarations.of(obligations),
-      stateMachines: DesignMachineDeclarations.of(stateMachines),
-      scenarios: DesignScenarioDeclarations.of(scenarios),
-      background: DesignBackgroundDeclarations.of(background),
-      unformalizedTargets: UnformalizedTargets.of(targets.value),
+      ...declarations.value,
       directoryExists,
       rules: rules.value,
     }),
@@ -335,12 +343,14 @@ export class DesignIntermediateRepresentationValidationMaterialsRepositoryImplem
       }
     }
 
+    const declarations = DesignUnitDeclarations.parse(units);
+    if (!declarations.ok) return corrupt(JSON.stringify(declarations.error));
     return ok(
       DesignIntermediateRepresentationValidationMaterials.of({
         id,
         irVersion: irVersion.value,
         schemaErrors: messages.value,
-        units: DesignUnitDeclarations.of(units),
+        units: declarations.value,
         sourceDocument: new Uint8Array(bytes),
       }),
     );

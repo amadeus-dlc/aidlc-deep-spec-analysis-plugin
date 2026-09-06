@@ -1,9 +1,15 @@
-import type {
-  ArtifactPath,
-  FirstClassCollection,
-  IterableFirstClassCollection,
-  UnitName,
+import {
+  type ArtifactPath,
+  type FirstClassCollection,
+  FirstClassCollectionBase,
+  type UnitName,
 } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DomainEntitySketch } from "./domain-entity-sketch.ts";
 import { XS_3 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
@@ -11,11 +17,23 @@ import type { SiblingUnitIndex } from "./sibling-unit-index.ts";
 
 // domain-design 側素描のコレクション。名前順の整列と正規化名での一意化
 // （XS 検査の凍結挙動）を所有する。
-export class DomainEntitySketches implements FirstClassCollection, IterableFirstClassCollection<DomainEntitySketch> {
+export class DomainEntitySketches
+  extends FirstClassCollectionBase<DomainEntitySketch, DomainEntitySketches>
+  implements FirstClassCollection<DomainEntitySketch>
+{
   readonly #values: readonly DomainEntitySketch[];
 
   private constructor(values: readonly DomainEntitySketch[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-domain-entity-sketches");
+  }
+
+  protected rebuild(values: readonly DomainEntitySketch[]): DomainEntitySketches {
+    return new DomainEntitySketches(values);
+  }
+
+  static parse(values: readonly DomainEntitySketch[]): Result<DomainEntitySketches, ParseError> {
+    return parseConstruction(() => new DomainEntitySketches(values));
   }
 
   static of(values: readonly DomainEntitySketch[]): DomainEntitySketches {
@@ -67,9 +85,5 @@ export class DomainEntitySketches implements FirstClassCollection, IterableFirst
         "the unit for this functional-design record could not be determined from its path",
       );
     }
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

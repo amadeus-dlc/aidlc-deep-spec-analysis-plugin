@@ -47,6 +47,15 @@ export class SpecificationBlockAssessment {
     return `contract:block-${this.#index.asNumber()}`;
   }
 
+  equals(other: SpecificationBlockAssessment): boolean {
+    return (
+      this.#index.equals(other.#index) &&
+      this.#line.equals(other.#line) &&
+      this.#issue === other.#issue &&
+      this.#error === other.#error
+    );
+  }
+
   locationLabel(): string {
     return `yaml fence #${this.#index.asNumber()} (line ${this.#line.asNumber()})`;
   }

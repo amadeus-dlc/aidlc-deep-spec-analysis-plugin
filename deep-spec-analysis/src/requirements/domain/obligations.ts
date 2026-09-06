@@ -1,13 +1,35 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
-import { type KeySet, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import {
+  type FirstClassCollection,
+  FirstClassCollectionBase,
+  type KeySet,
+  TargetIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { Obligation } from "./obligation.ts";
 import type { ObligationIdentifier } from "./obligation-identifier.ts";
 
-export class Obligations implements FirstClassCollection, IterableFirstClassCollection<Obligation> {
+export class Obligations
+  extends FirstClassCollectionBase<Obligation, Obligations>
+  implements FirstClassCollection<Obligation>
+{
   readonly #values: readonly Obligation[];
 
   private constructor(values: readonly Obligation[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-obligations");
+  }
+
+  protected rebuild(values: readonly Obligation[]): Obligations {
+    return new Obligations(values);
+  }
+
+  static parse(values: readonly Obligation[]): Result<Obligations, ParseError> {
+    return parseConstruction(() => new Obligations(values));
   }
 
   static of(values: readonly Obligation[]): Obligations {
@@ -40,9 +62,5 @@ export class Obligations implements FirstClassCollection, IterableFirstClassColl
 
   toArray(): readonly Obligation[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

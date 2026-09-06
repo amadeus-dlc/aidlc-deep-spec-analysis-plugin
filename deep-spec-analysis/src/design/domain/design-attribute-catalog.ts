@@ -1,4 +1,3 @@
-import type { FirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import {
   AttributePath,
   type DeclaredBindings,
@@ -7,6 +6,7 @@ import {
   ErrorMessages,
   type Expression,
   ExpressionTree,
+  FirstClassCollectionBase,
   KeyedIndex,
 } from "@deep-spec-analysis/kernel-domain";
 import {
@@ -16,14 +16,22 @@ import {
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
 import { AttributePaths } from "./attribute-paths.ts";
+import { DesignAttributeCatalogEntry } from "./design-attribute-catalog-entry.ts";
 import type { DesignAttributeDeclaration } from "./design-attribute-declaration.ts";
-import type { DesignEntityDeclarations } from "./design-entity-declarations.ts";
+import { DesignAttributeDeclarations } from "./design-attribute-declarations.ts";
+import { DesignEntityDeclaration } from "./design-entity-declaration.ts";
+import { DesignEntityDeclarations } from "./design-entity-declarations.ts";
 
-export class DesignAttributeCatalog implements FirstClassCollection {
+export class DesignAttributeCatalog extends FirstClassCollectionBase<
+  DesignAttributeCatalogEntry,
+  DesignAttributeCatalog
+> {
   readonly #declarations: DesignEntityDeclarations;
   readonly #byPath: KeyedIndex<AttributePath, DesignAttributeDeclaration>;
+  readonly #entries: readonly DesignAttributeCatalogEntry[];
 
   private constructor(declarations: DesignEntityDeclarations) {
+    super();
     let count = 0;
     for (const entity of declarations) {
       if (++count > 65_536) throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
@@ -35,14 +43,40 @@ export class DesignAttributeCatalog implements FirstClassCollection {
     if (declarations.hasAmbiguousAttributes())
       throw new IllegalArgumentException({ kind: "ambiguous-design-attributes" });
     const attributes = new Map<string, DesignAttributeDeclaration>();
+    const entries: DesignAttributeCatalogEntry[] = [];
     for (const entity of declarations)
       entity.inspectAttributes((path, attribute) => {
         attributes.set(path, attribute);
+        entries.push(DesignAttributeCatalogEntry.of(entity.name(), attribute));
       });
     this.#declarations = declarations;
+    this.#entries = Object.freeze(entries);
     this.#byPath = KeyedIndex.of(
       [...attributes].map(([path, attribute]) => [AttributePath.of(path), attribute] as const),
     );
+  }
+
+  protected rebuild(values: readonly DesignAttributeCatalogEntry[]): DesignAttributeCatalog {
+    const selectedByOwner = new Map<string, Set<DesignAttributeDeclaration>>();
+    for (const entry of values) {
+      const selected = selectedByOwner.get(entry.owner().asString()) ?? new Set<DesignAttributeDeclaration>();
+      selected.add(entry.attribute());
+      selectedByOwner.set(entry.owner().asString(), selected);
+    }
+    const declarations = [...this.#declarations].map((entity) =>
+      DesignEntityDeclaration.of({
+        name: entity.name(),
+        ...(entity.description() !== undefined ? { description: entity.description() } : {}),
+        attributes: DesignAttributeDeclarations.of(
+          [...entity.attributes()].filter((attribute) => selectedByOwner.get(entity.name().asString())?.has(attribute)),
+        ),
+      }),
+    );
+    return new DesignAttributeCatalog(DesignEntityDeclarations.of(declarations));
+  }
+
+  *[Symbol.iterator](): Iterator<DesignAttributeCatalogEntry> {
+    yield* this.#entries;
   }
 
   #attributeAt(path: string): DesignAttributeDeclaration | undefined {
@@ -126,9 +160,5 @@ export class DesignAttributeCatalog implements FirstClassCollection {
         );
     }
     return ErrorMessages.collect(errors.map(ErrorMessage.parse));
-  }
-
-  isEmpty(): boolean {
-    return this.#byPath.isEmpty();
   }
 }

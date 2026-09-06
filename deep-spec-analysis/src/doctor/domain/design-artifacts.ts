@@ -1,6 +1,6 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
 import {
-  IllegalArgumentException,
+  boundedCollectionSnapshot,
   type ParseError,
   parseConstruction,
   type Result,
@@ -8,12 +8,18 @@ import {
 import type { DesignArtifactReference } from "./design-artifact-reference.ts";
 
 // doctor一回の対象台帳。後続の観測数も同じ65,536件以内に保つ。
-export class DesignArtifacts implements FirstClassCollection, IterableFirstClassCollection<DesignArtifactReference> {
+export class DesignArtifacts
+  extends FirstClassCollectionBase<DesignArtifactReference, DesignArtifacts>
+  implements FirstClassCollection<DesignArtifactReference>
+{
   readonly #values: readonly DesignArtifactReference[];
   private constructor(values: readonly DesignArtifactReference[]) {
-    if (values.length > 65_536)
-      throw new IllegalArgumentException({ kind: "too-many-design-artifacts", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-artifacts");
+  }
+
+  protected rebuild(values: readonly DesignArtifactReference[]): DesignArtifacts {
+    return new DesignArtifacts(values);
   }
   static of(values: readonly DesignArtifactReference[]): DesignArtifacts {
     return new DesignArtifacts(values);
@@ -23,9 +29,5 @@ export class DesignArtifacts implements FirstClassCollection, IterableFirstClass
   }
   *[Symbol.iterator](): Iterator<DesignArtifactReference> {
     yield* this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

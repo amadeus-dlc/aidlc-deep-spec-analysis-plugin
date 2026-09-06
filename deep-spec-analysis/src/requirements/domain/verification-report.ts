@@ -283,6 +283,25 @@ export class VerificationReport {
     return this.#crossChecked;
   }
 
+  equals(other: VerificationReport): boolean {
+    const sameValues = <T extends { equals(value: T): boolean }>(left: readonly T[], right: readonly T[]): boolean =>
+      left.length === right.length && left.every((value, index) => value.equals(right[index] as T));
+    const crossCheckedEqual =
+      this.#crossChecked === null
+        ? other.#crossChecked === null
+        : other.#crossChecked !== null && sameValues(this.#crossChecked.toArray(), other.#crossChecked.toArray());
+    return (
+      this.#id.equals(other.#id) &&
+      this.#irVersion.equals(other.#irVersion) &&
+      this.#irHash.equals(other.#irHash) &&
+      this.#method.equals(other.#method) &&
+      sameValues(this.#findings.toArray(), other.#findings.toArray()) &&
+      sameValues(this.#skipped.toArray(), other.#skipped.toArray()) &&
+      crossCheckedEqual &&
+      this.#unavailableReason === other.#unavailableReason
+    );
+  }
+
   unavailableReason(): string | null {
     return this.#unavailableReason;
   }

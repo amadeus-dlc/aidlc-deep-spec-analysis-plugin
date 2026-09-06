@@ -13,6 +13,7 @@ export { type MarkdownTable, parseMarkdownTables } from "./markdown-table.ts";
 export type { ProcessLiveness } from "./process-liveness.ts";
 export { readIfExists } from "./read-if-exists.ts";
 export { findRecordRoot, relArtifact } from "./record-root.ts";
+export { parseRequirementIdentifiers } from "./requirement-identifiers-parser.ts";
 export type { SchemaUnreadable } from "./schema-unreadable.ts";
 export { parseFlags } from "./sensor-flags.ts";
 export { smtIntOf, smtLit, smtName, smtVar } from "./smt-symbols.ts";

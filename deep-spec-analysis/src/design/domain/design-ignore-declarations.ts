@@ -1,17 +1,33 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignIgnoreDeclaration } from "./design-ignore-declaration.ts";
 
-export class DesignIgnoreDeclarations
-  implements FirstClassCollection, IterableFirstClassCollection<DesignIgnoreDeclaration>
-{
+export class DesignIgnoreDeclarations extends FirstClassCollectionBase<
+  DesignIgnoreDeclaration,
+  DesignIgnoreDeclarations
+> {
   readonly #values: readonly DesignIgnoreDeclaration[];
 
   private constructor(values: readonly DesignIgnoreDeclaration[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-ignore-declarations");
+  }
+
+  protected rebuild(values: readonly DesignIgnoreDeclaration[]): DesignIgnoreDeclarations {
+    return new DesignIgnoreDeclarations(values);
   }
 
   static of(values: readonly DesignIgnoreDeclaration[]): DesignIgnoreDeclarations {
     return new DesignIgnoreDeclarations(values);
+  }
+
+  static parse(values: readonly DesignIgnoreDeclaration[]): Result<DesignIgnoreDeclarations, ParseError> {
+    return parseConstruction(() => new DesignIgnoreDeclarations(values));
   }
 
   add(value: DesignIgnoreDeclaration): DesignIgnoreDeclarations {
@@ -24,9 +40,5 @@ export class DesignIgnoreDeclarations
 
   toArray(): readonly DesignIgnoreDeclaration[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

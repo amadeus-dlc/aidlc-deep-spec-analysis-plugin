@@ -1,18 +1,34 @@
-import type {
-  ArtifactPath,
-  FirstClassCollection,
-  IterableFirstClassCollection,
+import {
+  type ArtifactPath,
+  type FirstClassCollection,
+  FirstClassCollectionBase,
 } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { SpecificationBlockAssessment } from "./specification-block-assessment.ts";
 
 export class SpecificationBlockAssessments
-  implements FirstClassCollection, IterableFirstClassCollection<SpecificationBlockAssessment>
+  extends FirstClassCollectionBase<SpecificationBlockAssessment, SpecificationBlockAssessments>
+  implements FirstClassCollection<SpecificationBlockAssessment>
 {
   readonly #values: readonly SpecificationBlockAssessment[];
 
   private constructor(values: readonly SpecificationBlockAssessment[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-specification-block-assessments");
+  }
+
+  protected rebuild(values: readonly SpecificationBlockAssessment[]): SpecificationBlockAssessments {
+    return new SpecificationBlockAssessments(values);
+  }
+
+  static parse(values: readonly SpecificationBlockAssessment[]): Result<SpecificationBlockAssessments, ParseError> {
+    return parseConstruction(() => new SpecificationBlockAssessments(values));
   }
 
   static of(values: readonly SpecificationBlockAssessment[]): SpecificationBlockAssessments {
@@ -36,9 +52,5 @@ export class SpecificationBlockAssessments
     for (const block of this) {
       block.check(report, artifact);
     }
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

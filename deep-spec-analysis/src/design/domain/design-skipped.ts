@@ -22,6 +22,15 @@ export class DesignSkipped {
     return new DesignSkipped(props);
   }
 
+  equals(other: DesignSkipped): boolean {
+    return (
+      this.#target.equals(other.#target) &&
+      this.#reason.asString() === other.#reason.asString() &&
+      this.#unit.equals(other.#unit) &&
+      this.#detail === other.#detail
+    );
+  }
+
   target(): TargetIdentifier {
     return this.#target;
   }

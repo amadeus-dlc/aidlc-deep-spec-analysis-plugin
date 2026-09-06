@@ -15,6 +15,10 @@ export class UnmappedTarget {
     return new UnmappedTarget(props.target, props.reason);
   }
 
+  equals(other: UnmappedTarget): boolean {
+    return this.#target.equals(other.#target) && this.#reason === other.#reason;
+  }
+
   isFor(token: string): boolean {
     return this.#target.asString() === token;
   }

@@ -4,8 +4,9 @@
 // RPC クライアント・永続化はここに置かない——それらはインターフェイス
 // アダプタ層のゲートウェイ責務である。node への依存も持たない。
 
+export { boundedCollectionSnapshot } from "./bounded-collection-snapshot.ts";
 export { boundedValueSnapshot } from "./bounded-value-snapshot.ts";
-export { canonicalStringify } from "./canonical-json.ts";
+export { canonicalStringify, jsonEquals } from "./canonical-json.ts";
 export { compareCanonically, sortedUniqueCanonically } from "./canonical-order.ts";
 export { IllegalArgumentException } from "./illegal-argument-exception.ts";
 export { isObject, type Json, strArr } from "./json.ts";

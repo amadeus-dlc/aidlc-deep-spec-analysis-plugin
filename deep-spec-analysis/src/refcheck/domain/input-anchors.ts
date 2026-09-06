@@ -1,13 +1,31 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { InputAnchor } from "./input-anchor.ts";
 
 // inputs[] のファーストクラスコレクション。artifact 順の整列（irHash の
 // 材料になる凍結正準形）という集合の知識を所有する。
-export class InputAnchors implements FirstClassCollection, IterableFirstClassCollection<InputAnchor> {
+export class InputAnchors
+  extends FirstClassCollectionBase<InputAnchor, InputAnchors>
+  implements FirstClassCollection<InputAnchor>
+{
   readonly #values: readonly InputAnchor[];
 
   private constructor(values: readonly InputAnchor[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-input-anchors");
+  }
+
+  protected rebuild(values: readonly InputAnchor[]): InputAnchors {
+    return new InputAnchors(values);
+  }
+
+  static parse(values: readonly InputAnchor[]): Result<InputAnchors, ParseError> {
+    return parseConstruction(() => new InputAnchors(values));
   }
 
   static of(values: readonly InputAnchor[]): InputAnchors {
@@ -32,9 +50,5 @@ export class InputAnchors implements FirstClassCollection, IterableFirstClassCol
 
   toArray(): readonly InputAnchor[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

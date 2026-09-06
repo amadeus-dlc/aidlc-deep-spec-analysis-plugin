@@ -21,6 +21,7 @@ import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredObligation } from "./lowered-obligation.ts";
 import { LoweredOrigin } from "./lowered-origin.ts";
 import { LoweredOriginReference } from "./lowered-origin-reference.ts";
+import { sameExpression } from "./value-equality.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type DesignTransitionParam = {
@@ -58,6 +59,17 @@ export class DesignTransition {
 
   static of(props: DesignTransitionParam): DesignTransition {
     return new DesignTransition(props);
+  }
+
+  equals(other: DesignTransition): boolean {
+    return (
+      this.#id.equals(other.#id) &&
+      this.#from === other.#from &&
+      this.#to === other.#to &&
+      this.#trigger.equals(other.#trigger) &&
+      sameExpression(this.#guard, other.#guard) &&
+      sameExpression(this.#effect, other.#effect)
+    );
   }
 
   id(): DesignTransitionIdentifier {

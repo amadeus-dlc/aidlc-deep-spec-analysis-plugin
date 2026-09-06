@@ -14,6 +14,10 @@ export class DesignAssignment {
     return new DesignAssignment(target, rightHandSide);
   }
 
+  equals(other: DesignAssignment): boolean {
+    return this.#target.equals(other.#target) && this.#rightHandSide.equals(other.#rightHandSide);
+  }
+
   target(): AttributePath {
     return this.#target;
   }

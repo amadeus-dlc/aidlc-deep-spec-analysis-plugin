@@ -186,7 +186,6 @@ import {
   AttributeKind,
   FindingKind,
   FunctionalRequirementReferences,
-  KeyedIndex,
   UnitName,
 } from "@deep-spec-analysis/kernel-domain";
 
@@ -263,7 +262,7 @@ const emptyDesignCollections = [
   ["ReachabilityPlan", Design.ReachabilityPlan.of([])],
   ["RefinementAttributes", Design.RefinementAttributes.of([])],
   ["RefinementObligations", Design.RefinementObligations.of([])],
-  ["RefinementQueryVerdicts", Design.RefinementQueryVerdicts.of(KeyedIndex.empty())],
+  ["RefinementQueryVerdicts", Design.RefinementQueryVerdicts.of([])],
   ["RefinementQuintInvariants", Design.RefinementQuintInvariants.of([])],
   ["RefinementScenarios", Design.RefinementScenarios.of([])],
   ["RefinementUnitMaps", Design.RefinementUnitMaps.of([])],

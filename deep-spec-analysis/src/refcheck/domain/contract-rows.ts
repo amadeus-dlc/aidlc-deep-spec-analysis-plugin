@@ -2,20 +2,39 @@
 // 解析（markdown テーブル/fence/YAML 歩き）はアダプタのパーサが行う。
 // フィールドはドメインプリミティブ、集まりはファーストクラスコレクション。
 
-import type {
-  ArtifactPath,
-  FirstClassCollection,
-  IterableFirstClassCollection,
+import {
+  type ArtifactPath,
+  type FirstClassCollection,
+  FirstClassCollectionBase,
 } from "@deep-spec-analysis/kernel-domain";
+
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { ContractRow } from "./contract-row.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { UnitDeclarations } from "./unit-declarations.ts";
 
-export class ContractRows implements FirstClassCollection, IterableFirstClassCollection<ContractRow> {
+export class ContractRows
+  extends FirstClassCollectionBase<ContractRow, ContractRows>
+  implements FirstClassCollection<ContractRow>
+{
   readonly #values: readonly ContractRow[];
 
   private constructor(values: readonly ContractRow[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-contract-rows");
+  }
+
+  protected rebuild(values: readonly ContractRow[]): ContractRows {
+    return new ContractRows(values);
+  }
+
+  static parse(values: readonly ContractRow[]): Result<ContractRows, ParseError> {
+    return parseConstruction(() => new ContractRows(values));
   }
 
   static of(values: readonly ContractRow[]): ContractRows {
@@ -50,9 +69,5 @@ export class ContractRows implements FirstClassCollection, IterableFirstClassCol
     for (const row of this) {
       row.checkPartiesDeclared(declared, report, artifact, depArtifact);
     }
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

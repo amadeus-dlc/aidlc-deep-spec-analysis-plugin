@@ -1,12 +1,30 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { BackgroundAssumption } from "./background-assumption.ts";
 
 // 背景仮定のファーストクラスコレクション。
-export class BackgroundAssumptions implements FirstClassCollection, IterableFirstClassCollection<BackgroundAssumption> {
+export class BackgroundAssumptions
+  extends FirstClassCollectionBase<BackgroundAssumption, BackgroundAssumptions>
+  implements FirstClassCollection<BackgroundAssumption>
+{
   readonly #values: readonly BackgroundAssumption[];
 
   private constructor(values: readonly BackgroundAssumption[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-background-assumptions");
+  }
+
+  protected rebuild(values: readonly BackgroundAssumption[]): BackgroundAssumptions {
+    return new BackgroundAssumptions(values);
+  }
+
+  static parse(values: readonly BackgroundAssumption[]): Result<BackgroundAssumptions, ParseError> {
+    return parseConstruction(() => new BackgroundAssumptions(values));
   }
 
   static of(values: readonly BackgroundAssumption[]): BackgroundAssumptions {
@@ -23,9 +41,5 @@ export class BackgroundAssumptions implements FirstClassCollection, IterableFirs
 
   toArray(): readonly BackgroundAssumption[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

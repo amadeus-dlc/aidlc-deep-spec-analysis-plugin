@@ -158,6 +158,8 @@ export function parseDesignModel(
         initial: flatMapResult(traverseResult(strArr(sm.initial), InitialState.parse), InitialStates.parse),
         entity: DesignEntityName.parse(sm.entity),
         attribute: DesignAttributeName.parse(sm.attribute),
+        transitions: DesignTransitions.parse(transitions),
+        ignores: DesignIgnores.parse(ignores),
       });
       if (!parsed.ok) return err(JSON.stringify(parsed.error));
       machines.push(
@@ -166,8 +168,8 @@ export function parseDesignModel(
           entity: parsed.value.entity,
           attribute: parsed.value.attribute,
           initial: parsed.value.initial,
-          transitions: DesignTransitions.of(transitions),
-          ignores: DesignIgnores.of(ignores),
+          transitions: parsed.value.transitions,
+          ignores: parsed.value.ignores,
           deterministic: sm.deterministic !== false,
         }),
       );
@@ -219,17 +221,23 @@ export function parseDesignModel(
       if (!constructed.ok) return err(JSON.stringify(constructed.error));
       background.push(constructed.value);
     }
+    const collections = combineResults({
+      obligations: DesignObligations.parse(obligations),
+      machines: DesignMachines.parse(machines),
+      scenarios: DesignScenarios.parse(scenarios),
+      background: DesignBackgroundAssumptions.parse(background),
+    });
+    if (!collections.ok) return err(JSON.stringify(collections.error));
     units.push(
       DesignUnit.of({
         unit: unit.value,
         catalog: catalog.value,
-        obligations: DesignObligations.of(obligations),
-        machines: DesignMachines.of(machines),
-        scenarios: DesignScenarios.of(scenarios),
-        background: DesignBackgroundAssumptions.of(background),
+        ...collections.value,
       }),
     );
   }
   if (units.length === 0) return err("design IR carries no parseable units");
-  return ok({ irVersion: irVersion.value, units: DesignUnits.of(units) });
+  const declaredUnits = DesignUnits.parse(units);
+  if (!declaredUnits.ok) return err(JSON.stringify(declaredUnits.error));
+  return ok({ irVersion: irVersion.value, units: declaredUnits.value });
 }

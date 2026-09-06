@@ -108,4 +108,20 @@ export class ComponentEntity {
   hasIdentifier(): boolean {
     return this.#identifier !== null;
   }
+
+  equals(other: ComponentEntity): boolean {
+    const references = this.#references.toArray();
+    const otherReferences = other.#references.toArray();
+    const identifiersEqual =
+      this.#identifier === null
+        ? other.#identifier === null
+        : other.#identifier !== null && this.#identifier.equals(other.#identifier);
+    return (
+      this.#name.equals(other.#name) &&
+      this.#element.equals(other.#element) &&
+      identifiersEqual &&
+      references.length === otherReferences.length &&
+      references.every((reference, index) => reference.equals(otherReferences[index] as (typeof references)[number]))
+    );
+  }
 }

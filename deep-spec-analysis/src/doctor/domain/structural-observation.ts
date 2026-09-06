@@ -24,4 +24,13 @@ export class StructuralObservation {
   artifact(): DesignArtifactReference {
     return this.#artifact;
   }
+
+  equals(other: StructuralObservation): boolean {
+    return (
+      this.#artifact.equals(other.#artifact) &&
+      (this.#findings === null
+        ? other.#findings === null
+        : other.#findings !== null && this.#findings.asNumber() === other.#findings.asNumber())
+    );
+  }
 }

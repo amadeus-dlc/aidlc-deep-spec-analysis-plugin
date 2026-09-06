@@ -1,6 +1,7 @@
 import {
   findRecordRoot,
   listSubdirectories,
+  parseRequirementIdentifiers,
   readIfExists,
   relArtifact,
   writeFileAtomically,
@@ -16,7 +17,7 @@ import {
 
 import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { ArtifactPath, ContentHash, RequirementIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import { ArtifactPath, ContentHash } from "@deep-spec-analysis/kernel-domain";
 import { err, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 
 import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
@@ -58,20 +59,25 @@ export class DesignRecordRepositoryImplementation implements DesignRecordReposit
     const input = (p: string, text: string): InputAnchor =>
       InputAnchor.of({ artifact: rel(p), sha256: ContentHash.ofText(text) });
 
+    let contractSummary: NonNullable<Parameters<typeof DesignRecord.of>[0]["contractSummary"]> | null = null;
+    if (targetBase === "contract-summary.md") {
+      const specBlocks = assessSpecBlocks(md);
+      if (!specBlocks.ok) return err({ kind: "corrupt", path: artifactPath, cause: JSON.stringify(specBlocks.error) });
+      contractSummary = {
+        contractsTable: parseContractsTable(md),
+        specBlocks: specBlocks.value,
+        declaredUnits: this.#declaredUnits(recordRoot),
+      };
+    }
+    const functional = isFunctional ? this.#functional(recordRoot, fdDir) : ok(null);
+    if (!functional.ok) return functional;
     const seed: Parameters<typeof DesignRecord.of>[0] = {
       id,
       target: input(artifactPath, md),
       sourceDocument: sourceBytes,
       componentCatalog: targetBase === "components.md" ? parseComponentCatalog(md) : null,
-      contractSummary:
-        targetBase === "contract-summary.md"
-          ? {
-              contractsTable: parseContractsTable(md),
-              specBlocks: assessSpecBlocks(md),
-              declaredUnits: this.#declaredUnits(recordRoot),
-            }
-          : null,
-      functional: isFunctional ? this.#functional(recordRoot, fdDir) : null,
+      contractSummary,
+      functional: functional.value,
     };
     return ok(DesignRecord.of(seed));
   }
@@ -114,7 +120,7 @@ export class DesignRecordRepositoryImplementation implements DesignRecordReposit
   #functional(
     recordRoot: string | null,
     fdDir: string,
-  ): NonNullable<Parameters<typeof DesignRecord.of>[0]["functional"]> {
+  ): Result<NonNullable<Parameters<typeof DesignRecord.of>[0]["functional"]>, RepositoryError> {
     const rel = (p: string): string => relArtifact(recordRoot, p);
     const load = <T>(path: string, parse: (text: string) => T): { input: InputAnchor; outcome: T } | null => {
       const text = readIfExists(path);
@@ -138,10 +144,18 @@ export class DesignRecordRepositoryImplementation implements DesignRecordReposit
     // requirements.md は rules が使えるときだけ読む（凍結された取得条件）。
     const reqPath =
       recordRoot === null ? null : join(recordRoot, "inception", "requirements-analysis", "requirements.md");
-    const requirements =
-      rules?.outcome.isExtracted() && reqPath !== null
-        ? load(reqPath, (t) => RequirementIdentifiers.extractFrom(t))
-        : null;
+    let requirements: NonNullable<Parameters<typeof DesignRecord.of>[0]["functional"]>["requirements"] = null;
+    if (rules?.outcome.isExtracted() && reqPath !== null) {
+      const text = readIfExists(reqPath);
+      if (text !== null) {
+        const parsed = parseRequirementIdentifiers(text);
+        if (!parsed.ok) return err({ kind: "corrupt", path: reqPath, cause: JSON.stringify(parsed.error) });
+        requirements = {
+          input: InputAnchor.of({ artifact: rel(reqPath), sha256: ContentHash.ofText(text) }),
+          outcome: parsed.value,
+        };
+      }
+    }
 
     const componentsPath = recordRoot === null ? null : join(recordRoot, "inception", "domain-design", "components.md");
     const components = componentsPath === null ? null : load(componentsPath, (t) => parseDomainEntitiesDocument(t));
@@ -157,7 +171,13 @@ export class DesignRecordRepositoryImplementation implements DesignRecordReposit
       }
     }
 
-    return {
+    const siblingInputs = InputAnchors.parse(
+      siblingTexts
+        .filter((s) => s.path !== entitiesPath)
+        .map((s) => InputAnchor.of({ artifact: rel(s.path), sha256: ContentHash.ofText(s.text) })),
+    );
+    if (!siblingInputs.ok) return err({ kind: "corrupt", path: fdDir, cause: JSON.stringify(siblingInputs.error) });
+    return ok({
       unit: unit === undefined ? undefined : UnitName.of(unit),
       entitiesArtifact: ArtifactPath.of(rel(entitiesPath)),
       entities,
@@ -169,11 +189,7 @@ export class DesignRecordRepositoryImplementation implements DesignRecordReposit
       componentsArtifact: ArtifactPath.of(componentsPath === null ? "components.md" : rel(componentsPath)),
       components,
       siblingUnits: buildSiblingUnitEntities(siblingTexts),
-      siblingInputs: InputAnchors.of(
-        siblingTexts
-          .filter((s) => s.path !== entitiesPath)
-          .map((s) => InputAnchor.of({ artifact: rel(s.path), sha256: ContentHash.ofText(s.text) })),
-      ),
-    };
+      siblingInputs: siblingInputs.value,
+    });
   }
 }

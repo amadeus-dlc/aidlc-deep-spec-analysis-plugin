@@ -1,15 +1,33 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { AttributeName } from "./attribute-name.ts";
 
 // ---- ファーストクラスコレクション（語彙） -----------------------------------
 // ドメイン層は配列を生で扱わない。集合の知識（正規化照合・差分・所属）は
 // コレクション自身が所有し、toArray() は境界（描画・アダプタ）専用の脱出口。
 
-export class AttributeNames implements FirstClassCollection, IterableFirstClassCollection<AttributeName> {
+export class AttributeNames
+  extends FirstClassCollectionBase<AttributeName, AttributeNames>
+  implements FirstClassCollection<AttributeName>
+{
   readonly #values: readonly AttributeName[];
 
   private constructor(values: readonly AttributeName[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-attribute-names");
+  }
+
+  protected rebuild(values: readonly AttributeName[]): AttributeNames {
+    return new AttributeNames(values);
+  }
+
+  static parse(values: readonly AttributeName[]): Result<AttributeNames, ParseError> {
+    return parseConstruction(() => new AttributeNames(values));
   }
 
   static of(values: readonly AttributeName[]): AttributeNames {
@@ -36,9 +54,5 @@ export class AttributeNames implements FirstClassCollection, IterableFirstClassC
   // 境界: 描画・アダプタ専用。
   toArray(): readonly AttributeName[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

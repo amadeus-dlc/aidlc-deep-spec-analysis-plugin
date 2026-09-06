@@ -1,7 +1,7 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import {
   type BackendName,
   type ContentHash,
+  FirstClassCollectionBase,
   KeyedIndex,
   ScenarioVerdicts,
   TargetIdentifier,
@@ -9,6 +9,7 @@ import {
   UnitName,
 } from "@deep-spec-analysis/kernel-domain";
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
+import { boundedCollectionSnapshot, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
 import { DesignCrossCheckedEntry } from "./design-cross-checked-entry.ts";
 import type { DesignFinding } from "./design-finding.ts";
@@ -18,15 +19,24 @@ import { DesignReport } from "./design-report.ts";
 import type { DesignReportIdentifier } from "./design-report-identifier.ts";
 import { DesignSkips } from "./design-skips.ts";
 
-export class DesignReports implements FirstClassCollection, IterableFirstClassCollection<DesignReport> {
+export class DesignReports extends FirstClassCollectionBase<DesignReport, DesignReports> {
   readonly #values: readonly DesignReport[];
 
   private constructor(values: readonly DesignReport[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-reports");
+  }
+
+  protected rebuild(values: readonly DesignReport[]): DesignReports {
+    return new DesignReports(values);
   }
 
   static of(values: readonly DesignReport[]): DesignReports {
     return new DesignReports(values);
+  }
+
+  static parse(values: readonly DesignReport[]): Result<DesignReports, ParseError> {
+    return parseConstruction(() => new DesignReports(values));
   }
 
   *[Symbol.iterator](): Iterator<DesignReport> {
@@ -86,9 +96,5 @@ export class DesignReports implements FirstClassCollection, IterableFirstClassCo
     return failure === null
       ? report
       : report.degraded(`scenario cross-check could not be constructed: ${failure.kind}`);
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

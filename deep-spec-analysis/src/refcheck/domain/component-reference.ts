@@ -31,4 +31,8 @@ export class ComponentReference {
   pointsAt(name: ComponentName): boolean {
     return this.#component.equals(name);
   }
+
+  equals(other: ComponentReference): boolean {
+    return this.#component.equals(other.#component) && this.#element.equals(other.#element);
+  }
 }

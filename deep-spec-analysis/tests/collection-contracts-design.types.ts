@@ -1,20 +1,17 @@
 import * as Design from "@deep-spec-analysis/design-domain";
 import type * as Kernel from "@deep-spec-analysis/kernel-domain";
-import type {
-  FallibleFirstClassCollectionFactory,
-  FirstClassCollectionFactory,
-} from "@deep-spec-analysis/kernel-domain";
+import type { FallibleFirstClassCollectionFactory } from "@deep-spec-analysis/kernel-domain";
 
 export const designCollectionFactories = {
-  AttributeMappings: Design.AttributeMappings satisfies FirstClassCollectionFactory<
+  AttributeMappings: Design.AttributeMappings satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.AttributeMapping[]],
     Design.AttributeMappings
   >,
-  AttributePaths: Design.AttributePaths satisfies FirstClassCollectionFactory<
+  AttributePaths: Design.AttributePaths satisfies FallibleFirstClassCollectionFactory<
     [readonly Kernel.AttributePath[]],
     Design.AttributePaths
   >,
-  BusinessRuleReferenceIndex: Design.BusinessRuleReferenceIndex satisfies FirstClassCollectionFactory<
+  BusinessRuleReferenceIndex: Design.BusinessRuleReferenceIndex satisfies FallibleFirstClassCollectionFactory<
     [Design.BusinessRuleReferences],
     Design.BusinessRuleReferenceIndex
   >,
@@ -22,7 +19,7 @@ export const designCollectionFactories = {
     [readonly Design.BusinessRuleReference[]],
     Design.BusinessRuleReferences
   >,
-  CheckedUnits: Design.CheckedUnits satisfies FirstClassCollectionFactory<
+  CheckedUnits: Design.CheckedUnits satisfies FallibleFirstClassCollectionFactory<
     [readonly Kernel.UnitName[]],
     Design.CheckedUnits
   >,
@@ -34,23 +31,23 @@ export const designCollectionFactories = {
     [Design.DesignEntityDeclarations],
     Design.DesignAttributeCatalog
   >,
-  DesignAttributeDeclarations: Design.DesignAttributeDeclarations satisfies FirstClassCollectionFactory<
+  DesignAttributeDeclarations: Design.DesignAttributeDeclarations satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignAttributeDeclaration[]],
     Design.DesignAttributeDeclarations
   >,
-  DesignBackgroundAssumptions: Design.DesignBackgroundAssumptions satisfies FirstClassCollectionFactory<
+  DesignBackgroundAssumptions: Design.DesignBackgroundAssumptions satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignBackgroundAssumption[]],
     Design.DesignBackgroundAssumptions
   >,
-  DesignBackgroundDeclarations: Design.DesignBackgroundDeclarations satisfies FirstClassCollectionFactory<
+  DesignBackgroundDeclarations: Design.DesignBackgroundDeclarations satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignBackgroundDeclaration[]],
     Design.DesignBackgroundDeclarations
   >,
-  DesignCrossCheckedEntries: Design.DesignCrossCheckedEntries satisfies FirstClassCollectionFactory<
+  DesignCrossCheckedEntries: Design.DesignCrossCheckedEntries satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignCrossCheckedEntry[]],
     Design.DesignCrossCheckedEntries
   >,
-  DesignEntityDeclarations: Design.DesignEntityDeclarations satisfies FirstClassCollectionFactory<
+  DesignEntityDeclarations: Design.DesignEntityDeclarations satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignEntityDeclaration[]],
     Design.DesignEntityDeclarations
   >,
@@ -58,67 +55,67 @@ export const designCollectionFactories = {
     [Design.DesignUnit],
     Design.DesignEventRuleCatalog
   >,
-  DesignFindings: Design.DesignFindings satisfies FirstClassCollectionFactory<
+  DesignFindings: Design.DesignFindings satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignFinding[]],
     Design.DesignFindings
   >,
-  DesignIgnoreDeclarations: Design.DesignIgnoreDeclarations satisfies FirstClassCollectionFactory<
+  DesignIgnoreDeclarations: Design.DesignIgnoreDeclarations satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignIgnoreDeclaration[]],
     Design.DesignIgnoreDeclarations
   >,
-  DesignIgnores: Design.DesignIgnores satisfies FirstClassCollectionFactory<
+  DesignIgnores: Design.DesignIgnores satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignIgnore[]],
     Design.DesignIgnores
   >,
-  DesignInputAnchors: Design.DesignInputAnchors satisfies FirstClassCollectionFactory<
+  DesignInputAnchors: Design.DesignInputAnchors satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignInputAnchor[]],
     Design.DesignInputAnchors
   >,
-  DesignMachineDeclarations: Design.DesignMachineDeclarations satisfies FirstClassCollectionFactory<
+  DesignMachineDeclarations: Design.DesignMachineDeclarations satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignMachineDeclaration[]],
     Design.DesignMachineDeclarations
   >,
-  DesignMachines: Design.DesignMachines satisfies FirstClassCollectionFactory<
+  DesignMachines: Design.DesignMachines satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignMachine[]],
     Design.DesignMachines
   >,
-  DesignObligationDeclarations: Design.DesignObligationDeclarations satisfies FirstClassCollectionFactory<
+  DesignObligationDeclarations: Design.DesignObligationDeclarations satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignObligationDeclaration[]],
     Design.DesignObligationDeclarations
   >,
-  DesignObligations: Design.DesignObligations satisfies FirstClassCollectionFactory<
+  DesignObligations: Design.DesignObligations satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignObligation[]],
     Design.DesignObligations
   >,
-  DesignReports: Design.DesignReports satisfies FirstClassCollectionFactory<
+  DesignReports: Design.DesignReports satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignReport[]],
     Design.DesignReports
   >,
-  DesignScenarioDeclarations: Design.DesignScenarioDeclarations satisfies FirstClassCollectionFactory<
+  DesignScenarioDeclarations: Design.DesignScenarioDeclarations satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignScenarioDeclaration[]],
     Design.DesignScenarioDeclarations
   >,
-  DesignScenarios: Design.DesignScenarios satisfies FirstClassCollectionFactory<
+  DesignScenarios: Design.DesignScenarios satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignScenario[]],
     Design.DesignScenarios
   >,
-  DesignSkips: Design.DesignSkips satisfies FirstClassCollectionFactory<
+  DesignSkips: Design.DesignSkips satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignSkipped[]],
     Design.DesignSkips
   >,
-  DesignTransitionDeclarations: Design.DesignTransitionDeclarations satisfies FirstClassCollectionFactory<
+  DesignTransitionDeclarations: Design.DesignTransitionDeclarations satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignTransitionDeclaration[]],
     Design.DesignTransitionDeclarations
   >,
-  DesignTransitions: Design.DesignTransitions satisfies FirstClassCollectionFactory<
+  DesignTransitions: Design.DesignTransitions satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignTransition[]],
     Design.DesignTransitions
   >,
-  DesignUnitDeclarations: Design.DesignUnitDeclarations satisfies FirstClassCollectionFactory<
+  DesignUnitDeclarations: Design.DesignUnitDeclarations satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignUnitDeclaration[]],
     Design.DesignUnitDeclarations
   >,
-  DesignUnits: Design.DesignUnits satisfies FirstClassCollectionFactory<
+  DesignUnits: Design.DesignUnits satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.DesignUnit[]],
     Design.DesignUnits
   >,
@@ -126,7 +123,7 @@ export const designCollectionFactories = {
     [readonly Design.EffectAssignment[]],
     Design.EffectAssignments
   >,
-  EventMappings: Design.EventMappings satisfies FirstClassCollectionFactory<
+  EventMappings: Design.EventMappings satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.EventMapping[]],
     Design.EventMappings
   >,
@@ -138,15 +135,15 @@ export const designCollectionFactories = {
     [readonly Design.LoweredIdentifier[]],
     Design.IssuedLoweredIdentifiers
   >,
-  LoweredBackgrounds: Design.LoweredBackgrounds satisfies FirstClassCollectionFactory<
+  LoweredBackgrounds: Design.LoweredBackgrounds satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.LoweredBackground[]],
     Design.LoweredBackgrounds
   >,
-  LoweredObligations: Design.LoweredObligations satisfies FirstClassCollectionFactory<
+  LoweredObligations: Design.LoweredObligations satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.LoweredObligation[]],
     Design.LoweredObligations
   >,
-  LoweredScenarios: Design.LoweredScenarios satisfies FirstClassCollectionFactory<
+  LoweredScenarios: Design.LoweredScenarios satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.LoweredScenario[]],
     Design.LoweredScenarios
   >,
@@ -154,27 +151,27 @@ export const designCollectionFactories = {
     [readonly Design.MachineReachability[]],
     Design.ReachabilityPlan
   >,
-  RefinementAttributes: Design.RefinementAttributes satisfies FirstClassCollectionFactory<
+  RefinementAttributes: Design.RefinementAttributes satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.RefinementAttribute[]],
     Design.RefinementAttributes
   >,
-  RefinementObligations: Design.RefinementObligations satisfies FirstClassCollectionFactory<
+  RefinementObligations: Design.RefinementObligations satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.RefinementObligation[]],
     Design.RefinementObligations
   >,
-  RefinementQueryVerdicts: Design.RefinementQueryVerdicts satisfies FirstClassCollectionFactory<
-    [Kernel.KeyedIndex<Kernel.QueryLabel, Design.RefinementQueryVerdict>],
+  RefinementQueryVerdicts: Design.RefinementQueryVerdicts satisfies FallibleFirstClassCollectionFactory<
+    [readonly Design.RefinementQueryVerdictEntry[]],
     Design.RefinementQueryVerdicts
   >,
-  RefinementQuintInvariants: Design.RefinementQuintInvariants satisfies FirstClassCollectionFactory<
+  RefinementQuintInvariants: Design.RefinementQuintInvariants satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.RefinementQuintInvariant[]],
     Design.RefinementQuintInvariants
   >,
-  RefinementScenarios: Design.RefinementScenarios satisfies FirstClassCollectionFactory<
+  RefinementScenarios: Design.RefinementScenarios satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.RefinementScenario[]],
     Design.RefinementScenarios
   >,
-  RefinementUnitMaps: Design.RefinementUnitMaps satisfies FirstClassCollectionFactory<
+  RefinementUnitMaps: Design.RefinementUnitMaps satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.RefinementUnitMap[]],
     Design.RefinementUnitMaps
   >,
@@ -182,23 +179,23 @@ export const designCollectionFactories = {
     [readonly Design.RuleSubsumption[]],
     Design.RuleSubsumptions
   >,
-  SiblingVerdictFindings: Design.SiblingVerdictFindings satisfies FirstClassCollectionFactory<
+  SiblingVerdictFindings: Design.SiblingVerdictFindings satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.SiblingVerdictFinding[]],
     Design.SiblingVerdictFindings
   >,
-  SiblingVerdictSkips: Design.SiblingVerdictSkips satisfies FirstClassCollectionFactory<
+  SiblingVerdictSkips: Design.SiblingVerdictSkips satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.SiblingVerdictSkip[]],
     Design.SiblingVerdictSkips
   >,
-  TransitionReferences: Design.TransitionReferences satisfies FirstClassCollectionFactory<
+  TransitionReferences: Design.TransitionReferences satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.TransitionReference[]],
     Design.TransitionReferences
   >,
-  UnformalizedTargets: Design.UnformalizedTargets satisfies FirstClassCollectionFactory<
+  UnformalizedTargets: Design.UnformalizedTargets satisfies FallibleFirstClassCollectionFactory<
     [readonly Kernel.TargetIdentifier[]],
     Design.UnformalizedTargets
   >,
-  UnmappedDeclarations: Design.UnmappedDeclarations satisfies FirstClassCollectionFactory<
+  UnmappedDeclarations: Design.UnmappedDeclarations satisfies FallibleFirstClassCollectionFactory<
     [readonly Design.UnmappedTarget[]],
     Design.UnmappedDeclarations
   >,

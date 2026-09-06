@@ -9,11 +9,12 @@ import { parseSmtChildResults } from "./smt-child-results-parser.ts";
 // 旧 runChild からの逐語移植。
 
 import { spawnSync } from "node:child_process";
-import { ErrorMessage, KeyedIndex, QueryLabel } from "@deep-spec-analysis/kernel-domain";
+import { ErrorMessage, QueryLabel } from "@deep-spec-analysis/kernel-domain";
 import type { RequirementsModel } from "@deep-spec-analysis/requirements-domain";
 import {
   SatisfiabilityModuloTheoriesCheck,
   SatisfiabilityModuloTheoriesQueryVerdict,
+  SatisfiabilityModuloTheoriesQueryVerdictEntry,
   SatisfiabilityModuloTheoriesQueryVerdicts,
 } from "@deep-spec-analysis/requirements-domain";
 import type { Z3SolverClient } from "@deep-spec-analysis/requirements-usecase";
@@ -70,7 +71,12 @@ export class Z3SolverClientImplementation implements Z3SolverClient {
     }
     return SatisfiabilityModuloTheoriesCheck.of({
       plan: plan.plan,
-      result: { kind: "solved", verdicts: SatisfiabilityModuloTheoriesQueryVerdicts.of(KeyedIndex.of(verdicts)) },
+      result: {
+        kind: "solved",
+        verdicts: SatisfiabilityModuloTheoriesQueryVerdicts.of(
+          verdicts.map(([query, verdict]) => SatisfiabilityModuloTheoriesQueryVerdictEntry.of(query, verdict)),
+        ),
+      },
     });
   }
 

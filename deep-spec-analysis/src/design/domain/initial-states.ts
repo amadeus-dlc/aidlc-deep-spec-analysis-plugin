@@ -1,18 +1,21 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
 import {
-  IllegalArgumentException,
+  boundedCollectionSnapshot,
   type ParseError,
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { InitialState } from "./initial-state.ts";
-export class InitialStates implements FirstClassCollection, IterableFirstClassCollection<InitialState> {
+export class InitialStates extends FirstClassCollectionBase<InitialState, InitialStates> {
   readonly #values: readonly InitialState[];
 
   private constructor(values: readonly InitialState[]) {
-    if (values.length > 10_000)
-      throw new IllegalArgumentException({ kind: "too-many-initial-states", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 10_000, "too-many-initial-states");
+  }
+
+  protected rebuild(values: readonly InitialState[]): InitialStates {
+    return new InitialStates(values);
   }
 
   static parse(values: readonly InitialState[]): Result<InitialStates, ParseError> {
@@ -31,15 +34,7 @@ export class InitialStates implements FirstClassCollection, IterableFirstClassCo
     yield* this.#values;
   }
 
-  includes(value: string): boolean {
-    return this.#values.some((state) => state.matchesName(value));
-  }
-
   toArray(): readonly InitialState[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

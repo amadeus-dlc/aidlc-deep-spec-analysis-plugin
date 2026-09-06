@@ -86,6 +86,10 @@ export class DesignReport {
     });
   }
 
+  equals(other: DesignReport): boolean {
+    return this.#id.equals(other.#id);
+  }
+
   #revised(changes: Partial<DesignReportParam>): DesignReport {
     return new DesignReport({
       id: this.#id,

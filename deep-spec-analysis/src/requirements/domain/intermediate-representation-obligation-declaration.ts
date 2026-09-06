@@ -56,6 +56,22 @@ export class IntermediateRepresentationObligationDeclaration {
     return this.#id;
   }
 
+  equals(other: IntermediateRepresentationObligationDeclaration): boolean {
+    const expressionEqual = (left: Expression | undefined, right: Expression | undefined): boolean =>
+      left === undefined
+        ? right === undefined
+        : right !== undefined && ExpressionTree.of(left).isCanonicallyEqual(ExpressionTree.of(right));
+    return (
+      this.#id.equals(other.#id) &&
+      expressionEqual(this.#assert, other.#assert) &&
+      expressionEqual(this.#guard, other.#guard) &&
+      expressionEqual(this.#effect, other.#effect) &&
+      (this.#temporal === undefined
+        ? other.#temporal === undefined
+        : other.#temporal !== undefined && this.#temporal.equals(other.#temporal))
+    );
+  }
+
   #inspectExpressions(visitor: (expression: Expression, primesAllowed: boolean) => void): void {
     if (this.#assert !== undefined) visitor(this.#assert, false);
     if (this.#guard !== undefined) visitor(this.#guard, false);

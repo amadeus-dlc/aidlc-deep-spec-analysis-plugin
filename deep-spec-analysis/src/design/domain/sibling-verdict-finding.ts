@@ -15,6 +15,7 @@ import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import type { LoweringIndex } from "./lowering-index.ts";
 import { RuleSubsumption } from "./rule-subsumption.ts";
 import { RuleSubsumptionVerdict } from "./rule-subsumption-verdict.ts";
+import { sameArray } from "./value-equality.ts";
 
 // 兄弟バックエンドが返した finding 1 件——lowering 側の id で書かれている。
 // 判定の再割り当て（SiblingVerdictDocument.remapVerdicts）は種類を問い、対象を写像し、
@@ -45,6 +46,22 @@ export class SiblingVerdictFinding {
 
   static of(props: SiblingVerdictFindingParam): SiblingVerdictFinding {
     return new SiblingVerdictFinding(props);
+  }
+
+  equals(other: SiblingVerdictFinding): boolean {
+    const left = this.#targets.map((target) => target.asString());
+    const right = other.#targets.map((target) => target.asString());
+    return (
+      this.#kind.equals(other.#kind) &&
+      this.#detail === other.#detail &&
+      sameArray(left, right, (target, otherTarget) => target === otherTarget) &&
+      sameArray(
+        this.#functionalRequirementReferences.toStrings(),
+        other.#functionalRequirementReferences.toStrings(),
+        (reference, otherReference) => reference === otherReference,
+      ) &&
+      this.#witness.equals(other.#witness)
+    );
   }
 
   remap(

@@ -36,6 +36,10 @@ export class EffectAssignment {
     return new EffectAssignment(target, equation);
   }
 
+  equals(other: EffectAssignment): boolean {
+    return this.#target.equals(other.#target) && this.#equation.equals(other.#equation);
+  }
+
   static parse(target: AttributePath, equation: ExpressionTree): Result<EffectAssignment, ParseError> {
     return parseConstruction(() => new EffectAssignment(target, equation));
   }

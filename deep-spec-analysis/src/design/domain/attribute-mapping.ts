@@ -9,6 +9,7 @@ import {
 } from "@deep-spec-analysis/kernel-domain";
 import type { DesignUnit } from "./design-unit.ts";
 import type { RefinementAttributes } from "./refinement-attributes.ts";
+import { sameExpression } from "./value-equality.ts";
 
 // 属性写像（attrMap の 1 エントリ）。閉じた 3 variant —— 式写像（bool/int）・
 // enum 場合分け・unspecified。α置換の材料（enum 比較の展開・写像式の代入・
@@ -66,6 +67,23 @@ export class AttributeMapping {
 
   static parse(req: AttributePath, value: AttributeMappingParam): Result<AttributeMapping, ParseError> {
     return parseConstruction(() => new AttributeMapping(req, value));
+  }
+
+  equals(other: AttributeMapping): boolean {
+    const variant = this.#variant;
+    const otherVariant = other.#variant;
+    if (!this.#req.equals(other.#req) || variant.kind !== otherVariant.kind) return false;
+    if (variant.kind === "unspecified") return true;
+    if (variant.kind === "expression" && otherVariant.kind === "expression")
+      return sameExpression(variant.expr, otherVariant.expr);
+    if (variant.kind !== "enum-cases" || otherVariant.kind !== "enum-cases") return false;
+    if (!variant.from.equals(otherVariant.from)) return false;
+    const left = Object.keys(variant.cases).sort();
+    const right = Object.keys(otherVariant.cases).sort();
+    return (
+      left.length === right.length &&
+      left.every((key, index) => key === right[index] && variant.cases[key] === otherVariant.cases[key])
+    );
   }
 
   diagnostics(unit: DesignUnit, attributes: RefinementAttributes): ErrorMessages {
@@ -198,12 +216,12 @@ export class AttributeMapping {
 
   // 生成値の範囲（enum-cases 専門）: cases の生成値のうち要件属性の値でない
   // もの（正準順・重複なし）。
-  producedValuesOutside(reqValues: { includes(value: string): boolean } | undefined): readonly string[] {
+  producedValuesOutside(reqValues: EnumerationMembers | undefined): readonly string[] {
     const variant = this.#variant;
     if (variant.kind !== "enum-cases") return [];
     return EnumerationMembers.of(
       Object.values(variant.cases)
-        .filter((rv) => !(reqValues?.includes(rv) ?? false))
+        .filter((rv) => !(reqValues?.exists((member) => member.matchesLiteral(rv)) ?? false))
         .map((value) => EnumerationMember.of(value)),
     )
       .sortedUniqueCanonically()

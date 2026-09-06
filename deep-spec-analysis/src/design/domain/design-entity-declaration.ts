@@ -28,6 +28,17 @@ export class DesignEntityDeclaration {
     return new DesignEntityDeclaration(props);
   }
 
+  equals(other: DesignEntityDeclaration): boolean {
+    const left = [...this.#attributes];
+    const right = [...other.#attributes];
+    return (
+      this.#name.equals(other.#name) &&
+      this.#description === other.#description &&
+      left.length === right.length &&
+      left.every((attribute, index) => attribute.equals(right[index] as DesignAttributeDeclaration))
+    );
+  }
+
   name(): DesignEntityName {
     return this.#name;
   }

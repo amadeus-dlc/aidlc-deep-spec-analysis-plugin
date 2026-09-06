@@ -4,7 +4,7 @@
 // 旧 decodeItfValue / decodeItfTrace / itfStatus からの逐語移植。
 
 import { err, isObject, type Json, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
-import { AttributePath, TraceState, TraceValue } from "@deep-spec-analysis/requirements-domain";
+import { AttributePath, TraceState, TraceStateEntry, TraceValue } from "@deep-spec-analysis/requirements-domain";
 
 function decodeItfValue(v: Json): Json {
   if (isObject(v) && typeof v["#bigint"] === "string") return Number.parseInt(v["#bigint"], 10);
@@ -24,7 +24,7 @@ export function decodeItfTrace(itfText: string, varToPath: Map<string, string>):
   const trace: TraceState[] = [];
   for (const state of doc.states) {
     if (!isObject(state)) continue;
-    const entries: (readonly [AttributePath, TraceValue])[] = [];
+    const entries: TraceStateEntry[] = [];
     for (const key of Object.keys(state).sort()) {
       if (key.startsWith("#")) continue;
       const path = varToPath.get(key) ?? key;
@@ -32,7 +32,7 @@ export function decodeItfTrace(itfText: string, varToPath: Map<string, string>):
       if (!attributePath.ok) return err(JSON.stringify(attributePath.error));
       const value = TraceValue.parse(decodeItfValue(state[key] ?? null));
       if (!value.ok) return err(JSON.stringify(value.error));
-      entries.push([attributePath.value, value.value]);
+      entries.push(TraceStateEntry.of(attributePath.value, value.value));
     }
     trace.push(TraceState.of(entries));
   }

@@ -51,6 +51,33 @@ export class MachineReachability {
     return new MachineReachability(input);
   }
 
+  equals(other: MachineReachability): boolean {
+    if (
+      !this.#unit.equals(other.#unit) ||
+      !this.#machine.equals(other.#machine) ||
+      this.#bounded !== other.#bounded ||
+      this.#probes.length !== other.#probes.length ||
+      this.#observations.size !== other.#observations.size
+    )
+      return false;
+    const probesEqual = this.#probes.every((probe, index) => {
+      const otherProbe = other.#probes[index];
+      return (
+        otherProbe !== undefined &&
+        probe.unit().name() === otherProbe.unit().name() &&
+        probe.attributePath() === otherProbe.attributePath() &&
+        probe.state() === otherProbe.state()
+      );
+    });
+    if (!probesEqual) return false;
+    return this.#probes.every((probe, index) => {
+      const otherProbe = other.#probes[index];
+      const left = this.#observations.get(probe);
+      const right = otherProbe === undefined ? undefined : other.#observations.get(otherProbe);
+      return left === undefined ? right === undefined : right !== undefined && left.equals(right);
+    });
+  }
+
   static parse(input: MachineReachabilityParam): Result<MachineReachability, ParseError> {
     return parseConstruction(() => new MachineReachability(input));
   }

@@ -16,6 +16,7 @@ import { DesignWitness } from "./design-witness.ts";
 import type { EventMapping } from "./event-mapping.ts";
 import type { EventMappings } from "./event-mappings.ts";
 import type { UnmappedDeclarations } from "./unmapped-declarations.ts";
+import { sameIterable } from "./value-equality.ts";
 
 // refinement map の 1 ユニット分——属性写像・イベント写像・unmapped 宣言。
 // 計画はユニットの一致を問い、トリガのイベント写像を引く（#71 波24）。
@@ -42,6 +43,15 @@ export class RefinementUnitMap {
 
   static of(props: RefinementUnitMapParam): RefinementUnitMap {
     return new RefinementUnitMap(props);
+  }
+
+  equals(other: RefinementUnitMap): boolean {
+    return (
+      this.#unit.equals(other.#unit) &&
+      sameIterable(this.#attrMap, other.#attrMap, (left, right) => left.equals(right)) &&
+      sameIterable(this.#eventMap, other.#eventMap, (left, right) => left.equals(right)) &&
+      sameIterable(this.#unmapped, other.#unmapped, (left, right) => left.equals(right))
+    );
   }
 
   gapFor(

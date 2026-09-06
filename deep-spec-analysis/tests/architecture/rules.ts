@@ -382,24 +382,26 @@ export function noExportStar(relPath: string, rawSource: string): Violation[] {
 }
 
 // ルール: domain のクラスは private constructor + static ファクトリ(new は
-// 自クラス内の 1 箇所——house style)。Error 派生の例外型だけは公開 ctor を許す。
+// 具体型自身で構築する)。抽象基底は protected、Error 派生の例外型は公開 ctor を許す。
 export function privateConstructorInDomain(relPath: string, rawSource: string): Violation[] {
   const loc = locationOf(relPath);
   if (loc === null || typeof loc === "string" || loc.layer !== "domain") return [];
   const source = stripComments(rawSource);
   const out: Violation[] = [];
-  const classRe = /^export (?:abstract )?class (\w+)(?:\s+extends\s+(\w+))?/gm;
+  const classRe = /^export (abstract )?class (\w+)(?:\s+extends\s+(\w+))?/gm;
   for (let m = classRe.exec(source); m !== null; m = classRe.exec(source)) {
-    const name = m[1] ?? "";
-    if (m[2] === "Error") continue;
+    const abstract = m[1] !== undefined;
+    const name = m[2] ?? "";
+    if (m[3] === "Error") continue;
     const start = m.index;
     const next = source.indexOf("\nexport ", start + 1);
     const body = source.slice(start, next > 0 ? next : source.length);
-    if (!body.includes("private constructor")) {
+    const visibility = abstract ? "protected" : "private";
+    if (!body.includes(`${visibility} constructor`)) {
       out.push({
         path: relPath,
         rule: "private-constructor-in-domain",
-        detail: `class ${name} lacks a private constructor`,
+        detail: `class ${name} lacks a ${visibility} constructor`,
       });
     }
   }
@@ -426,8 +428,20 @@ export function noReconstitutionBypass(relPath: string, rawSource: string): Viol
 // adapterに汎用の例外変換ラッパーを置くとofのpanicまで回復してしまう。
 export function constructionParsingInDomain(relPath: string, rawSource: string): Violation[] {
   const loc = locationOf(relPath);
-  if (loc === null || typeof loc === "string" || loc.layer === "domain" || loc.layer === "infrastructure") return [];
-  if (/\bparseConstruction\b/.test(stripStrings(rawSource))) {
+  if (loc === null || typeof loc === "string" || loc.layer === "infrastructure") return [];
+  const source = stripStrings(rawSource);
+  if (loc.layer === "domain") {
+    return /\bparseConstruction\s*\(\s*\(\s*\)\s*=>\s*\w+\.of\s*\(/.test(source)
+      ? [
+          {
+            path: relPath,
+            rule: "construction-parsing-in-domain",
+            detail: "parse constructs directly; do not catch an of factory panic",
+          },
+        ]
+      : [];
+  }
+  if (/\bparseConstruction\b/.test(source)) {
     return [
       {
         path: relPath,

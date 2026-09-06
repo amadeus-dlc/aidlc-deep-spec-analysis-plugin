@@ -4,16 +4,22 @@ import {
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
-import type { IterableFirstClassCollection } from "./iterable-first-class-collection.ts";
+import type { NonEmptyFirstClassCollection } from "./non-empty-first-class-collection.ts";
+import { NonEmptyFirstClassCollectionBase } from "./non-empty-first-class-collection-base.ts";
 import type { TargetIdentifier } from "./target-identifier.ts";
+import { TargetIdentifiers } from "./target-identifiers.ts";
 
 export const MAX_FINDING_TARGETS = 65_536;
 
 /** 診断1件は必ず対象を持つ。対象列の予算は65,536件で、宣言順と重複を保持する。 */
-export class FindingTargets implements IterableFirstClassCollection<TargetIdentifier> {
+export class FindingTargets
+  extends NonEmptyFirstClassCollectionBase<TargetIdentifier, TargetIdentifiers>
+  implements NonEmptyFirstClassCollection<TargetIdentifier>
+{
   readonly #values: readonly TargetIdentifier[];
 
   private constructor(head: TargetIdentifier, tail: readonly TargetIdentifier[]) {
+    super();
     if (tail.length >= MAX_FINDING_TARGETS)
       throw new IllegalArgumentException({ kind: "too-many-finding-targets", raw: tail.length + 1 });
     const snapshot: TargetIdentifier[] = [head];
@@ -23,6 +29,10 @@ export class FindingTargets implements IterableFirstClassCollection<TargetIdenti
       snapshot.push(value);
     }
     this.#values = Object.freeze(snapshot);
+  }
+
+  protected rebuild(values: readonly TargetIdentifier[]): TargetIdentifiers {
+    return TargetIdentifiers.of(values);
   }
 
   static of(head: TargetIdentifier, tail: readonly TargetIdentifier[]): FindingTargets {
@@ -39,10 +49,6 @@ export class FindingTargets implements IterableFirstClassCollection<TargetIdenti
 
   count(): number {
     return this.#values.length;
-  }
-
-  includes(value: TargetIdentifier): boolean {
-    return this.#values.some((target) => target.equals(value));
   }
 
   sortedCanonically(): FindingTargets {

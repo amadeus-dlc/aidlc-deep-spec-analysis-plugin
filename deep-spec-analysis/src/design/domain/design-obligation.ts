@@ -18,6 +18,7 @@ import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredObligation } from "./lowered-obligation.ts";
 import { LoweredOrigin } from "./lowered-origin.ts";
 import { LoweredOriginReference } from "./lowered-origin-reference.ts";
+import { sameExpression, sameIterable, sameOptional } from "./value-equality.ts";
 
 type DesignTemporalExpressions = {
   readonly pattern: string;
@@ -83,6 +84,31 @@ export class DesignObligation {
 
   static of(props: DesignObligationParam): DesignObligation {
     return new DesignObligation(props);
+  }
+
+  equals(other: DesignObligation): boolean {
+    return (
+      this.#id.equals(other.#id) &&
+      this.#nature.equals(other.#nature) &&
+      this.#origin.equals(other.#origin) &&
+      sameIterable(this.#businessRuleReferences, other.#businessRuleReferences, (left, right) => left.equals(right)) &&
+      sameIterable(this.#functionalRequirementReferences, other.#functionalRequirementReferences, (left, right) =>
+        left.equals(right),
+      ) &&
+      sameOptional(this.#trigger, other.#trigger, (left, right) => left.equals(right)) &&
+      sameExpression(this.#assert, other.#assert) &&
+      sameExpression(this.#guard, other.#guard) &&
+      sameExpression(this.#effect, other.#effect) &&
+      sameOptional(
+        this.#temporal,
+        other.#temporal,
+        (left, right) =>
+          left.pattern === right.pattern &&
+          sameExpression(left.assert, right.assert) &&
+          sameExpression(left.from, right.from) &&
+          sameExpression(left.to, right.to),
+      )
+    );
   }
 
   id(): DesignObligationIdentifier {

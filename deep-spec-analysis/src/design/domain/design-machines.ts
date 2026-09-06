@@ -1,16 +1,31 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignMachine } from "./design-machine.ts";
 
 // 状態機械のファーストクラスコレクション。全遷移 id の導出を所有する。
-export class DesignMachines implements FirstClassCollection, IterableFirstClassCollection<DesignMachine> {
+export class DesignMachines extends FirstClassCollectionBase<DesignMachine, DesignMachines> {
   readonly #values: readonly DesignMachine[];
 
   private constructor(values: readonly DesignMachine[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-machines");
+  }
+
+  protected rebuild(values: readonly DesignMachine[]): DesignMachines {
+    return new DesignMachines(values);
   }
 
   static of(values: readonly DesignMachine[]): DesignMachines {
     return new DesignMachines(values);
+  }
+
+  static parse(values: readonly DesignMachine[]): Result<DesignMachines, ParseError> {
+    return parseConstruction(() => new DesignMachines(values));
   }
 
   add(value: DesignMachine): DesignMachines {
@@ -43,9 +58,5 @@ export class DesignMachines implements FirstClassCollection, IterableFirstClassC
 
   toArray(): readonly DesignMachine[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

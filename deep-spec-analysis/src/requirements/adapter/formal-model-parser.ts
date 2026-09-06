@@ -149,11 +149,18 @@ export function parseFormalModel(
     if (!constructed.ok) return err(JSON.stringify(constructed.error));
     background.push(constructed.value);
   }
+  const collections = combineResults({
+    attributes: RequirementAttributeDeclarations.parse(attributes),
+    obligations: Obligations.parse(obligations),
+    scenarios: Scenarios.parse(scenarios),
+    background: BackgroundAssumptions.parse(background),
+  });
+  if (!collections.ok) return err(JSON.stringify(collections.error));
   return ok({
     irVersion: irVersion.value,
-    attributes: RequirementAttributeDeclarations.of(attributes),
-    obligations: Obligations.of(obligations),
-    scenarios: Scenarios.of(scenarios),
-    background: BackgroundAssumptions.of(background),
+    attributes: collections.value.attributes,
+    obligations: collections.value.obligations,
+    scenarios: collections.value.scenarios,
+    background: collections.value.background,
   });
 }

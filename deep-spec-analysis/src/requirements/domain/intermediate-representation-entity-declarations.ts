@@ -1,15 +1,46 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
-import { ErrorMessage, ErrorMessages } from "@deep-spec-analysis/kernel-domain";
+import {
+  ErrorMessage,
+  ErrorMessages,
+  type FirstClassCollection,
+  FirstClassCollectionBase,
+} from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { IntermediateRepresentationAttributeDeclaration } from "./intermediate-representation-attribute-declaration.ts";
 import type { IntermediateRepresentationEntityDeclaration } from "./intermediate-representation-entity-declaration.ts";
 
 export class IntermediateRepresentationEntityDeclarations
-  implements FirstClassCollection, IterableFirstClassCollection<IntermediateRepresentationEntityDeclaration>
+  extends FirstClassCollectionBase<
+    IntermediateRepresentationEntityDeclaration,
+    IntermediateRepresentationEntityDeclarations
+  >
+  implements FirstClassCollection<IntermediateRepresentationEntityDeclaration>
 {
   readonly #values: readonly IntermediateRepresentationEntityDeclaration[];
 
   private constructor(values: readonly IntermediateRepresentationEntityDeclaration[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(
+      values,
+      65_536,
+      "too-many-intermediate-representation-entity-declarations",
+    );
+  }
+
+  protected rebuild(
+    values: readonly IntermediateRepresentationEntityDeclaration[],
+  ): IntermediateRepresentationEntityDeclarations {
+    return new IntermediateRepresentationEntityDeclarations(values);
+  }
+
+  static parse(
+    values: readonly IntermediateRepresentationEntityDeclaration[],
+  ): Result<IntermediateRepresentationEntityDeclarations, ParseError> {
+    return parseConstruction(() => new IntermediateRepresentationEntityDeclarations(values));
   }
 
   static of(
@@ -73,9 +104,5 @@ export class IntermediateRepresentationEntityDeclarations
 
   toArray(): readonly IntermediateRepresentationEntityDeclaration[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

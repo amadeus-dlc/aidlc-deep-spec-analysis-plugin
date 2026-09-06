@@ -61,17 +61,26 @@ export function parseReportDocument(
         }),
       );
     }
-    findings.push(Finding.of({ ...entry, witness: { refs: WitnessReferences.of(refs) } }));
+    const parsedRefs = WitnessReferences.parse(refs);
+    if (!parsedRefs.ok) return err({ cause: JSON.stringify(parsedRefs.error) });
+    findings.push(Finding.of({ ...entry, witness: { refs: parsedRefs.value } }));
   }
+  const collections = combineResults({
+    inputs: InputAnchors.parse(
+      doc.inputs.map((entry) => InputAnchor.of({ artifact: entry.artifact.asString(), sha256: entry.sha256 })),
+    ),
+    checked: TargetIdentifiers.parse(checked.value),
+    findings: Findings.parse(findings),
+    skipped: Skips.parse(doc.skipped.map(Skipped.of)),
+  });
+  if (!collections.ok) return err({ cause: JSON.stringify(collections.error) });
   return ok(
     ReferenceCheckReport.of({
       id,
-      inputs: InputAnchors.of(
-        doc.inputs.map((entry) => InputAnchor.of({ artifact: entry.artifact.asString(), sha256: entry.sha256 })),
-      ),
-      checked: TargetIdentifiers.of(checked.value),
-      findings: Findings.of(findings),
-      skipped: Skips.of(doc.skipped.map(Skipped.of)),
+      inputs: collections.value.inputs,
+      checked: collections.value.checked,
+      findings: collections.value.findings,
+      skipped: collections.value.skipped,
       unavailableReason: doc.unavailable?.reason ?? null,
     }),
   );

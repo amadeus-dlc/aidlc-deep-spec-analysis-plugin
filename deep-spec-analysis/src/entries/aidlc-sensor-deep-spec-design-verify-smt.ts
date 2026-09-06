@@ -104,7 +104,7 @@ function main(): void {
       break;
     case "model-unreadable":
       process.stdout.write(
-        `${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "ir-unreadable" })}\n`,
+        `${JSON.stringify({ pass: false, findings_count: 0, skipped_count: 0, note: "ir-unreadable" })}\n`,
       );
       process.exit(0);
       break;

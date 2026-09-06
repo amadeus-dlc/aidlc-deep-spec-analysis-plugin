@@ -25,6 +25,18 @@ export class UnitDeclaration {
     return this.#name;
   }
 
+  equals(other: UnitDeclaration): boolean {
+    const dependencies = this.#dependsOn.toArray();
+    const otherDependencies = other.#dependsOn.toArray();
+    return (
+      this.#name.equals(other.#name) &&
+      dependencies.length === otherDependencies.length &&
+      dependencies.every((dependency, index) =>
+        dependency.equals(otherDependencies[index] as (typeof dependencies)[number]),
+      )
+    );
+  }
+
   dependsOn(): UnitNames {
     return this.#dependsOn;
   }

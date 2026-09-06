@@ -1,6 +1,18 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
-import { type ArtifactPath, AttributePath, type Expression, ExpressionTree } from "@deep-spec-analysis/kernel-domain";
-import { err, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  type ArtifactPath,
+  AttributePath,
+  type Expression,
+  ExpressionTree,
+  FirstClassCollectionBase,
+} from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  err,
+  ok,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import { AttributeCoverage } from "./attribute-coverage.ts";
 import type { AttributeMapping } from "./attribute-mapping.ts";
 import { AttributePaths } from "./attribute-paths.ts";
@@ -18,15 +30,24 @@ import type { UnmappedDeclarations } from "./unmapped-declarations.ts";
 // （`substitute`——旧 alphaExpr の逐語）、未代入属性のフレーム等式（`equalityFor`）
 // はコレクションの知識で、置換の材料は各写像が所有する（種別規律の裁定 10、
 // 2026-09-02——旧 `AlphaContext` を吸収）。
-export class AttributeMappings implements FirstClassCollection, IterableFirstClassCollection<AttributeMapping> {
+export class AttributeMappings extends FirstClassCollectionBase<AttributeMapping, AttributeMappings> {
   readonly #values: readonly AttributeMapping[];
 
   private constructor(values: readonly AttributeMapping[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-attribute-mappings");
+  }
+
+  protected rebuild(values: readonly AttributeMapping[]): AttributeMappings {
+    return new AttributeMappings(values);
   }
 
   static of(values: readonly AttributeMapping[]): AttributeMappings {
     return new AttributeMappings(values);
+  }
+
+  static parse(values: readonly AttributeMapping[]): Result<AttributeMappings, ParseError> {
+    return parseConstruction(() => new AttributeMappings(values));
   }
 
   add(value: AttributeMapping): AttributeMappings {
@@ -150,9 +171,5 @@ export class AttributeMappings implements FirstClassCollection, IterableFirstCla
 
   toArray(): readonly AttributeMapping[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

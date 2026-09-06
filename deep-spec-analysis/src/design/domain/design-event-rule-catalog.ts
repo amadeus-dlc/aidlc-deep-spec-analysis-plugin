@@ -1,25 +1,40 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
-import { KeyedIndex, TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import { FirstClassCollectionBase, KeyedIndex, TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignEventRule } from "./design-event-rule.ts";
 import { DesignMachines } from "./design-machines.ts";
 import type { DesignUnit } from "./design-unit.ts";
 import { RuleSubsumptionProbe } from "./rule-subsumption-probe.ts";
 
-export class DesignEventRuleCatalog implements FirstClassCollection, IterableFirstClassCollection<DesignEventRule> {
+export class DesignEventRuleCatalog extends FirstClassCollectionBase<DesignEventRule, DesignEventRuleCatalog> {
   readonly #events: KeyedIndex<TargetIdentifier, DesignEventRule>;
-  private constructor(unit: DesignUnit) {
+  readonly #unit: DesignUnit;
+
+  private constructor(unit: DesignUnit, retained?: readonly DesignEventRule[]) {
+    super();
+    this.#unit = unit;
     const events: DesignEventRule[] = [];
-    for (const obligation of unit.obligations().sortedCanonically()) {
-      const event = obligation.asEventRule();
-      if (event !== null) events.push(event);
-    }
-    for (const machine of unit.machines().sortedCanonically())
-      for (const transition of machine.transitions().sortedCanonically())
-        events.push(transition.asEventRule(DesignMachines.attrPathOf(machine)));
+    if (retained === undefined) {
+      for (const obligation of unit.obligations().sortedCanonically()) {
+        const event = obligation.asEventRule();
+        if (event !== null) events.push(event);
+      }
+      for (const machine of unit.machines().sortedCanonically())
+        for (const transition of machine.transitions().sortedCanonically())
+          events.push(transition.asEventRule(DesignMachines.attrPathOf(machine)));
+    } else events.push(...retained);
+    const snapshot = boundedCollectionSnapshot(events, 65_536, "too-many-design-event-rules");
     this.#events = KeyedIndex.of(
-      events.map((event) => [TargetIdentifier.of(event.reference().asString()), event] as const),
+      snapshot.map((event) => [TargetIdentifier.of(event.reference().asString()), event] as const),
     );
+  }
+
+  protected rebuild(values: readonly DesignEventRule[]): DesignEventRuleCatalog {
+    return new DesignEventRuleCatalog(this.#unit, values);
   }
   static of(unit: DesignUnit): DesignEventRuleCatalog {
     return new DesignEventRuleCatalog(unit);
@@ -52,9 +67,5 @@ export class DesignEventRuleCatalog implements FirstClassCollection, IterableFir
           if (parsed.ok) probes.push(parsed.value);
         }
     return probes;
-  }
-
-  isEmpty(): boolean {
-    return this.#events.isEmpty();
   }
 }

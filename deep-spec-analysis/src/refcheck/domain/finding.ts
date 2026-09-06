@@ -67,6 +67,23 @@ export class Finding {
     return this.#detail;
   }
 
+  equals(other: Finding): boolean {
+    const sameValues = <T extends { equals(value: T): boolean }>(left: readonly T[], right: readonly T[]): boolean =>
+      left.length === right.length && left.every((value, index) => value.equals(right[index] as T));
+    const unitsEqual =
+      this.#unit === undefined
+        ? other.#unit === undefined
+        : other.#unit !== undefined && this.#unit.equals(other.#unit);
+    return (
+      this.#kind.equals(other.#kind) &&
+      sameValues(this.#functionalRequirementReferences.toArray(), other.#functionalRequirementReferences.toArray()) &&
+      sameValues(this.#targets.toArray(), other.#targets.toArray()) &&
+      sameValues(this.#witness.toArray(), other.#witness.toArray()) &&
+      unitsEqual &&
+      this.#detail === other.#detail
+    );
+  }
+
   // 正準順の材料: kind 順位は所有者（コレクション）が引き、同順位なら targets の
   // 結合キー、次いで detail の辞書順。
   compareTo(other: Finding): number {

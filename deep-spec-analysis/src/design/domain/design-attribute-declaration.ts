@@ -46,6 +46,23 @@ export class DesignAttributeDeclaration {
     return new DesignAttributeDeclaration(props);
   }
 
+  equals(other: DesignAttributeDeclaration): boolean {
+    const leftValues = this.#values?.toArray().map((value) => value.asString()) ?? null;
+    const rightValues = other.#values?.toArray().map((value) => value.asString()) ?? null;
+    const sameValues =
+      leftValues === null || rightValues === null
+        ? leftValues === rightValues
+        : leftValues.length === rightValues.length && leftValues.every((value, index) => value === rightValues[index]);
+    return (
+      this.#name.equals(other.#name) &&
+      this.#kind.equals(other.#kind) &&
+      this.#description === other.#description &&
+      this.#min?.asNumber() === other.#min?.asNumber() &&
+      this.#max?.asNumber() === other.#max?.asNumber() &&
+      sameValues
+    );
+  }
+
   // 同定面（座標組み立て・重複検査の材料）。
   name(): DesignAttributeName {
     return this.#name;
@@ -71,7 +88,7 @@ export class DesignAttributeDeclaration {
   }
 
   admitsEnumLiteral(value: string): boolean {
-    return this.#kind.isEnum() && (this.#values?.includes(value) ?? false);
+    return this.#kind.isEnum() && (this.#values?.exists((member) => member.matchesLiteral(value)) ?? false);
   }
 
   // scenario binding の適合（bool / 安全整数 int / 宣言済み enum 値）。

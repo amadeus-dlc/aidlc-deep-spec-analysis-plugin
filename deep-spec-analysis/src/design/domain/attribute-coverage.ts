@@ -21,8 +21,6 @@ export class AttributeCoverage {
   readonly #missing: AttributePaths;
   private constructor(props: AttributeCoverageParam) {
     const required = [...props.required];
-    if (required.length > 65_536)
-      throw new IllegalArgumentException({ kind: "attribute-coverage-too-large", raw: required.length });
     for (const path of required) {
       const occurrences = [props.mapped, props.waived, props.missing].filter((part) => part.has(path)).length;
       if (occurrences !== 1) throw new IllegalArgumentException({ kind: "invalid-attribute-coverage-partition" });

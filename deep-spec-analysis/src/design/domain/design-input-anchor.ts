@@ -24,6 +24,10 @@ export class DesignInputAnchor {
     return new DesignInputAnchor(props);
   }
 
+  equals(other: DesignInputAnchor): boolean {
+    return this.#artifact.equals(other.#artifact) && this.#sha256.equals(other.#sha256);
+  }
+
   artifact(): string {
     return this.#artifact.asString();
   }

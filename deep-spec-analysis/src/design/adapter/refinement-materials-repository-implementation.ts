@@ -218,12 +218,16 @@ export class RefinementMaterialsRepositoryImplementation implements RefinementMa
         }),
       );
     }
+    const collections = combineResults({
+      attributes: RefinementAttributes.parse(attributes),
+      obligations: RefinementObligations.parse(obligations),
+      scenarios: RefinementScenarios.parse(scenarios),
+    });
+    if (!collections.ok) return err({ kind: "corrupt", path, cause: JSON.stringify(collections.error) });
     const model = RefinementRequirements.of({
       id: FormalModelIdentifier.of(ArtifactPath.of(path)),
       hash: ContentHash.ofText(canonicalStringify(raw)),
-      attributes: RefinementAttributes.of(attributes),
-      obligations: RefinementObligations.of(obligations),
-      scenarios: RefinementScenarios.of(scenarios),
+      ...collections.value,
     });
     return ok({ model, bytes: bytes.value });
   }
@@ -328,13 +332,16 @@ export function parseRefinementMapDocument(
       if (!isObject(e) || typeof e.reqTrigger !== "string") continue;
       const parsed = combineResults({
         reqTrigger: TriggerName.parse(e.reqTrigger),
-        transitions: traverseResult(strArr(e.transitions), TransitionReference.parse),
+        transitions: flatMapResult(
+          traverseResult(strArr(e.transitions), TransitionReference.parse),
+          TransitionReferences.parse,
+        ),
       });
       if (!parsed.ok) return { kind: "malformed", error: JSON.stringify(parsed.error) };
       eventMap.push(
         EventMapping.of({
           reqTrigger: parsed.value.reqTrigger,
-          transitions: TransitionReferences.of(parsed.value.transitions),
+          transitions: parsed.value.transitions,
           waived: isObject(e.waived) && typeof e.waived.reason === "string" ? { reason: e.waived.reason } : undefined,
         }),
       );
@@ -351,12 +358,16 @@ export function parseRefinementMapDocument(
     }
     const unit = DesignUnitIdentifier.parse(u.unit);
     if (!unit.ok) return { kind: "malformed", error: JSON.stringify(unit.error) };
+    const collections = combineResults({
+      attrMap: AttributeMappings.parse(attrMap),
+      eventMap: EventMappings.parse(eventMap),
+      unmapped: UnmappedDeclarations.parse(unmapped),
+    });
+    if (!collections.ok) return { kind: "malformed", error: JSON.stringify(collections.error) };
     units.push(
       RefinementUnitMap.of({
         unit: unit.value,
-        attrMap: AttributeMappings.of(attrMap),
-        eventMap: EventMappings.of(eventMap),
-        unmapped: UnmappedDeclarations.of(unmapped),
+        ...collections.value,
       }),
     );
   }
@@ -365,13 +376,15 @@ export function parseRefinementMapDocument(
     design: ContentHash.parse(typeof doc.designIrHash === "string" ? doc.designIrHash : ""),
   });
   if (!hashes.ok) return { kind: "malformed", error: JSON.stringify(hashes.error) };
+  const unitMaps = RefinementUnitMaps.parse(units);
+  if (!unitMaps.ok) return { kind: "malformed", error: JSON.stringify(unitMaps.error) };
   return {
     kind: "parsed",
     map: RefinementMap.of({
       id,
       requirementsIrHash: hashes.value.requirements,
       designIrHash: hashes.value.design,
-      units: RefinementUnitMaps.of(units),
+      units: unitMaps.value,
       sourceDocument: bytes,
     }),
   };

@@ -419,8 +419,8 @@ describe("doctor observation construction contracts", () => {
     const accepted = StageScopes.parse([StageScope.of("feature")]);
     expect(accepted.ok).toBe(true);
     if (accepted.ok) {
-      expect(accepted.value.includes(StageScope.of("feature"))).toBe(true);
-      expect(accepted.value.includes(StageScope.of("enterprise"))).toBe(false);
+      expect(accepted.value.include(StageScope.of("feature"))).toBe(true);
+      expect(accepted.value.include(StageScope.of("enterprise"))).toBe(false);
     }
     expect([...StageScopes.of(Array(1024).fill(StageScope.of("feature")))]).toHaveLength(1024);
     const oversized = Array(1025).fill(StageScope.of("feature"));

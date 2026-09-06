@@ -18,6 +18,9 @@ export class AttributeDefault {
   static of(raw: string | number): AttributeDefault {
     return new AttributeDefault(raw);
   }
+  equals(other: AttributeDefault): boolean {
+    return this.#value === other.#value || (Number.isNaN(this.#value) && Number.isNaN(other.#value));
+  }
   isNumber(): boolean {
     return typeof this.#value === "number";
   }

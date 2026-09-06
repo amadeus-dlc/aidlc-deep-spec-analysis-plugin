@@ -23,6 +23,14 @@ export class SiblingVerdictSkip {
     return new SiblingVerdictSkip(props);
   }
 
+  equals(other: SiblingVerdictSkip): boolean {
+    return (
+      this.#target.equals(other.#target) &&
+      this.#reason.asString() === other.#reason.asString() &&
+      this.#detail === other.#detail
+    );
+  }
+
   remap(unit: UnitName, index: LoweringIndex): Result<DesignSkipped | null, ParseError> {
     const resolved = index.resolveDesignTarget(this.#target);
     if (!resolved.ok) return resolved;

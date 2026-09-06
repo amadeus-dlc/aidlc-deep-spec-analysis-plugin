@@ -1,13 +1,31 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import { TraceState } from "./trace-state.ts";
 
 // 復号済みトレースのファーストクラスコレクション（ステップ順を保持——
 // witness の trace ペイロードへ toArray() で降りる）。
-export class TraceStates implements FirstClassCollection, IterableFirstClassCollection<TraceState> {
+export class TraceStates
+  extends FirstClassCollectionBase<TraceState, TraceStates>
+  implements FirstClassCollection<TraceState>
+{
   readonly #values: readonly TraceState[];
 
   private constructor(values: readonly TraceState[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-trace-states");
+  }
+
+  protected rebuild(values: readonly TraceState[]): TraceStates {
+    return new TraceStates(values);
+  }
+
+  static parse(values: readonly TraceState[]): Result<TraceStates, ParseError> {
+    return parseConstruction(() => new TraceStates(values));
   }
 
   static of(values: readonly TraceState[]): TraceStates {
@@ -29,9 +47,5 @@ export class TraceStates implements FirstClassCollection, IterableFirstClassColl
 
   toArray(): TraceState[] {
     return [...this.#values];
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

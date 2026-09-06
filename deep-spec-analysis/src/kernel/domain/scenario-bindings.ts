@@ -1,4 +1,5 @@
 import {
+  boundedCollectionSnapshot,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -6,24 +7,32 @@ import {
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { AttributePath } from "./attribute-path.ts";
 import type { BindingValue } from "./binding-value.ts";
-import type { FirstClassCollection } from "./first-class-collection.ts";
+import { FirstClassCollectionBase } from "./first-class-collection-base.ts";
 import type { ScenarioBinding } from "./scenario-binding.ts";
 
 // 同一属性へ一意に値を束縛するシナリオ状態。空集合は部分束縛として有効。
-export class ScenarioBindings implements FirstClassCollection {
+export class ScenarioBindings extends FirstClassCollectionBase<ScenarioBinding, ScenarioBindings> {
   readonly #values: readonly ScenarioBinding[];
 
   /** 1シナリオの束縛数の処理予算は10,000件。 */
   private constructor(values: readonly ScenarioBinding[]) {
-    if (values.length > 10_000)
-      throw new IllegalArgumentException({ kind: "too-many-scenario-bindings", raw: values.length });
+    super();
+    const snapshot = boundedCollectionSnapshot(values, 10_000, "too-many-scenario-bindings");
     const paths = new Set<string>();
-    for (const binding of values) {
+    for (const binding of snapshot) {
       const path = binding.path().asString();
       if (paths.has(path)) throw new IllegalArgumentException({ kind: "duplicate-scenario-binding", raw: path });
       paths.add(path);
     }
-    this.#values = Object.freeze([...values]);
+    this.#values = snapshot;
+  }
+
+  protected rebuild(values: readonly ScenarioBinding[]): ScenarioBindings {
+    return new ScenarioBindings(values);
+  }
+
+  *[Symbol.iterator](): Iterator<ScenarioBinding> {
+    yield* this.#values;
   }
 
   static parse(values: readonly ScenarioBinding[]): Result<ScenarioBindings, ParseError> {

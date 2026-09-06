@@ -1,4 +1,5 @@
 import {
+  boundedCollectionSnapshot,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -14,14 +15,13 @@ export class UnitCoverage {
   readonly #scopes: StageScopes;
   /** doctor一回の走査予算は65,536intentかつ総計65,536unit。多段集合で予算を乗算させない。 */
   private constructor(observations: readonly FunctionalObservation[], scopes: StageScopes) {
-    if (observations.length > 65_536)
-      throw new IllegalArgumentException({ kind: "too-many-functional-observations", raw: observations.length });
+    const snapshot = boundedCollectionSnapshot(observations, 65_536, "too-many-functional-observations");
     let units = 0;
-    for (const observation of observations) {
+    for (const observation of snapshot) {
       units += observation.eligibleCount();
       if (units > 65_536) throw new IllegalArgumentException({ kind: "too-many-covered-units", raw: units });
     }
-    this.#observations = Object.freeze([...observations]);
+    this.#observations = snapshot;
     this.#scopes = scopes;
   }
   static of(observations: readonly FunctionalObservation[], scopes: StageScopes): UnitCoverage {

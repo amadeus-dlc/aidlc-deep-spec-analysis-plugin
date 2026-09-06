@@ -14,13 +14,7 @@ import {
   LoweredScenarios,
   LoweringIndex,
 } from "@deep-spec-analysis/design-domain";
-import {
-  ArtifactPath,
-  ContentHash,
-  KeyedIndex,
-  QueryLabel,
-  TargetIdentifiers,
-} from "@deep-spec-analysis/kernel-domain";
+import { ArtifactPath, ContentHash, QueryLabel, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import { IllegalArgumentException, type Json } from "@deep-spec-analysis/kernel-infrastructure";
 import {
   AttributeDeclaration,
@@ -66,6 +60,7 @@ import {
   ObligationIdentifier,
   RequirementsModel,
   SatisfiabilityModuloTheoriesQueryVerdict,
+  SatisfiabilityModuloTheoriesQueryVerdictEntry,
   SatisfiabilityModuloTheoriesQueryVerdicts,
   ScenarioIdentifier,
   VerificationReportIdentifier,
@@ -188,9 +183,7 @@ describe("SMT response completeness", () => {
     const input = model();
     const plan = buildSmtPlan(input);
     expect(plan.queries.map((q) => q.id)).toEqual(["global"]);
-    const result = requireSuccess(
-      plan.plan.interpret(input, SatisfiabilityModuloTheoriesQueryVerdicts.of(KeyedIndex.empty())),
-    );
+    const result = requireSuccess(plan.plan.interpret(input, SatisfiabilityModuloTheoriesQueryVerdicts.of([])));
     expect(result.findings.toArray()).toHaveLength(0);
     expect(result.skipped.toArray().map((s) => ({ target: s.target().asString(), reason: s.reason() }))).toEqual([
       { target: "OB-1", reason: "unrecognized-format" },
@@ -210,9 +203,12 @@ describe("SMT response completeness", () => {
     const result = requireSuccess(
       plan.plan.interpret(
         input,
-        SatisfiabilityModuloTheoriesQueryVerdicts.of(
-          KeyedIndex.of([[QueryLabel.of("global"), SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "sat" })]]),
-        ),
+        SatisfiabilityModuloTheoriesQueryVerdicts.of([
+          SatisfiabilityModuloTheoriesQueryVerdictEntry.of(
+            QueryLabel.of("global"),
+            SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "sat" }),
+          ),
+        ]),
       ),
     );
     expect(result.skipped.toArray().map((s) => s.detail())).toEqual([

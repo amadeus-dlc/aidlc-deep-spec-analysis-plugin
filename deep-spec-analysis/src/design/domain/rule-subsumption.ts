@@ -24,6 +24,16 @@ export class RuleSubsumption {
   static parse(verdict: RuleSubsumptionVerdict): Result<RuleSubsumption, ParseError> {
     return parseConstruction(() => new RuleSubsumption(verdict));
   }
+
+  equals(other: RuleSubsumption): boolean {
+    const left = this.#probe.targets().toStrings();
+    const right = other.#probe.targets().toStrings();
+    return (
+      left.length === right.length &&
+      left.every((target, index) => target === right[index]) &&
+      this.#finding.equals(other.#finding)
+    );
+  }
   isReverseOf(other: RuleSubsumption): boolean {
     return this.#probe.isReverseOf(other.#probe);
   }

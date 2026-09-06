@@ -7,6 +7,51 @@ import { join, resolve } from "node:path";
 const applicationRoot = resolve(import.meta.dir, "..");
 
 test.each([
+  ["requirements", "smt"],
+  ["requirements", "quint"],
+  ["design", "smt"],
+  ["design", "quint"],
+] as const)("%s/%s: モデル解析失敗をセンサー成功として報告しない", (context, backend) => {
+  const directory = mkdtempSync(join(tmpdir(), "collection-invalid-model-"));
+  try {
+    const design = context === "design";
+    const model = join(
+      directory,
+      design ? "deep-spec-analysis-functional-formal-model.md" : "deep-spec-analysis-formal-model.md",
+    );
+    writeFileSync(model, "```json\n{ broken\n```\n");
+    const entry = `aidlc-sensor-deep-spec-${design ? "design-" : ""}verify-${backend}.ts`;
+    const result = spawnSync(
+      process.execPath,
+      [join(applicationRoot, "src", "entries", entry), "--output-path", model],
+      {
+        cwd: applicationRoot,
+        encoding: "utf-8",
+        timeout: 10_000,
+      },
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    const published = JSON.parse(
+      readFileSync(
+        join(directory, design ? "deep-spec-design-verify" : "deep-spec-verify", `${backend}.json`),
+        "utf-8",
+      ),
+    );
+    expect(published.findings).toEqual([]);
+    expect(published.unavailable.reason.length).toBeGreaterThan(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      pass: false,
+      findings_count: 0,
+      skipped_count: 0,
+      note: "ir-unreadable",
+    });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test.each([
   {
     backend: "smt",
     environment: "AIDLC_DEEP_SPEC_SMT_RUNTIME",
@@ -81,7 +126,7 @@ process.stdout.write(JSON.stringify({ results: request.queries.map((query) => ({
     expect(result.error).toBeUndefined();
     expect(result.status).toBe(0);
     const published = JSON.parse(readFileSync(join(directory, "deep-spec-verify", "smt.json"), "utf-8"));
-    expect(published.unavailable.reason).toContain("too-many-finding-targets");
+    expect(published.unavailable.reason).toContain("too-many-obligations");
     expect(published.findings).toEqual([]);
     expect(JSON.parse(result.stdout)).toMatchObject({ pass: false, findings_count: 0, skipped_count: 0 });
   } finally {

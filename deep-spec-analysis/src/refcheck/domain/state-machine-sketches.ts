@@ -1,17 +1,35 @@
-import type {
-  ArtifactPath,
-  FirstClassCollection,
-  IterableFirstClassCollection,
+import {
+  type ArtifactPath,
+  type FirstClassCollection,
+  FirstClassCollectionBase,
 } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DeclaredEntities } from "./declared-entities.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { StateMachineSketch } from "./state-machine-sketch.ts";
 
-export class StateMachineSketches implements FirstClassCollection, IterableFirstClassCollection<StateMachineSketch> {
+export class StateMachineSketches
+  extends FirstClassCollectionBase<StateMachineSketch, StateMachineSketches>
+  implements FirstClassCollection<StateMachineSketch>
+{
   readonly #values: readonly StateMachineSketch[];
 
   private constructor(values: readonly StateMachineSketch[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-state-machine-sketches");
+  }
+
+  protected rebuild(values: readonly StateMachineSketch[]): StateMachineSketches {
+    return new StateMachineSketches(values);
+  }
+
+  static parse(values: readonly StateMachineSketch[]): Result<StateMachineSketches, ParseError> {
+    return parseConstruction(() => new StateMachineSketches(values));
   }
 
   static of(values: readonly StateMachineSketch[]): StateMachineSketches {
@@ -24,10 +42,6 @@ export class StateMachineSketches implements FirstClassCollection, IterableFirst
 
   *[Symbol.iterator](): Iterator<StateMachineSketch> {
     yield* this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 
   toArray(): readonly StateMachineSketch[] {

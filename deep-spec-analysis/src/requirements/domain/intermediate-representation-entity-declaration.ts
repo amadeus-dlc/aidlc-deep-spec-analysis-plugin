@@ -28,6 +28,16 @@ export class IntermediateRepresentationEntityDeclaration {
     return this.#name;
   }
 
+  equals(other: IntermediateRepresentationEntityDeclaration): boolean {
+    const attributes = this.#attributes.toArray();
+    const otherAttributes = other.#attributes.toArray();
+    return (
+      this.#name.equals(other.#name) &&
+      attributes.length === otherAttributes.length &&
+      attributes.every((attribute, index) => attribute.equals(otherAttributes[index] as (typeof attributes)[number]))
+    );
+  }
+
   attributes(): IntermediateRepresentationAttributeDeclarations {
     return this.#attributes;
   }

@@ -32,6 +32,20 @@ class IllegalArgumentException extends Error {
   }
 }
 
+// src/kernel/infrastructure/bounded-collection-snapshot.ts
+function boundedCollectionSnapshot(values, maximum, problemKind) {
+  if (values.length > maximum)
+    throw new IllegalArgumentException({ kind: problemKind, raw: values.length });
+  const snapshot = [];
+  let inspected = 0;
+  for (const value of values) {
+    if (inspected >= maximum)
+      throw new IllegalArgumentException({ kind: problemKind, raw: inspected + 1 });
+    inspected++;
+    snapshot.push(value);
+  }
+  return Object.freeze(snapshot);
+}
 // src/kernel/infrastructure/bounded-value-snapshot.ts
 function boundedValueSnapshot(value, limits) {
   let nodes = 0;
@@ -84,6 +98,32 @@ function canonicalStringify(value) {
     return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(record[k] ?? null)}`).join(",")}}`;
   }
   return JSON.stringify(value) ?? "null";
+}
+function jsonEquals(left, right) {
+  if (Object.is(left, right))
+    return true;
+  if (left === null || right === null || typeof left !== typeof right)
+    return false;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length)
+      return false;
+    for (let index = 0;index < left.length; index++) {
+      if (!jsonEquals(left[index], right[index]))
+        return false;
+    }
+    return true;
+  }
+  if (typeof left !== "object" || typeof right !== "object")
+    return false;
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length)
+    return false;
+  for (const key of leftKeys) {
+    if (!Object.hasOwn(right, key) || !jsonEquals(left[key], right[key]))
+      return false;
+  }
+  return true;
 }
 // src/kernel/infrastructure/canonical-order.ts
 function numSegments(id) {
@@ -452,6 +492,9 @@ class BindingDeclaration {
   value() {
     return this.#value;
   }
+  equals(other) {
+    return this.#path.equals(other.#path) && this.#value.equals(other.#value);
+  }
 }
 // src/kernel/domain/binding-value.ts
 class BindingValue {
@@ -563,7 +606,7 @@ class Declaration {
     return cases.nonLiteral();
   }
   equals(other) {
-    return canonicalStringify(this.#value) === canonicalStringify(other.#value);
+    return jsonEquals(this.#value, other.#value);
   }
   describe() {
     return JSON.stringify(this.#value);
@@ -590,14 +633,184 @@ class DeclaredBindingValue {
   describe() {
     return this.#value.describe();
   }
+  equals(other) {
+    return this.#value.equals(other.#value);
+  }
 }
-// src/kernel/domain/declared-bindings.ts
-class DeclaredBindings {
+// src/kernel/domain/collection-operations.ts
+var MAX_COLLECTION_ELEMENTS = 65536;
+function invalidIndex(index) {
+  return new IllegalArgumentException({ kind: "invalid-collection-index", raw: index });
+}
+function checkReadBudget(operation, inspected) {
+  if (inspected >= MAX_COLLECTION_ELEMENTS)
+    throw new IllegalArgumentException({ kind: `${operation}-too-large`, raw: inspected + 1 });
+}
+function collectionAt(source, index) {
+  if (!Number.isSafeInteger(index) || index < 0 || index >= MAX_COLLECTION_ELEMENTS)
+    throw invalidIndex(index);
+  let position = 0;
+  for (const element of source) {
+    if (position === index)
+      return element;
+    position++;
+  }
+  throw invalidIndex(index);
+}
+function collectionHead(source) {
+  for (const element of source)
+    return element;
+  throw new IllegalArgumentException({ kind: "empty-collection-head" });
+}
+function collectionTail(source) {
+  const tail = [];
+  let inspected = 0;
+  let foundHead = false;
+  for (const element of source) {
+    checkReadBudget("collection-tail", inspected);
+    inspected++;
+    if (!foundHead) {
+      foundHead = true;
+      continue;
+    }
+    tail.push(element);
+  }
+  if (!foundHead)
+    throw new IllegalArgumentException({ kind: "empty-collection-tail" });
+  return tail;
+}
+function collectionInclude(source, target) {
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-include", inspected);
+    inspected++;
+    if (element.equals(target))
+      return true;
+  }
+  return false;
+}
+function collectionExists(source, predicate) {
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-exists", inspected);
+    inspected++;
+    if (predicate(element))
+      return true;
+  }
+  return false;
+}
+function collectionFilter(source, predicate) {
+  const values = [];
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-filter", inspected);
+    inspected++;
+    if (predicate(element))
+      values.push(element);
+  }
+  return values;
+}
+function collectionMap(source, transform) {
+  const values = [];
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-map", inspected);
+    inspected++;
+    values.push(transform(element));
+  }
+  return values;
+}
+
+// src/kernel/domain/immutable-first-class-collection.ts
+class ImmutableFirstClassCollection {
   #values;
   constructor(values) {
-    if (values.length > 1e4)
-      throw new IllegalArgumentException({ kind: "too-many-binding-declarations", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-immutable-collection-elements");
+  }
+  static of(values) {
+    return new ImmutableFirstClassCollection(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ImmutableFirstClassCollection(values));
+  }
+  [Symbol.iterator]() {
+    return this.#values[Symbol.iterator]();
+  }
+  at(index) {
+    return collectionAt(this, index);
+  }
+  head() {
+    return collectionHead(this);
+  }
+  tail() {
+    return ImmutableFirstClassCollection.of(collectionTail(this));
+  }
+  include(element) {
+    return collectionInclude(this, element);
+  }
+  exists(predicate) {
+    return collectionExists(this, predicate);
+  }
+  filter(predicate) {
+    return ImmutableFirstClassCollection.of(collectionFilter(this, predicate));
+  }
+  map(transform) {
+    return ImmutableFirstClassCollection.of(collectionMap(this, transform));
+  }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
+}
+
+// src/kernel/domain/non-empty-first-class-collection-base.ts
+class NonEmptyFirstClassCollectionBase {
+  constructor() {}
+  at(index) {
+    return collectionAt(this, index);
+  }
+  head() {
+    return collectionHead(this);
+  }
+  tail() {
+    return this.rebuild(collectionTail(this));
+  }
+  include(element) {
+    return collectionInclude(this, element);
+  }
+  exists(predicate) {
+    return collectionExists(this, predicate);
+  }
+  filter(predicate) {
+    return this.rebuild(collectionFilter(this, predicate));
+  }
+  map(transform) {
+    return ImmutableFirstClassCollection.of(collectionMap(this, transform));
+  }
+}
+
+// src/kernel/domain/first-class-collection-base.ts
+class FirstClassCollectionBase extends NonEmptyFirstClassCollectionBase {
+  constructor() {
+    super();
+  }
+  isEmpty() {
+    for (const _element of this)
+      return false;
+    return true;
+  }
+}
+
+// src/kernel/domain/declared-bindings.ts
+var MAX_DECLARED_BINDINGS = 1e4;
+
+class DeclaredBindings extends FirstClassCollectionBase {
+  #values;
+  constructor(values) {
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_DECLARED_BINDINGS, "too-many-binding-declarations");
+  }
+  rebuild(values) {
+    return new DeclaredBindings(values);
   }
   static parse(values) {
     return parseConstruction(() => new DeclaredBindings(values));
@@ -689,12 +902,16 @@ class EnumerationMember {
   }
 }
 // src/kernel/domain/enumeration-members.ts
-class EnumerationMembers {
+var MAX_ENUMERATION_MEMBERS = 1e4;
+
+class EnumerationMembers extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > 1e4)
-      throw new IllegalArgumentException({ kind: "too-many-enum-members", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_ENUMERATION_MEMBERS, "too-many-enum-members");
+  }
+  rebuild(values) {
+    return new EnumerationMembers(values);
   }
   static parse(values) {
     return parseConstruction(() => new EnumerationMembers(values));
@@ -750,16 +967,21 @@ class ErrorMessage {
   asString() {
     return this.#value;
   }
+  equals(other) {
+    return this.#value === other.#value;
+  }
 }
 // src/kernel/domain/error-messages.ts
 var MAX_MESSAGES = 65536;
 
-class ErrorMessages {
+class ErrorMessages extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > MAX_MESSAGES)
-      throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_MESSAGES, "too-many-error-messages");
+  }
+  rebuild(values) {
+    return new ErrorMessages(values);
   }
   static parse(values) {
     return parseConstruction(() => new ErrorMessages(values));
@@ -884,6 +1106,9 @@ class ExpressionTree {
   isCanonicallyEqual(other) {
     return canonicalStringify(this.#root) === canonicalStringify(other.#root);
   }
+  equals(other) {
+    return this.isCanonicallyEqual(other);
+  }
 }
 // src/kernel/domain/finding-kind.ts
 var KIND_RANK = {
@@ -964,12 +1189,104 @@ class FindingKind {
     return this.#value;
   }
 }
+// src/kernel/domain/target-identifier.ts
+var TARGET_ID_PATTERNS = [
+  /^(OB|SC)-[0-9]+$/,
+  /^BR[0-9]+\.[0-9]+$/,
+  /^(DOB|DSC|DBG|SM|TR)-[0-9]+$/,
+  /^(component|entity|attr|unit|contract|state|check):[A-Za-z0-9_./-]+$/
+];
+
+class TargetIdentifier {
+  #value;
+  constructor(raw) {
+    if (raw.length > 1024)
+      throw new IllegalArgumentException({ kind: "target-id-too-long", raw: raw.length });
+    if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
+      throw new IllegalArgumentException({ kind: "malformed-target-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new TargetIdentifier(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new TargetIdentifier(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  compareTo(other) {
+    return compareCanonically(this.#value, other.#value);
+  }
+  isRequirementObligation() {
+    return this.#value.startsWith("OB-");
+  }
+  asString() {
+    return this.#value;
+  }
+}
+
+// src/kernel/domain/target-identifiers.ts
+var MAX_TARGET_IDENTIFIERS = 65536;
+
+class TargetIdentifiers extends FirstClassCollectionBase {
+  #values;
+  constructor(values) {
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_TARGET_IDENTIFIERS, "too-many-target-identifiers");
+  }
+  rebuild(values) {
+    return new TargetIdentifiers(values);
+  }
+  static of(values) {
+    return new TargetIdentifiers(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new TargetIdentifiers(values));
+  }
+  static safe(prefix, raw) {
+    const token = raw.replace(/[^A-Za-z0-9_./-]/g, "-");
+    return `${prefix}:${token === "" ? "unknown" : token}`;
+  }
+  add(value) {
+    return new TargetIdentifiers([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  count() {
+    return this.#values.length;
+  }
+  excluding(value) {
+    return new TargetIdentifiers(this.#values.filter((v) => !v.equals(value)));
+  }
+  sortedCanonically() {
+    return new TargetIdentifiers([...this.#values].sort((a, b) => a.compareTo(b)));
+  }
+  sortedUniqueCanonically() {
+    return TargetIdentifiers.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetIdentifier.of(raw)));
+  }
+  joined(separator) {
+    return this.toStrings().join(separator);
+  }
+  toArray() {
+    return this.#values;
+  }
+  toStrings() {
+    return this.#values.map((v) => v.asString());
+  }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
+}
+
 // src/kernel/domain/finding-targets.ts
 var MAX_FINDING_TARGETS = 65536;
 
-class FindingTargets {
+class FindingTargets extends NonEmptyFirstClassCollectionBase {
   #values;
   constructor(head, tail) {
+    super();
     if (tail.length >= MAX_FINDING_TARGETS)
       throw new IllegalArgumentException({ kind: "too-many-finding-targets", raw: tail.length + 1 });
     const snapshot = [head];
@@ -979,6 +1296,9 @@ class FindingTargets {
       snapshot.push(value);
     }
     this.#values = Object.freeze(snapshot);
+  }
+  rebuild(values) {
+    return TargetIdentifiers.of(values);
   }
   static of(head, tail) {
     return new FindingTargets(head, tail);
@@ -991,9 +1311,6 @@ class FindingTargets {
   }
   count() {
     return this.#values.length;
-  }
-  includes(value) {
-    return this.#values.some((target) => target.equals(value));
   }
   sortedCanonically() {
     const [head, ...tail] = [...this.#values].sort((a, b) => a.compareTo(b));
@@ -1047,12 +1364,16 @@ class FindingsSchema {
   }
 }
 // src/kernel/domain/functional-requirement-references.ts
-class FunctionalRequirementReferences {
+var MAX_FUNCTIONAL_REQUIREMENT_REFERENCES = 1e4;
+
+class FunctionalRequirementReferences extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > 1e4)
-      throw new IllegalArgumentException({ kind: "too-many-functional-requirement-references", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_FUNCTIONAL_REQUIREMENT_REFERENCES, "too-many-functional-requirement-references");
+  }
+  rebuild(values) {
+    return new FunctionalRequirementReferences(values);
   }
   static parse(values) {
     return parseConstruction(() => new FunctionalRequirementReferences(values));
@@ -1299,23 +1620,28 @@ class RequirementIdentifier {
   }
 }
 // src/kernel/domain/requirement-identifiers.ts
-class RequirementIdentifiers {
+var MAX_REQUIREMENT_IDENTIFIERS = 65536;
+
+class RequirementIdentifiers extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = values;
+    super();
+    const snapshot = boundedCollectionSnapshot(values, MAX_REQUIREMENT_IDENTIFIERS, "too-many-requirement-identifiers");
+    this.#values = KeySet.of(snapshot);
   }
-  static extractFrom(text) {
-    const ids = [];
-    for (const m of text.matchAll(/\b(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*\b/g)) {
-      ids.push(RequirementIdentifier.of(m[0]));
-    }
-    return new RequirementIdentifiers(KeySet.of(ids));
+  rebuild(values) {
+    return new RequirementIdentifiers(values);
   }
   static of(values) {
-    return new RequirementIdentifiers(KeySet.of(values));
+    return new RequirementIdentifiers(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new RequirementIdentifiers(values));
   }
   add(value) {
-    return new RequirementIdentifiers(this.#values.with(value));
+    if (this.#values.has(value))
+      return this;
+    return new RequirementIdentifiers([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -1353,21 +1679,30 @@ class ScenarioBinding {
   isFor(path) {
     return this.#path.equals(path);
   }
+  equals(other) {
+    return this.#path.equals(other.#path) && this.#value.equals(other.#value);
+  }
 }
 // src/kernel/domain/scenario-bindings.ts
-class ScenarioBindings {
+class ScenarioBindings extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > 1e4)
-      throw new IllegalArgumentException({ kind: "too-many-scenario-bindings", raw: values.length });
+    super();
+    const snapshot = boundedCollectionSnapshot(values, 1e4, "too-many-scenario-bindings");
     const paths = new Set;
-    for (const binding of values) {
+    for (const binding of snapshot) {
       const path = binding.path().asString();
       if (paths.has(path))
         throw new IllegalArgumentException({ kind: "duplicate-scenario-binding", raw: path });
       paths.add(path);
     }
-    this.#values = Object.freeze([...values]);
+    this.#values = snapshot;
+  }
+  rebuild(values) {
+    return new ScenarioBindings(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
   }
   static parse(values) {
     return parseConstruction(() => new ScenarioBindings(values));
@@ -1506,6 +1841,9 @@ class ScenarioVerdict {
   agreesWith(other) {
     return this.#state === other.#state;
   }
+  equals(other) {
+    return this.#backend.equals(other.#backend) && this.#modelHash.equals(other.#modelHash) && this.#state === other.#state && this.#target.equals(other.#target) && (this.#unit === null ? other.#unit === null : other.#unit !== null && this.#unit.equals(other.#unit));
+  }
   verdictLabel() {
     if (this.#state !== "clean" && this.#state !== "violated")
       throw new Error("defect: an unverified scenario has no verdict label");
@@ -1513,23 +1851,23 @@ class ScenarioVerdict {
   }
 }
 // src/kernel/domain/scenario-verdicts.ts
-class ScenarioVerdicts {
+class ScenarioVerdicts extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    if (values.length > 128)
-      throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: values.length });
-    const snapshot = [];
-    for (const value of values) {
-      if (snapshot.length === 128)
-        throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: snapshot.length + 1 });
-      snapshot.push(value);
-    }
+    super();
+    const snapshot = boundedCollectionSnapshot(values, 128, "too-many-scenario-verdicts");
     const comparable = snapshot.filter((value) => value.isComparable());
     if (comparable.some((value) => !value.sameSubjectAs(comparable[0])))
       throw new IllegalArgumentException({ kind: "different-scenario-subjects" });
     if (KeySet.of(comparable.map((value) => value.backend())).size() !== comparable.length)
       throw new IllegalArgumentException({ kind: "duplicate-scenario-backend" });
     this.#values = [...comparable];
+  }
+  rebuild(values) {
+    return new ScenarioVerdicts(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
   }
   static of(values) {
     return new ScenarioVerdicts(values);
@@ -1610,89 +1948,6 @@ class SkipReason {
   }
   compareTo(other) {
     return this.#value < other.#value ? -1 : this.#value > other.#value ? 1 : 0;
-  }
-}
-// src/kernel/domain/target-identifier.ts
-var TARGET_ID_PATTERNS = [
-  /^(OB|SC)-[0-9]+$/,
-  /^BR[0-9]+\.[0-9]+$/,
-  /^(DOB|DSC|DBG|SM|TR)-[0-9]+$/,
-  /^(component|entity|attr|unit|contract|state|check):[A-Za-z0-9_./-]+$/
-];
-
-class TargetIdentifier {
-  #value;
-  constructor(raw) {
-    if (raw.length > 1024)
-      throw new IllegalArgumentException({ kind: "target-id-too-long", raw: raw.length });
-    if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
-      throw new IllegalArgumentException({ kind: "malformed-target-id", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new TargetIdentifier(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new TargetIdentifier(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  compareTo(other) {
-    return compareCanonically(this.#value, other.#value);
-  }
-  isRequirementObligation() {
-    return this.#value.startsWith("OB-");
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/kernel/domain/target-identifiers.ts
-class TargetIdentifiers {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new TargetIdentifiers(values);
-  }
-  static safe(prefix, raw) {
-    const token = raw.replace(/[^A-Za-z0-9_./-]/g, "-");
-    return `${prefix}:${token === "" ? "unknown" : token}`;
-  }
-  add(value) {
-    return new TargetIdentifiers([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  count() {
-    return this.#values.length;
-  }
-  includes(value) {
-    return this.#values.some((v) => v.equals(value));
-  }
-  excluding(value) {
-    return new TargetIdentifiers(this.#values.filter((v) => !v.equals(value)));
-  }
-  sortedCanonically() {
-    return new TargetIdentifiers([...this.#values].sort((a, b) => a.compareTo(b)));
-  }
-  sortedUniqueCanonically() {
-    return TargetIdentifiers.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetIdentifier.of(raw)));
-  }
-  joined(separator) {
-    return this.toStrings().join(separator);
-  }
-  toArray() {
-    return this.#values;
-  }
-  toStrings() {
-    return this.#values.map((v) => v.asString());
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/kernel/domain/trigger-name.ts
@@ -2071,14 +2326,14 @@ function parseFindingsValues(raw) {
       const fields = combineResults({
         backend: BackendName.parse(entry.backend),
         unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit),
-        targets: traverseResult(entry.targets, TargetIdentifier.parse)
+        targets: flatMapResult(traverseResult(entry.targets, TargetIdentifier.parse), TargetIdentifiers.parse)
       });
       if (!fields.ok)
         return fields;
       return ok({
         backend: fields.value.backend,
         unit: fields.value.unit,
-        targets: TargetIdentifiers.of(fields.value.targets)
+        targets: fields.value.targets
       });
     })
   });
@@ -2144,6 +2399,17 @@ function relArtifact(recordRoot, absPath) {
     return absPath.slice(recordRoot.length + 1);
   }
   return absPath.split("/").slice(-1)[0] ?? absPath;
+}
+// src/kernel/adapter/requirement-identifiers-parser.ts
+function parseRequirementIdentifiers(text) {
+  const values = [];
+  for (const match of text.matchAll(/\b(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*\b/g)) {
+    const parsed = RequirementIdentifier.parse(match[0]);
+    if (!parsed.ok)
+      return parsed;
+    values.push(parsed.value);
+  }
+  return RequirementIdentifiers.parse(values);
 }
 // src/kernel/adapter/sensor-flags.ts
 function parseFlags(argv) {
@@ -2360,10 +2626,17 @@ class AllowedValue {
   }
 }
 // src/refcheck/domain/allowed-values.ts
-class AllowedValues {
+class AllowedValues extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-allowed-values");
+  }
+  rebuild(values) {
+    return new AllowedValues(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new AllowedValues(values));
   }
   static of(values) {
     return new AllowedValues(values);
@@ -2387,9 +2660,6 @@ class AllowedValues {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/refcheck/domain/applies-to.ts
@@ -2427,10 +2697,17 @@ class AppliesTo {
   }
 }
 // src/refcheck/domain/check-families.ts
-class CheckFamilies {
+class CheckFamilies extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-check-families");
+  }
+  rebuild(values) {
+    return new CheckFamilies(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new CheckFamilies(values));
   }
   static of(values) {
     return new CheckFamilies(values);
@@ -2446,9 +2723,6 @@ class CheckFamilies {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 
@@ -2567,6 +2841,9 @@ class WitnessReference {
   value() {
     return this.#value;
   }
+  equals(other) {
+    return this.#artifact.equals(other.#artifact) && this.#element.equals(other.#element) && this.#value === other.#value;
+  }
   pointsAt(artifact, element) {
     return this.#artifact.asString() === artifact && this.#element.asString() === element;
   }
@@ -2652,6 +2929,13 @@ class AttributeDeclaration {
   element() {
     return this.#element;
   }
+  equals(other) {
+    const optionalEqual = (left, right) => left === null ? right === null : right !== null && left.equals(right);
+    const allowedEqual = this.#allowed === null ? other.#allowed === null : other.#allowed !== null && this.#allowed.toArray().length === other.#allowed.toArray().length && this.#allowed.toArray().every((value, index) => value.equals(other.#allowed?.toArray()[index]));
+    const defaultsEqual = optionalEqual(this.#def, other.#def);
+    const boundEqual = (left, right) => left === null ? right === null : right !== null && left.equals(right);
+    return this.#name.equals(other.#name) && this.#element.equals(other.#element) && optionalEqual(this.#type, other.#type) && this.#uniqueIsTrue === other.#uniqueIsTrue && optionalEqual(this.#references, other.#references) && allowedEqual && defaultsEqual && this.#minDeclared === other.#minDeclared && this.#maxDeclared === other.#maxDeclared && boundEqual(this.#min, other.#min) && boundEqual(this.#max, other.#max);
+  }
   hasAllowedValues() {
     return this.#allowed !== null;
   }
@@ -2706,10 +2990,17 @@ class AttributeDeclaration {
   }
 }
 // src/refcheck/domain/attribute-declarations.ts
-class AttributeDeclarations {
+class AttributeDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-attribute-declarations");
+  }
+  rebuild(values) {
+    return new AttributeDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new AttributeDeclarations(values));
   }
   static of(values) {
     return new AttributeDeclarations(values);
@@ -2746,9 +3037,6 @@ class AttributeDeclarations {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/refcheck/domain/attribute-default.ts
 class AttributeDefault {
@@ -2763,6 +3051,9 @@ class AttributeDefault {
   }
   static of(raw) {
     return new AttributeDefault(raw);
+  }
+  equals(other) {
+    return this.#value === other.#value || Number.isNaN(this.#value) && Number.isNaN(other.#value);
   }
   isNumber() {
     return typeof this.#value === "number";
@@ -2819,10 +3110,17 @@ class AttributeName {
   }
 }
 // src/refcheck/domain/attribute-names.ts
-class AttributeNames {
+class AttributeNames extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-attribute-names");
+  }
+  rebuild(values) {
+    return new AttributeNames(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new AttributeNames(values));
   }
   static of(values) {
     return new AttributeNames(values);
@@ -2841,9 +3139,6 @@ class AttributeNames {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/refcheck/domain/block-index.ts
@@ -2988,6 +3283,19 @@ class Component {
   element() {
     return this.#element;
   }
+  equals(other) {
+    const sameReferences = (left, right) => {
+      const leftValues = left.toArray();
+      const rightValues = right.toArray();
+      return leftValues.length === rightValues.length && leftValues.every((value, index) => value.equals(rightValues[index]));
+    };
+    const sameEntities = (left, right) => {
+      const leftValues = left.toArray();
+      const rightValues = right.toArray();
+      return leftValues.length === rightValues.length && leftValues.every((value, index) => value.equals(rightValues[index]));
+    };
+    return this.#name.equals(other.#name) && this.#element.equals(other.#element) && sameReferences(this.#dependsOn, other.#dependsOn) && sameReferences(this.#dependents, other.#dependents) && sameEntities(this.#entities, other.#entities);
+  }
   dependsOn() {
     return this.#dependsOn;
   }
@@ -3106,10 +3414,17 @@ class ComponentCatalogOutcome {
   }
 }
 // src/refcheck/domain/component-entities.ts
-class ComponentEntities {
+class ComponentEntities extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-component-entities");
+  }
+  rebuild(values) {
+    return new ComponentEntities(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ComponentEntities(values));
   }
   static of(values) {
     return new ComponentEntities(values);
@@ -3125,9 +3440,6 @@ class ComponentEntities {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/refcheck/domain/component-entity.ts
@@ -3178,6 +3490,12 @@ class ComponentEntity {
   hasIdentifier() {
     return this.#identifier !== null;
   }
+  equals(other) {
+    const references = this.#references.toArray();
+    const otherReferences = other.#references.toArray();
+    const identifiersEqual = this.#identifier === null ? other.#identifier === null : other.#identifier !== null && this.#identifier.equals(other.#identifier);
+    return this.#name.equals(other.#name) && this.#element.equals(other.#element) && identifiersEqual && references.length === otherReferences.length && references.every((reference, index) => reference.equals(otherReferences[index]));
+  }
 }
 // src/refcheck/domain/component-name.ts
 class ComponentName {
@@ -3225,12 +3543,22 @@ class ComponentReference {
   pointsAt(name) {
     return this.#component.equals(name);
   }
+  equals(other) {
+    return this.#component.equals(other.#component) && this.#element.equals(other.#element);
+  }
 }
 // src/refcheck/domain/component-references.ts
-class ComponentReferences {
+class ComponentReferences extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-component-references");
+  }
+  rebuild(values) {
+    return new ComponentReferences(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ComponentReferences(values));
   }
   static of(values) {
     return new ComponentReferences(values);
@@ -3246,9 +3574,6 @@ class ComponentReferences {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/refcheck/domain/component-shape-error.ts
@@ -3268,12 +3593,22 @@ class ComponentShapeError {
   detail() {
     return this.#detail;
   }
+  equals(other) {
+    return this.#element.equals(other.#element) && this.#detail === other.#detail;
+  }
 }
 // src/refcheck/domain/component-shape-errors.ts
-class ComponentShapeErrors {
+class ComponentShapeErrors extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-component-shape-errors");
+  }
+  rebuild(values) {
+    return new ComponentShapeErrors(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ComponentShapeErrors(values));
   }
   static of(values) {
     return new ComponentShapeErrors(values);
@@ -3289,9 +3624,6 @@ class ComponentShapeErrors {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/refcheck/domain/entity-name.ts
@@ -3322,10 +3654,17 @@ class EntityName {
 }
 
 // src/refcheck/domain/components.ts
-class Components {
+class Components extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-components");
+  }
+  rebuild(values) {
+    return new Components(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new Components(values));
   }
   static of(values) {
     return new Components(values);
@@ -3492,9 +3831,6 @@ class Components {
       report.finding(DD_7, FindingKind.structureInvalid(), FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", head)), tail.map((name) => TargetIdentifier.of(TargetIdentifiers.safe("component", name)))), cycle.map((n, i) => WitnessReference.at(art, `${this.byName(ComponentName.of(n))?.element().asString() ?? "components"}.depends_on`, cycle[(i + 1) % cycle.length])), `dependency cycle: ${[...cycle, cycle[0]].join(" -> ")}`);
     }
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/refcheck/domain/contract-identifier.ts
 class ContractIdentifier {
@@ -3572,6 +3908,9 @@ class ContractRow {
   id() {
     return this.#id;
   }
+  equals(other) {
+    return this.#id.equals(other.#id) && this.#provider.equals(other.#provider) && this.#consumer.equals(other.#consumer) && this.#owner.equals(other.#owner) && this.#line.equals(other.#line);
+  }
   connects(from, to) {
     return this.#provider.asString() === from && this.#consumer.asString() === to || this.#consumer.asString() === from && this.#provider.asString() === to;
   }
@@ -3600,10 +3939,17 @@ class ContractRow {
   }
 }
 // src/refcheck/domain/contract-rows.ts
-class ContractRows {
+class ContractRows extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-contract-rows");
+  }
+  rebuild(values) {
+    return new ContractRows(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ContractRows(values));
   }
   static of(values) {
     return new ContractRows(values);
@@ -3624,9 +3970,6 @@ class ContractRows {
     for (const row of this) {
       row.checkPartiesDeclared(declared, report, artifact, depArtifact);
     }
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/refcheck/domain/contracts-table-outcome.ts
@@ -3960,6 +4303,11 @@ class Finding {
   detail() {
     return this.#detail;
   }
+  equals(other) {
+    const sameValues = (left, right) => left.length === right.length && left.every((value, index) => value.equals(right[index]));
+    const unitsEqual = this.#unit === undefined ? other.#unit === undefined : other.#unit !== undefined && this.#unit.equals(other.#unit);
+    return this.#kind.equals(other.#kind) && sameValues(this.#functionalRequirementReferences.toArray(), other.#functionalRequirementReferences.toArray()) && sameValues(this.#targets.toArray(), other.#targets.toArray()) && sameValues(this.#witness.toArray(), other.#witness.toArray()) && unitsEqual && this.#detail === other.#detail;
+  }
   compareTo(other) {
     const kr = this.#kind.compareTo(other.#kind);
     if (kr !== 0)
@@ -3973,10 +4321,17 @@ class Finding {
 }
 
 // src/refcheck/domain/findings.ts
-class Findings {
+class Findings extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-findings");
+  }
+  rebuild(values) {
+    return new Findings(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new Findings(values));
   }
   static of(values) {
     return new Findings(values);
@@ -3990,9 +4345,6 @@ class Findings {
   count() {
     return this.#values.length;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
   sortedCanonically() {
     return new Findings([...this.#values].sort((a, b) => a.compareTo(b)));
   }
@@ -4002,10 +4354,17 @@ class Findings {
 }
 
 // src/refcheck/domain/input-anchors.ts
-class InputAnchors {
+class InputAnchors extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-input-anchors");
+  }
+  rebuild(values) {
+    return new InputAnchors(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new InputAnchors(values));
   }
   static of(values) {
     return new InputAnchors(values);
@@ -4024,9 +4383,6 @@ class InputAnchors {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 
@@ -4057,6 +4413,9 @@ class Skipped {
   detail() {
     return this.#detail;
   }
+  equals(other) {
+    return this.#target.equals(other.#target) && this.#reason.asString() === other.#reason.asString() && (this.#unit === undefined ? other.#unit === undefined : other.#unit !== undefined && this.#unit.equals(other.#unit)) && this.#detail === other.#detail;
+  }
   compareTo(other) {
     const c = this.#target.compareTo(other.#target);
     if (c !== 0)
@@ -4066,10 +4425,17 @@ class Skipped {
 }
 
 // src/refcheck/domain/skips.ts
-class Skips {
+class Skips extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-skips");
+  }
+  rebuild(values) {
+    return new Skips(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new Skips(values));
   }
   static of(values) {
     return new Skips(values);
@@ -4089,16 +4455,20 @@ class Skips {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 
 // src/refcheck/domain/witness-references.ts
-class WitnessReferences {
+class WitnessReferences extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-witness-references");
+  }
+  rebuild(values) {
+    return new WitnessReferences(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new WitnessReferences(values));
   }
   static of(values) {
     return new WitnessReferences(values);
@@ -4111,9 +4481,6 @@ class WitnessReferences {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 
@@ -4478,6 +4845,11 @@ class DomainEntitySketch {
   name() {
     return this.#name;
   }
+  equals(other) {
+    const attributes = this.#attributes.toArray();
+    const otherAttributes = other.#attributes.toArray();
+    return this.#name.equals(other.#name) && this.#component.equals(other.#component) && attributes.length === otherAttributes.length && attributes.every((attribute, index) => attribute.equals(otherAttributes[index]));
+  }
   catalogLabel() {
     return `entity ${this.#name.asString()} (component ${this.#component.asString()})`;
   }
@@ -4486,10 +4858,17 @@ class DomainEntitySketch {
   }
 }
 // src/refcheck/domain/domain-entity-sketches.ts
-class DomainEntitySketches {
+class DomainEntitySketches extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-domain-entity-sketches");
+  }
+  rebuild(values) {
+    return new DomainEntitySketches(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DomainEntitySketches(values));
   }
   static of(values) {
     return new DomainEntitySketches(values);
@@ -4522,9 +4901,6 @@ class DomainEntitySketches {
     if (unit === undefined) {
       report.skip(XS_3, "unrecognized-format", "the unit for this functional-design record could not be determined from its path");
     }
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/refcheck/domain/entity-declaration.ts
@@ -4561,6 +4937,10 @@ class EntityDeclaration {
   element() {
     return this.#element;
   }
+  equals(other) {
+    const sameValues = (left, right) => left.length === right.length && left.every((value, index) => value.equals(right[index]));
+    return this.#name.equals(other.#name) && this.#element.equals(other.#element) && sameValues(this.#attrs.toArray(), other.#attrs.toArray()) && sameValues(this.#rels.toArray(), other.#rels.toArray());
+  }
   attributeNames() {
     return AttributeNames.of(this.#attrs.names());
   }
@@ -4589,12 +4969,19 @@ class EntityDeclaration {
   }
 }
 // src/refcheck/domain/entity-declarations.ts
-class EntityDeclarations {
+class EntityDeclarations extends FirstClassCollectionBase {
   #values;
   #names;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-entity-declarations");
     this.#names = KeySet.of(this.#values.map((e) => e.name()));
+  }
+  rebuild(values) {
+    return new EntityDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new EntityDeclarations(values));
   }
   static of(values) {
     return new EntityDeclarations(values);
@@ -4655,9 +5042,6 @@ class EntityDeclarations {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/refcheck/domain/entity-reference.ts
 class EntityReference {
@@ -4681,12 +5065,22 @@ class EntityReference {
   element() {
     return this.#element;
   }
+  equals(other) {
+    return this.#entity.equals(other.#entity) && this.#ownedBy.equals(other.#ownedBy) && this.#element.equals(other.#element);
+  }
 }
 // src/refcheck/domain/entity-references.ts
-class EntityReferences {
+class EntityReferences extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-entity-references");
+  }
+  rebuild(values) {
+    return new EntityReferences(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new EntityReferences(values));
   }
   static of(values) {
     return new EntityReferences(values);
@@ -4699,9 +5093,6 @@ class EntityReferences {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/refcheck/domain/input-anchor.ts
@@ -4723,6 +5114,9 @@ class InputAnchor {
   }
   sha256() {
     return this.#sha256;
+  }
+  equals(other) {
+    return this.#artifact.equals(other.#artifact) && this.#sha256.equals(other.#sha256);
   }
   compareByArtifact(other) {
     const a = this.#artifact.asString();
@@ -4876,12 +5270,23 @@ class RelationshipDeclaration {
   cardinalityWithoutDirection() {
     return this.#cardinality !== null && !this.#hasDirection;
   }
+  equals(other) {
+    const optionalEqual = (left, right) => left === null ? right === null : right !== null && left.equals(right);
+    return this.#element.equals(other.#element) && optionalEqual(this.#from, other.#from) && optionalEqual(this.#to, other.#to) && optionalEqual(this.#cardinality, other.#cardinality) && this.#hasDirection === other.#hasDirection;
+  }
 }
 // src/refcheck/domain/relationship-declarations.ts
-class RelationshipDeclarations {
+class RelationshipDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-relationship-declarations");
+  }
+  rebuild(values) {
+    return new RelationshipDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new RelationshipDeclarations(values));
   }
   static of(values) {
     return new RelationshipDeclarations(values);
@@ -4897,9 +5302,6 @@ class RelationshipDeclarations {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/refcheck/domain/rule-category.ts
@@ -4955,6 +5357,13 @@ class RuleDeclaration {
   identifierForUniqueness() {
     return this.#id?.matchesShape() ? this.#id : null;
   }
+  equals(other) {
+    const optionalEqual = (left, right) => left === null ? right === null : right !== null && left.equals(right);
+    const sourceIds = this.#sourceIds.toArray();
+    const otherSourceIds = other.#sourceIds.toArray();
+    const sourceIdsEqual = sourceIds.length === otherSourceIds.length && sourceIds.every((sourceId, index) => sourceId.equals(otherSourceIds[index]));
+    return (this.#id === null ? other.#id === null : other.#id !== null && this.#id.asString() === other.#id.asString()) && this.#element.equals(other.#element) && optionalEqual(this.#category, other.#category) && optionalEqual(this.#appliesTo, other.#appliesTo) && sourceIdsEqual && this.#missing.length === other.#missing.length && this.#missing.every((missing, index) => missing === other.#missing[index]);
+  }
   #findingTarget(fallback) {
     return this.identifierForUniqueness()?.asString() ?? fallback;
   }
@@ -4995,10 +5404,17 @@ class RuleDeclaration {
   }
 }
 // src/refcheck/domain/rule-declarations.ts
-class RuleDeclarations {
+class RuleDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-rule-declarations");
+  }
+  rebuild(values) {
+    return new RuleDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new RuleDeclarations(values));
   }
   static of(values) {
     return new RuleDeclarations(values);
@@ -5038,9 +5454,6 @@ class RuleDeclarations {
     for (const rule of this)
       rule.checkCategory(report, artifact);
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/refcheck/domain/shape-error.ts
 class ShapeError {
@@ -5053,15 +5466,25 @@ class ShapeError {
   static of(props) {
     return new ShapeError(props.element, props.detail);
   }
+  equals(other) {
+    return this.#element.equals(other.#element) && this.#detail === other.#detail;
+  }
   recordIn(family, report, artifact) {
     report.finding(family, FindingKind.structureInvalid(), FindingTargets.of(TargetIdentifier.of(family.asCheckTarget()), []), [WitnessReference.at(artifact.asString(), this.#element.asString())], this.#detail);
   }
 }
 // src/refcheck/domain/shape-errors.ts
-class ShapeErrors {
+class ShapeErrors extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-shape-errors");
+  }
+  rebuild(values) {
+    return new ShapeErrors(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ShapeErrors(values));
   }
   static of(values) {
     return new ShapeErrors(values);
@@ -5075,15 +5498,43 @@ class ShapeErrors {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
+}
+// src/refcheck/domain/sibling-unit-index-entry.ts
+class SiblingUnitIndexEntry {
+  #unit;
+  #declarations;
+  constructor(unit, declarations) {
+    this.#unit = unit;
+    this.#declarations = declarations;
+  }
+  static of(unit, declarations) {
+    return new SiblingUnitIndexEntry(unit, declarations);
+  }
+  unit() {
+    return this.#unit;
+  }
+  declarations() {
+    return this.#declarations;
+  }
+  equals(other) {
+    const values = this.#declarations.toArray();
+    const otherValues = other.#declarations.toArray();
+    return this.#unit.equals(other.#unit) && values.length === otherValues.length && values.every((value, index) => value.equals(otherValues[index]));
   }
 }
+
 // src/refcheck/domain/unit-names.ts
-class UnitNames {
+class UnitNames extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-unit-names");
+  }
+  rebuild(values) {
+    return new UnitNames(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new UnitNames(values));
   }
   static of(values) {
     return new UnitNames(values);
@@ -5103,15 +5554,14 @@ class UnitNames {
   toArray() {
     return this.#values;
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 
 // src/refcheck/domain/sibling-unit-index.ts
-class SiblingUnitIndex {
+class SiblingUnitIndex extends FirstClassCollectionBase {
   #units;
-  constructor(units) {
+  #entries;
+  constructor(units, entries) {
+    super();
     if (units.size() > 65536)
       throw new IllegalArgumentException({ kind: "too-many-sibling-units", raw: units.size() });
     let count = 0;
@@ -5119,10 +5569,20 @@ class SiblingUnitIndex {
       for (const _entity of declarations)
         if (++count > 65536)
           throw new IllegalArgumentException({ kind: "too-many-sibling-entities", raw: count });
+    this.#entries = Object.freeze(entries ?? [...units].map(([unit, declarations]) => SiblingUnitIndexEntry.of(unit, declarations)));
     this.#units = KeyedIndex.of([...units].map(([unit, declarations]) => [
       unit,
       KeyedIndex.of([...declarations].map((entity) => [entity.name().normalized(), entity]))
     ]));
+  }
+  rebuild(values) {
+    return new SiblingUnitIndex(KeyedIndex.of(values.map((entry) => [entry.unit(), entry.declarations()])), values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#entries;
+  }
+  toArray() {
+    return this.#entries;
   }
   static of(units) {
     return new SiblingUnitIndex(units);
@@ -5135,9 +5595,6 @@ class SiblingUnitIndex {
   }
   entityDeclaredIn(unit, normalizedName) {
     return this.#units.get(unit)?.get(normalizedName);
-  }
-  isEmpty() {
-    return this.#units.isEmpty();
   }
   hasAnyUnit() {
     return !this.#units.isEmpty();
@@ -5167,10 +5624,17 @@ class SourceIdentifier {
   }
 }
 // src/refcheck/domain/source-identifiers.ts
-class SourceIdentifiers {
+class SourceIdentifiers extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-source-identifiers");
+  }
+  rebuild(values) {
+    return new SourceIdentifiers(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new SourceIdentifiers(values));
   }
   static of(values) {
     return new SourceIdentifiers(values);
@@ -5189,9 +5653,6 @@ class SourceIdentifiers {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/refcheck/domain/specification-block-assessment.ts
@@ -5220,6 +5681,9 @@ class SpecificationBlockAssessment {
   }
   blockId() {
     return `contract:block-${this.#index.asNumber()}`;
+  }
+  equals(other) {
+    return this.#index.equals(other.#index) && this.#line.equals(other.#line) && this.#issue === other.#issue && this.#error === other.#error;
   }
   locationLabel() {
     return `yaml fence #${this.#index.asNumber()} (line ${this.#line.asNumber()})`;
@@ -5252,10 +5716,17 @@ class SpecificationBlockAssessment {
   }
 }
 // src/refcheck/domain/specification-block-assessments.ts
-class SpecificationBlockAssessments {
+class SpecificationBlockAssessments extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-specification-block-assessments");
+  }
+  rebuild(values) {
+    return new SpecificationBlockAssessments(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new SpecificationBlockAssessments(values));
   }
   static of(values) {
     return new SpecificationBlockAssessments(values);
@@ -5273,9 +5744,6 @@ class SpecificationBlockAssessments {
     for (const block of this) {
       block.check(report, artifact);
     }
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/refcheck/domain/state-machine-sketch.ts
@@ -5299,6 +5767,19 @@ class StateMachineSketch {
   locationLabel() {
     const state = this.#state;
     return state.kind === "unrecognized" ? `State Machine heading (line ${state.line.asNumber()})` : `State Machine: ${state.declaration.spec.asString()} (fence line ${state.declaration.fenceLine.asNumber()})`;
+  }
+  equals(other) {
+    if (this.#state.kind !== other.#state.kind)
+      return false;
+    if (this.#state.kind === "unrecognized" && other.#state.kind === "unrecognized")
+      return this.#state.line.equals(other.#state.line) && this.#state.reason.equals(other.#state.reason);
+    if (this.#state.kind !== "declared" || other.#state.kind !== "declared")
+      return false;
+    const left = this.#state.declaration;
+    const right = other.#state.declaration;
+    const states = left.states.toArray();
+    const otherStates = right.states.toArray();
+    return left.spec.equals(right.spec) && states.length === otherStates.length && states.every((state, index) => state.equals(otherStates[index])) && left.fenceLine.equals(right.fenceLine) && left.unsupported === right.unsupported;
   }
   check(report, specArtifact, entitiesArtifact, entities) {
     if (this.#state.kind === "unrecognized") {
@@ -5332,10 +5813,17 @@ class StateMachineSketch {
   }
 }
 // src/refcheck/domain/state-machine-sketches.ts
-class StateMachineSketches {
+class StateMachineSketches extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-state-machine-sketches");
+  }
+  rebuild(values) {
+    return new StateMachineSketches(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new StateMachineSketches(values));
   }
   static of(values) {
     return new StateMachineSketches(values);
@@ -5345,9 +5833,6 @@ class StateMachineSketches {
   }
   *[Symbol.iterator]() {
     yield* this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
   toArray() {
     return this.#values;
@@ -5388,10 +5873,17 @@ class StateName {
   }
 }
 // src/refcheck/domain/state-names.ts
-class StateNames {
+class StateNames extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-state-names");
+  }
+  rebuild(values) {
+    return new StateNames(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new StateNames(values));
   }
   static of(values) {
     return new StateNames(values);
@@ -5404,9 +5896,6 @@ class StateNames {
   }
   toArray() {
     return this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
 }
 // src/refcheck/domain/type-name.ts
@@ -5466,6 +5955,11 @@ class UnitDeclaration {
   name() {
     return this.#name;
   }
+  equals(other) {
+    const dependencies = this.#dependsOn.toArray();
+    const otherDependencies = other.#dependsOn.toArray();
+    return this.#name.equals(other.#name) && dependencies.length === otherDependencies.length && dependencies.every((dependency, index) => dependency.equals(otherDependencies[index]));
+  }
   dependsOn() {
     return this.#dependsOn;
   }
@@ -5474,10 +5968,17 @@ class UnitDeclaration {
   }
 }
 // src/refcheck/domain/unit-declarations.ts
-class UnitDeclarations {
+class UnitDeclarations extends FirstClassCollectionBase {
   #values;
   constructor(values) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-unit-declarations");
+  }
+  rebuild(values) {
+    return new UnitDeclarations(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new UnitDeclarations(values));
   }
   static of(values) {
     return new UnitDeclarations(values);
@@ -5518,9 +6019,6 @@ class UnitDeclarations {
       }
     }
   }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
 }
 // src/refcheck/adapter/component-catalog-parser.ts
 function str(v) {
@@ -5534,13 +6032,17 @@ function extractComponents(value) {
       element: ElementPath.of("components"),
       detail: "top-level `components:` list is missing"
     }));
-    return { comps: Components.of(comps), shapeErrors: ComponentShapeErrors.of(shapeErrors) };
+    const parsed2 = combineResults({
+      comps: Components.parse(comps),
+      shapeErrors: ComponentShapeErrors.parse(shapeErrors)
+    });
+    return parsed2.ok ? ok(parsed2.value) : err(JSON.stringify(parsed2.error));
   }
-  value.components.forEach((raw, i) => {
+  for (const [i, raw] of value.components.entries()) {
     const element = `components[${i}]`;
     if (!isObject(raw)) {
       shapeErrors.push(ComponentShapeError.of({ element: ElementPath.of(element), detail: "component entry is not a mapping" }));
-      return;
+      continue;
     }
     const name = str(raw.name);
     if (name === null) {
@@ -5548,7 +6050,7 @@ function extractComponents(value) {
         element: ElementPath.of(`${element}.name`),
         detail: "component has no string `name`"
       }));
-      return;
+      continue;
     }
     const parsedName = ComponentName.parse(name);
     if (!parsedName.ok) {
@@ -5556,12 +6058,14 @@ function extractComponents(value) {
         element: ElementPath.of(`${element}.name`),
         detail: JSON.stringify(parsedName.error)
       }));
-      return;
+      continue;
     }
     const refs = (key) => {
       const out = [];
-      if (!Array.isArray(raw[key]))
-        return ComponentReferences.of(out);
+      if (!Array.isArray(raw[key])) {
+        const parsed3 = ComponentReferences.parse(out);
+        return parsed3.ok ? ok(parsed3.value) : err(JSON.stringify(parsed3.error));
+      }
       raw[key].forEach((entry, j) => {
         const el = `${element}.${key}[${j}].component`;
         const comp = isObject(entry) ? str(entry.component) : str(entry);
@@ -5574,23 +6078,24 @@ function extractComponents(value) {
         }
         out.push(ComponentReference.of({ component: component.value, element: ElementPath.of(el) }));
       });
-      return ComponentReferences.of(out);
+      const parsed2 = ComponentReferences.parse(out);
+      return parsed2.ok ? ok(parsed2.value) : err(JSON.stringify(parsed2.error));
     };
     const entities = [];
     if (Array.isArray(raw.entities)) {
-      raw.entities.forEach((entry, j) => {
+      for (const [j, entry] of raw.entities.entries()) {
         if (!isObject(entry))
-          return;
+          continue;
         const ename = str(entry.name);
         if (ename === null)
-          return;
+          continue;
         const entity = EntityName.parse(ename);
         if (!entity.ok) {
           shapeErrors.push(ComponentShapeError.of({
             element: ElementPath.of(`${element}.entities[${j}].name`),
             detail: JSON.stringify(entity.error)
           }));
-          return;
+          continue;
         }
         const references = [];
         if (Array.isArray(entry.references)) {
@@ -5626,25 +6131,41 @@ function extractComponents(value) {
             element: ElementPath.of(`${element}.entities[${j}].identifier`),
             detail: JSON.stringify(parsedIdentifier.error)
           }));
-          return;
+          continue;
         }
+        const parsedReferences = EntityReferences.parse(references);
+        if (!parsedReferences.ok)
+          return err(JSON.stringify(parsedReferences.error));
         entities.push(ComponentEntity.of({
           name: entity.value,
           element: ElementPath.of(`${element}.entities[${j}]`),
           identifier: parsedIdentifier.value,
-          references: EntityReferences.of(references)
+          references: parsedReferences.value
         }));
-      });
+      }
     }
+    const dependsOn = refs("depends_on");
+    if (!dependsOn.ok)
+      return err(dependsOn.error);
+    const dependents = refs("dependents");
+    if (!dependents.ok)
+      return err(dependents.error);
+    const parsedEntities = ComponentEntities.parse(entities);
+    if (!parsedEntities.ok)
+      return err(JSON.stringify(parsedEntities.error));
     comps.push(Component.of({
       name: parsedName.value,
       element: ElementPath.of(element),
-      dependsOn: refs("depends_on"),
-      dependents: refs("dependents"),
-      entities: ComponentEntities.of(entities)
+      dependsOn: dependsOn.value,
+      dependents: dependents.value,
+      entities: parsedEntities.value
     }));
+  }
+  const parsed = combineResults({
+    comps: Components.parse(comps),
+    shapeErrors: ComponentShapeErrors.parse(shapeErrors)
   });
-  return { comps: Components.of(comps), shapeErrors: ComponentShapeErrors.of(shapeErrors) };
+  return parsed.ok ? ok(parsed.value) : err(JSON.stringify(parsed.error));
 }
 function parseComponentCatalog(md) {
   const fences = extractFences(md, "yaml");
@@ -5655,8 +6176,8 @@ function parseComponentCatalog(md) {
   if (parsed.error !== undefined) {
     return ComponentCatalogOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), parsed.error);
   }
-  const { comps, shapeErrors } = extractComponents(parsed.value ?? null);
-  return ComponentCatalogOutcome.extracted(comps, shapeErrors);
+  const extracted = extractComponents(parsed.value ?? null);
+  return extracted.ok ? ComponentCatalogOutcome.extracted(extracted.value.comps, extracted.value.shapeErrors) : ComponentCatalogOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), extracted.error);
 }
 // src/refcheck/adapter/contract-summary-parser.ts
 function parseDeclaredUnits(depMd) {
@@ -5681,11 +6202,15 @@ function parseDeclaredUnits(depMd) {
       });
       if (!fields.ok)
         return DeclaredUnitsOutcome.unrecognized(JSON.stringify(fields.error));
-      units.push(UnitDeclaration.of({ name: fields.value.name, dependsOn: UnitNames.of(fields.value.dependsOn) }));
+      const parsedDependsOn = UnitNames.parse(fields.value.dependsOn);
+      if (!parsedDependsOn.ok)
+        return DeclaredUnitsOutcome.unrecognized(JSON.stringify(parsedDependsOn.error));
+      units.push(UnitDeclaration.of({ name: fields.value.name, dependsOn: parsedDependsOn.value }));
     }
     if (units.length === 0)
       return DeclaredUnitsOutcome.unrecognized();
-    return DeclaredUnitsOutcome.declared(UnitDeclarations.of(units));
+    const parsedUnits = UnitDeclarations.parse(units);
+    return parsedUnits.ok ? DeclaredUnitsOutcome.declared(parsedUnits.value) : DeclaredUnitsOutcome.unrecognized(JSON.stringify(parsedUnits.error));
   }
   return DeclaredUnitsOutcome.unrecognized("no yaml fence with a top-level `units:` list");
 }
@@ -5720,7 +6245,8 @@ function parseContractsTable(md) {
       line: LineNumber.of(row.line)
     }));
   }
-  return ContractsTableOutcome.rows(ContractRows.of(rows));
+  const parsedRows = ContractRows.parse(rows);
+  return parsedRows.ok ? ContractsTableOutcome.rows(parsedRows.value) : ContractsTableOutcome.unparseable(ErrorMessage.of(JSON.stringify(parsedRows.error)));
 }
 function assessSpecBlocks(md) {
   const blocks = extractFences(md, "yaml").map((fence, i) => {
@@ -5739,7 +6265,7 @@ function assessSpecBlocks(md) {
     }
     return SpecificationBlockAssessment.sound(index, line);
   });
-  return SpecificationBlockAssessments.of(blocks);
+  return SpecificationBlockAssessments.parse(blocks);
 }
 // src/refcheck/adapter/design-record-repository-implementation.ts
 import { readFileSync as readFileSync4 } from "fs";
@@ -5787,29 +6313,31 @@ function extractEntities(value) {
   const model = collected;
   if (!isObject(value) || !Array.isArray(value.entities)) {
     model.shapeErrors.push(ShapeError.of({ element: ElementPath.of("entities"), detail: "top-level `entities:` list is missing" }));
-    return DeclaredEntities.of({
-      entities: EntityDeclarations.of(collected.entities),
-      rels: RelationshipDeclarations.of(collected.rels),
-      shapeErrors: ShapeErrors.of(collected.shapeErrors)
+    const parsed2 = combineResults({
+      entities: EntityDeclarations.parse(collected.entities),
+      rels: RelationshipDeclarations.parse(collected.rels),
+      shapeErrors: ShapeErrors.parse(collected.shapeErrors)
     });
+    return parsed2.ok ? ok(DeclaredEntities.of(parsed2.value)) : err(JSON.stringify(parsed2.error));
   }
-  value.entities.forEach((raw, i) => {
+  for (const [i, raw] of value.entities.entries()) {
     const element = `entities[${i}]`;
     if (!isObject(raw)) {
       model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(element), detail: "entity entry is not a mapping" }));
-      return;
+      continue;
     }
     const name = str2(raw.name);
     if (name === null) {
       model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${element}.name`), detail: "entity has no string `name`" }));
-      return;
+      continue;
     }
     const entity = EntityName.parse(name);
     if (!entity.ok) {
       model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${element}.name`), detail: JSON.stringify(entity.error) }));
-      return;
+      continue;
     }
     const attrs = [];
+    let collectionError = null;
     if (Array.isArray(raw.attributes)) {
       raw.attributes.forEach((a, j) => {
         const ael = `${element}.attributes[${j}]`;
@@ -5848,13 +6376,18 @@ function extractEntities(value) {
           model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(ael), detail: JSON.stringify(fields.error) }));
           return;
         }
+        const parsedAllowed = fields.value.allowed === null ? null : AllowedValues.parse(fields.value.allowed);
+        if (parsedAllowed !== null && !parsedAllowed.ok) {
+          collectionError = JSON.stringify(parsedAllowed.error);
+          return;
+        }
         attrs.push(AttributeDeclaration.of({
           name: fields.value.name,
           element: ElementPath.of(ael),
           type: fields.value.type,
           uniqueIsTrue: pick(a, ["unique"]) === true,
           references: fields.value.references,
-          allowed: fields.value.allowed === null ? null : AllowedValues.of(fields.value.allowed),
+          allowed: parsedAllowed === null ? null : parsedAllowed.value,
           def: fields.value.def,
           minDeclared: minRaw !== null,
           maxDeclared: maxRaw !== null,
@@ -5863,6 +6396,8 @@ function extractEntities(value) {
         }));
       });
     }
+    if (collectionError !== null)
+      return err(collectionError);
     const rels = [];
     if (Array.isArray(raw.relationships)) {
       raw.relationships.forEach((r, j) => {
@@ -5873,13 +6408,19 @@ function extractEntities(value) {
           rels.push(rel.value);
       });
     }
+    const parsedAttributes = AttributeDeclarations.parse(attrs);
+    if (!parsedAttributes.ok)
+      return err(JSON.stringify(parsedAttributes.error));
+    const parsedRelationships = RelationshipDeclarations.parse(rels);
+    if (!parsedRelationships.ok)
+      return err(JSON.stringify(parsedRelationships.error));
     model.entities.push(EntityDeclaration.of({
       name: entity.value,
       element: ElementPath.of(element),
-      attrs: AttributeDeclarations.of(attrs),
-      rels: RelationshipDeclarations.of(rels)
+      attrs: parsedAttributes.value,
+      rels: parsedRelationships.value
     }));
-  });
+  }
   if (Array.isArray(value.relationships)) {
     value.relationships.forEach((r, j) => {
       const rel = extractRel(r, `relationships[${j}]`, null);
@@ -5889,11 +6430,12 @@ function extractEntities(value) {
         model.rels.push(rel.value);
     });
   }
-  return DeclaredEntities.of({
-    entities: EntityDeclarations.of(collected.entities),
-    rels: RelationshipDeclarations.of(collected.rels),
-    shapeErrors: ShapeErrors.of(collected.shapeErrors)
+  const parsed = combineResults({
+    entities: EntityDeclarations.parse(collected.entities),
+    rels: RelationshipDeclarations.parse(collected.rels),
+    shapeErrors: ShapeErrors.parse(collected.shapeErrors)
   });
+  return parsed.ok ? ok(DeclaredEntities.of(parsed.value)) : err(JSON.stringify(parsed.error));
 }
 function parseEntitiesDocument(md) {
   if (md === null)
@@ -5905,7 +6447,8 @@ function parseEntitiesDocument(md) {
   if (parsed.error !== undefined) {
     return EntitiesOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), parsed.error);
   }
-  return EntitiesOutcome.extracted(extractEntities(parsed.value ?? null));
+  const extracted = extractEntities(parsed.value ?? null);
+  return extracted.ok ? EntitiesOutcome.extracted(extracted.value) : EntitiesOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), extracted.error);
 }
 function parseRulesDocument(md) {
   if (md === null)
@@ -5920,6 +6463,7 @@ function parseRulesDocument(md) {
   const v = parsed.value ?? null;
   if (!isObject(v) || !Array.isArray(v.rules))
     return RulesOutcome.noRulesList();
+  let collectionError = null;
   const ruleList = v.rules.map((raw, i) => {
     const element = `rules[${i}]`;
     if (!isObject(raw)) {
@@ -5949,16 +6493,33 @@ function parseRulesDocument(md) {
       missing.push("category");
     if (!parsedAppliesTo.ok)
       missing.push("applies_to");
+    const parsedRequirementIds = parseRequirementIdentifiers(sourceText);
+    let sourceIds;
+    if (!parsedRequirementIds.ok) {
+      collectionError = JSON.stringify(parsedRequirementIds.error);
+      sourceIds = SourceIdentifiers.of([]);
+    } else {
+      const parsedSourceIds = SourceIdentifiers.parse([...parsedRequirementIds.value].map((value) => SourceIdentifier.of(value.asString())));
+      if (!parsedSourceIds.ok) {
+        collectionError = JSON.stringify(parsedSourceIds.error);
+        sourceIds = SourceIdentifiers.of([]);
+      } else {
+        sourceIds = parsedSourceIds.value;
+      }
+    }
     return RuleDeclaration.of({
       id: parsedId.ok ? parsedId.value : null,
       element: ElementPath.of(element),
       category: parsedCategory.ok ? parsedCategory.value : null,
       appliesTo: parsedAppliesTo.ok ? parsedAppliesTo.value : null,
-      sourceIds: SourceIdentifiers.of([...RequirementIdentifiers.extractFrom(sourceText)].map((v2) => SourceIdentifier.of(v2.asString()))),
+      sourceIds,
       missing
     });
   });
-  return RulesOutcome.extracted(RuleDeclarations.of(ruleList));
+  if (collectionError !== null)
+    return RulesOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), collectionError);
+  const parsedRules = RuleDeclarations.parse(ruleList);
+  return parsedRules.ok ? RulesOutcome.extracted(parsedRules.value) : RulesOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), JSON.stringify(parsedRules.error));
 }
 function parseFunctionalSpecDocument(md) {
   if (md === null)
@@ -6012,9 +6573,14 @@ function parseFunctionalSpecDocument(md) {
         machines.push(StateMachineSketch.unrecognized(LineNumber.of(j + 1), ErrorMessage.of(`invalid diagram state: ${parsedStates.error.kind}`)));
         break;
       }
+      const stateNames = StateNames.parse(parsedStates.value);
+      if (!stateNames.ok) {
+        machines.push(StateMachineSketch.unrecognized(LineNumber.of(j + 1), ErrorMessage.of(`state collection is too large: ${stateNames.error.kind}`)));
+        break;
+      }
       machines.push(StateMachineSketch.of({
         spec: spec.value,
-        states: StateNames.of(parsedStates.value),
+        states: stateNames.value,
         fenceLine: LineNumber.of(j + 1),
         unsupported
       }));
@@ -6049,15 +6615,19 @@ function parseDomainEntitiesDocument(md) {
         });
         if (!fields.ok)
           return DomainEntitiesOutcome.unusable(JSON.stringify(fields.error));
+        const parsedAttributes = AttributeNames.parse(fields.value.attributes);
+        if (!parsedAttributes.ok)
+          return DomainEntitiesOutcome.unusable(JSON.stringify(parsedAttributes.error));
         out.push(DomainEntitySketch.of({
           name: fields.value.name,
           component: fields.value.component,
-          attributes: AttributeNames.of(fields.value.attributes)
+          attributes: parsedAttributes.value
         }));
       }
     }
   }
-  return DomainEntitiesOutcome.extracted(DomainEntitySketches.of(out));
+  const parsedEntities = DomainEntitySketches.parse(out);
+  return parsedEntities.ok ? DomainEntitiesOutcome.extracted(parsedEntities.value) : DomainEntitiesOutcome.unusable(JSON.stringify(parsedEntities.error));
 }
 function buildSiblingUnitEntities(texts) {
   const unitEntities = [];
@@ -6069,10 +6639,12 @@ function buildSiblingUnitEntities(texts) {
     if (parsed.error !== undefined)
       continue;
     const model = extractEntities(parsed.value ?? null);
+    if (!model.ok)
+      return err({ kind: "invalid-entities", raw: model.error });
     const name = UnitName.parse(unit);
     if (!name.ok)
       return name;
-    unitEntities.push([name.value, model.entities()]);
+    unitEntities.push([name.value, model.value.entities()]);
   }
   return SiblingUnitIndex.parse(KeyedIndex.of(unitEntities));
 }
@@ -6094,17 +6666,27 @@ class DesignRecordRepositoryImplementation {
     const recordRoot = findRecordRoot(isFunctional ? fdDir : dirname3(artifactPath));
     const rel = (p) => relArtifact(recordRoot, p);
     const input = (p, text) => InputAnchor.of({ artifact: rel(p), sha256: ContentHash.ofText(text) });
+    let contractSummary = null;
+    if (targetBase === "contract-summary.md") {
+      const specBlocks = assessSpecBlocks(md);
+      if (!specBlocks.ok)
+        return err({ kind: "corrupt", path: artifactPath, cause: JSON.stringify(specBlocks.error) });
+      contractSummary = {
+        contractsTable: parseContractsTable(md),
+        specBlocks: specBlocks.value,
+        declaredUnits: this.#declaredUnits(recordRoot)
+      };
+    }
+    const functional = isFunctional ? this.#functional(recordRoot, fdDir) : ok(null);
+    if (!functional.ok)
+      return functional;
     const seed = {
       id,
       target: input(artifactPath, md),
       sourceDocument: sourceBytes,
       componentCatalog: targetBase === "components.md" ? parseComponentCatalog(md) : null,
-      contractSummary: targetBase === "contract-summary.md" ? {
-        contractsTable: parseContractsTable(md),
-        specBlocks: assessSpecBlocks(md),
-        declaredUnits: this.#declaredUnits(recordRoot)
-      } : null,
-      functional: isFunctional ? this.#functional(recordRoot, fdDir) : null
+      contractSummary,
+      functional: functional.value
     };
     return ok(DesignRecord.of(seed));
   }
@@ -6152,7 +6734,19 @@ class DesignRecordRepositoryImplementation {
     const specPath = join4(fdDir, "functional-spec.md");
     const spec = load(specPath, (t) => parseFunctionalSpecDocument(t));
     const reqPath = recordRoot === null ? null : join4(recordRoot, "inception", "requirements-analysis", "requirements.md");
-    const requirements = rules?.outcome.isExtracted() && reqPath !== null ? load(reqPath, (t) => RequirementIdentifiers.extractFrom(t)) : null;
+    let requirements = null;
+    if (rules?.outcome.isExtracted() && reqPath !== null) {
+      const text = readIfExists(reqPath);
+      if (text !== null) {
+        const parsed = parseRequirementIdentifiers(text);
+        if (!parsed.ok)
+          return err({ kind: "corrupt", path: reqPath, cause: JSON.stringify(parsed.error) });
+        requirements = {
+          input: InputAnchor.of({ artifact: rel(reqPath), sha256: ContentHash.ofText(text) }),
+          outcome: parsed.value
+        };
+      }
+    }
     const componentsPath = recordRoot === null ? null : join4(recordRoot, "inception", "domain-design", "components.md");
     const components = componentsPath === null ? null : load(componentsPath, (t) => parseDomainEntitiesDocument(t));
     const siblingTexts = [];
@@ -6165,7 +6759,10 @@ class DesignRecordRepositoryImplementation {
           siblingTexts.push({ unit: u, path: p, text });
       }
     }
-    return {
+    const siblingInputs = InputAnchors.parse(siblingTexts.filter((s) => s.path !== entitiesPath).map((s) => InputAnchor.of({ artifact: rel(s.path), sha256: ContentHash.ofText(s.text) })));
+    if (!siblingInputs.ok)
+      return err({ kind: "corrupt", path: fdDir, cause: JSON.stringify(siblingInputs.error) });
+    return ok({
       unit: unit === undefined ? undefined : UnitName.of(unit),
       entitiesArtifact: ArtifactPath.of(rel(entitiesPath)),
       entities,
@@ -6177,8 +6774,8 @@ class DesignRecordRepositoryImplementation {
       componentsArtifact: ArtifactPath.of(componentsPath === null ? "components.md" : rel(componentsPath)),
       components,
       siblingUnits: buildSiblingUnitEntities(siblingTexts),
-      siblingInputs: InputAnchors.of(siblingTexts.filter((s) => s.path !== entitiesPath).map((s) => InputAnchor.of({ artifact: rel(s.path), sha256: ContentHash.ofText(s.text) })))
-    };
+      siblingInputs: siblingInputs.value
+    });
   }
 }
 // src/refcheck/adapter/reference-check-report-repository-implementation.ts
@@ -6222,14 +6819,25 @@ function parseReportDocument(id, raw) {
         ...typeof ref.value === "string" ? { value: ref.value } : {}
       }));
     }
-    findings.push(Finding.of({ ...entry, witness: { refs: WitnessReferences.of(refs) } }));
+    const parsedRefs = WitnessReferences.parse(refs);
+    if (!parsedRefs.ok)
+      return err({ cause: JSON.stringify(parsedRefs.error) });
+    findings.push(Finding.of({ ...entry, witness: { refs: parsedRefs.value } }));
   }
+  const collections = combineResults({
+    inputs: InputAnchors.parse(doc.inputs.map((entry) => InputAnchor.of({ artifact: entry.artifact.asString(), sha256: entry.sha256 }))),
+    checked: TargetIdentifiers.parse(checked.value),
+    findings: Findings.parse(findings),
+    skipped: Skips.parse(doc.skipped.map(Skipped.of))
+  });
+  if (!collections.ok)
+    return err({ cause: JSON.stringify(collections.error) });
   return ok(ReferenceCheckReport.of({
     id,
-    inputs: InputAnchors.of(doc.inputs.map((entry) => InputAnchor.of({ artifact: entry.artifact.asString(), sha256: entry.sha256 }))),
-    checked: TargetIdentifiers.of(checked.value),
-    findings: Findings.of(findings),
-    skipped: Skips.of(doc.skipped.map(Skipped.of)),
+    inputs: collections.value.inputs,
+    checked: collections.value.checked,
+    findings: collections.value.findings,
+    skipped: collections.value.skipped,
     unavailableReason: doc.unavailable?.reason ?? null
   }));
 }

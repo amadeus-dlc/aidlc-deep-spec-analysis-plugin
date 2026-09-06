@@ -1,4 +1,9 @@
-import { ArtifactPath, type IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import {
+  ArtifactPath,
+  ImmutableFirstClassCollection,
+  type NonEmptyFirstClassCollection,
+  NonEmptyFirstClassCollectionBase,
+} from "@deep-spec-analysis/kernel-domain";
 import { ManifestEntry } from "./manifest-entry.ts";
 
 const err = (rel: string): ManifestEntry => ManifestEntry.error(ArtifactPath.of(rel));
@@ -8,11 +13,19 @@ const err = (rel: string): ManifestEntry => ManifestEntry.error(ArtifactPath.of(
 // 層ツリーの canary 行は持たない（src/ はソースであって配布物ではない）。
 // 行順は doctor stdout の manifest 検査行の凍結順。intent-e2e の compose 検査
 // リストと同期を保つこと（移行 PR9、#22）。
-export class InstallationManifest implements IterableFirstClassCollection<ManifestEntry> {
+export class InstallationManifest
+  extends NonEmptyFirstClassCollectionBase<ManifestEntry>
+  implements NonEmptyFirstClassCollection<ManifestEntry>
+{
   readonly #entries: readonly ManifestEntry[];
 
   private constructor(entries: readonly ManifestEntry[]) {
+    super();
     this.#entries = Object.freeze([...entries]);
+  }
+
+  protected rebuild(values: readonly ManifestEntry[]): ImmutableFirstClassCollection<ManifestEntry> {
+    return ImmutableFirstClassCollection.of(values);
   }
 
   static standard(): InstallationManifest {

@@ -33,6 +33,14 @@ export class VerificationSkipped {
     return this.#detail;
   }
 
+  equals(other: VerificationSkipped): boolean {
+    return (
+      this.#target.equals(other.#target) &&
+      this.#reason.asString() === other.#reason.asString() &&
+      this.#detail === other.#detail
+    );
+  }
+
   isFor(target: TargetIdentifier): boolean {
     return this.#target.equals(target);
   }

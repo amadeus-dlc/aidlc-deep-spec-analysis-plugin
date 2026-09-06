@@ -1,18 +1,34 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignBackgroundAssumption } from "./design-background-assumption.ts";
 
 // 設計背景仮定のファーストクラスコレクション。
-export class DesignBackgroundAssumptions
-  implements FirstClassCollection, IterableFirstClassCollection<DesignBackgroundAssumption>
-{
+export class DesignBackgroundAssumptions extends FirstClassCollectionBase<
+  DesignBackgroundAssumption,
+  DesignBackgroundAssumptions
+> {
   readonly #values: readonly DesignBackgroundAssumption[];
 
   private constructor(values: readonly DesignBackgroundAssumption[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-background-assumptions");
+  }
+
+  protected rebuild(values: readonly DesignBackgroundAssumption[]): DesignBackgroundAssumptions {
+    return new DesignBackgroundAssumptions(values);
   }
 
   static of(values: readonly DesignBackgroundAssumption[]): DesignBackgroundAssumptions {
     return new DesignBackgroundAssumptions(values);
+  }
+
+  static parse(values: readonly DesignBackgroundAssumption[]): Result<DesignBackgroundAssumptions, ParseError> {
+    return parseConstruction(() => new DesignBackgroundAssumptions(values));
   }
 
   add(value: DesignBackgroundAssumption): DesignBackgroundAssumptions {
@@ -30,9 +46,5 @@ export class DesignBackgroundAssumptions
 
   toArray(): readonly DesignBackgroundAssumption[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

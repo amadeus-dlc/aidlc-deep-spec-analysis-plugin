@@ -4,6 +4,7 @@ import { type ParseError, parseConstruction, type Result } from "@deep-spec-anal
 import type { BusinessRuleReferences } from "./business-rule-references.ts";
 import type { DesignAttributeCatalog } from "./design-attribute-catalog.ts";
 import type { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
+import { sameExpression, sameIterable, sameOptional } from "./value-equality.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type DesignScenarioDeclarationParam = {
@@ -35,6 +36,18 @@ export class DesignScenarioDeclaration {
 
   static of(props: DesignScenarioDeclarationParam): DesignScenarioDeclaration {
     return new DesignScenarioDeclaration(props);
+  }
+
+  equals(other: DesignScenarioDeclaration): boolean {
+    return (
+      this.#id.equals(other.#id) &&
+      this.#hasEvent === other.#hasEvent &&
+      sameExpression(this.#expect, other.#expect) &&
+      sameIterable(this.#bindings, other.#bindings, (left, right) => left.equals(right)) &&
+      sameOptional(this.#businessRuleReferences, other.#businessRuleReferences, (left, right) =>
+        sameIterable(left, right, (a, b) => a.equals(b)),
+      )
+    );
   }
 
   diagnostics(catalog: DesignAttributeCatalog): ErrorMessages {

@@ -32,6 +32,10 @@ export class InputAnchor {
     return this.#sha256;
   }
 
+  equals(other: InputAnchor): boolean {
+    return this.#artifact.equals(other.#artifact) && this.#sha256.equals(other.#sha256);
+  }
+
   compareByArtifact(other: InputAnchor): number {
     const a = this.#artifact.asString();
     const b = other.#artifact.asString();
