@@ -17,12 +17,19 @@ export function flatMapResult<T, U, E>(result: Result<T, E>, next: (value: T) =>
 
 // Result を値のまま合成する。失敗を例外に変換せず、生成処理のpanicも捕捉しない。
 export function combineResults<T, E>(fields: { [K in keyof T]: Result<T[K], E> }): Result<T, E> {
-  const values: Partial<T> = {};
-  for (const key in fields) {
-    const field = fields[key];
+  const values: object = Array.isArray(fields) ? new Array<T[keyof T]>(fields.length) : {};
+  for (const key of Reflect.ownKeys(fields)) {
+    if (Array.isArray(fields) && key === "length") continue;
+    const field = fields[key as keyof typeof fields];
     if (!field.ok) return err(field.error);
-    values[key] = field.value;
+    Object.defineProperty(values, key, {
+      configurable: true,
+      enumerable: true,
+      value: field.value,
+      writable: true,
+    });
   }
+  // Reflect.ownKeys と同じキー形状を T として表すことは TypeScript ではできないため、境界で形を戻す。
   return ok(values as T);
 }
 

@@ -14,6 +14,7 @@ import {
   LoweredScenarios,
   LoweringIndex,
 } from "@deep-spec-analysis/design-domain";
+import { parseSolverChildResults } from "@deep-spec-analysis/kernel-adapter";
 import { ArtifactPath, ContentHash, QueryLabel, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import { IllegalArgumentException, type Json } from "@deep-spec-analysis/kernel-infrastructure";
 import {
@@ -48,12 +49,7 @@ import {
   StateNames,
   TypeName,
 } from "@deep-spec-analysis/refcheck-domain";
-import {
-  buildSmtPlan,
-  parseFormalModel,
-  parseSmtChildResults,
-  Z3SolverClientImplementation,
-} from "@deep-spec-analysis/requirements-adapter";
+import { buildSmtPlan, parseFormalModel, Z3SolverClientImplementation } from "@deep-spec-analysis/requirements-adapter";
 import {
   BackgroundAssumptionIdentifier,
   FormalModelIdentifier,
@@ -110,13 +106,13 @@ describe("SMT response completeness", () => {
     { raw: { results: [{ id: "global", status: "error", error: 1 }, other] }, cause: "invalid error" },
   ];
   test.each(invalidBatches)("rejects an incomplete or invalid batch %#", ({ raw, cause }) => {
-    const parsed = parseSmtChildResults(raw, ["global", "vac:OB-1"]);
+    const parsed = parseSolverChildResults(raw, ["global", "vac:OB-1"]);
     expect(parsed.ok).toBe(false);
     if (!parsed.ok) expect(parsed.error).toContain(cause);
   });
 
   test.each(["sat", "unsat", "unknown", "budget", "error"])("accepts a complete %s response", (status) => {
-    const result = parseSmtChildResults(
+    const result = parseSolverChildResults(
       { results: [{ id: "q", status, model: { x: "1" }, core: ["ob_OB_1"], error: "detail" }] },
       ["q"],
     );
@@ -126,7 +122,7 @@ describe("SMT response completeness", () => {
 
   test("matches query identity independently of response order", () => {
     expect(
-      parseSmtChildResults(
+      parseSolverChildResults(
         {
           results: [
             { id: "b", status: "sat" },
@@ -136,8 +132,8 @@ describe("SMT response completeness", () => {
         ["a", "b"],
       ).ok,
     ).toBe(true);
-    expect(parseSmtChildResults({ results: [] }, []).ok).toBe(true);
-    expect(parseSmtChildResults({ results: [{ id: "a", status: "sat" }] }, ["a", "a"]).ok).toBe(false);
+    expect(parseSolverChildResults({ results: [] }, []).ok).toBe(true);
+    expect(parseSolverChildResults({ results: [{ id: "a", status: "sat" }] }, ["a", "a"]).ok).toBe(false);
   });
 
   test("a successful child exit with no query result becomes unavailable", () => {

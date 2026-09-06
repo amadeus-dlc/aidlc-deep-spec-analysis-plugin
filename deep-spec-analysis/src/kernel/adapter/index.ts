@@ -17,6 +17,8 @@ export { parseRequirementIdentifiers } from "./requirement-identifiers-parser.ts
 export type { SchemaUnreadable } from "./schema-unreadable.ts";
 export { parseFlags } from "./sensor-flags.ts";
 export { smtIntOf, smtLit, smtName, smtVar } from "./smt-symbols.ts";
+export type { SolverChildResult } from "./solver-child-result.ts";
+export { parseSolverChildResults } from "./solver-child-results-parser.ts";
 export { SystemClock } from "./system-clock.ts";
 export { renderVerdictLine } from "./verdict-line.ts";
 export { parseYamlSubset, type Yaml } from "./yaml.ts";

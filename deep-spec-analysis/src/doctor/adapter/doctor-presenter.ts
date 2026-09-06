@@ -158,6 +158,16 @@ export class DoctorPresenter {
 
   functionalCoverage(coverage: UnitCoverage): Check[] {
     // 凍結順: refinement 失効行（走査順）→ unit 問題行 → 要約行。
+    const unavailable = coverage.unavailableReason();
+    if (unavailable !== null)
+      return [
+        Check.of({
+          pass: false,
+          label: `deep-spec-analysis: design verification coverage unavailable — ${unavailable.asString()}`,
+          fix: "Reduce the workspace's functional-design scope and run the doctor again.",
+          severity: CheckSeverity.advisory(),
+        }),
+      ];
     const rows: Check[] = coverage.refinementStale().map((row) =>
       Check.of({
         pass: false,
@@ -169,14 +179,21 @@ export class DoctorPresenter {
       }),
     );
     for (const row of coverage.problems()) {
-      const noun = row.matchState({
-        unverified: () => "has functional-design artifacts with no deep-spec design verification",
-        stale: () => "changed its functional-design artifacts after the last design verification",
+      const label = row.match({
+        valid: (unit, state) => {
+          const noun = state.match({
+            unverified: () => "has functional-design artifacts with no deep-spec design verification",
+            stale: () => "changed its functional-design artifacts after the last design verification",
+          });
+          return `deep-spec-analysis: unit ${row.location().space().asString()}/${row.location().intent().asString()}/${unit.asString()} ${noun}`;
+        },
+        invalid: (detail) =>
+          `deep-spec-analysis: unit ${row.location().space().asString()}/${row.location().intent().asString()}/<invalid-unit-name> has an invalid functional-design unit name (${detail.asString()})`,
       });
       rows.push(
         Check.of({
           pass: false,
-          label: `deep-spec-analysis: unit ${row.location().space().asString()}/${row.location().intent().asString()}/${row.unit().asString()} ${noun}`,
+          label,
           fix:
             `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.location().intent().asString()}\`), ` +
             "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to verify its functional design without advancing the workflow.",

@@ -1,5 +1,10 @@
 import { QueryLabel, SkipReason, type TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  boundedValueSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import { VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationSkips } from "./verification-skips.ts";
 
@@ -24,10 +29,11 @@ export class SatisfiabilityModuloTheoriesQueryVerdict {
 
   // 未検証の構築引数はParam型として明示し、各生成経路で共有する。
   private constructor(props: SatisfiabilityModuloTheoriesQueryVerdictParam) {
-    this.#status = props.status;
-    // 判定の内部状態は外部と参照を共有しない（入出力ともにコピー）。
-    this.#decodedModel = props.decodedModel === undefined ? undefined : { ...props.decodedModel };
-    this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.of(label));
+    // child応答と証拠文書の処理予算を一度のsnapshotで適用し、ofからの迂回を防ぐ。
+    const snapshot = boundedValueSnapshot(props, { string: 65_536, nodes: 65_536, depth: 4, total: 16_777_216 });
+    this.#status = snapshot.status;
+    this.#decodedModel = snapshot.decodedModel;
+    this.#core = snapshot.core === undefined ? undefined : snapshot.core.map((label) => QueryLabel.of(label));
   }
 
   static parse(

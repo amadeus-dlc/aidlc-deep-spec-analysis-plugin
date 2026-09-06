@@ -250,6 +250,35 @@ describe("要件検査の診断予算", () => {
     }
   });
 
+  test("FR参照索引の展開上限はsourceRequiredへ進む前に診断へ写像する", () => {
+    const references = FunctionalRequirementReferences.of(
+      Array.from({ length: 10_000 }, () => RequirementIdentifier.of("FR-1")),
+    );
+    const claims = FunctionalRequirementReferenceClaims.of(
+      Array.from({ length: 7 }, (_, index) => FunctionalRequirementReferenceClaim.of(`OB-${index + 1}`, references)),
+    );
+    const materials = IntermediateRepresentationValidationMaterials.of({
+      id: IntermediateRepresentationValidationMaterialsIdentifier.of(FormalModelIdentifier.of(ap("/record/model.md"))),
+      irVersion: IntermediateRepresentationVersion.of("1.0.0"),
+      schemaErrors: ErrorMessages.of([]),
+      view: emptyDeclaration(),
+      functionalRequirementReferenceClaims: claims,
+      declaredDigest: null,
+      sourceId: RequirementsSourceIdentifier.of(ap("/record")),
+      sourceDocument: new Uint8Array(),
+    });
+    const assessment = materials.validate({
+      complete: (value) => value,
+      sourceRequired: () => {
+        throw new Error("reference index overflow must not request requirements.md");
+      },
+    });
+    expect(assessment.passes()).toBe(false);
+    expect([...assessment.errors()].map((message) => message.asString())).toEqual([
+      "functional requirement reference index is unusable: too-many-functional-requirement-reference-index-entries",
+    ]);
+  });
+
   test("多数のownerを含む参照診断が文字数上限を超えても検査を失わない", () => {
     const references = FunctionalRequirementReferences.of([RequirementIdentifier.of("FR-1")]);
     const index = FunctionalRequirementReferenceIndex.of(

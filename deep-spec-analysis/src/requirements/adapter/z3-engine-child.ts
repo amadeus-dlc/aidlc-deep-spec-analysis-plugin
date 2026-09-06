@@ -1,4 +1,4 @@
-import type { SatisfiabilityModuloTheoriesChildResult } from "./satisfiability-modulo-theories-child-result.ts";
+import type { SolverChildResult } from "@deep-spec-analysis/kernel-adapter";
 // z3 実行の子プロセス本体。stdin の {queries, timeoutMs, budgetMs} を解いて
 // z3-solver（WASM）でクエリを流し、{results} または {unavailable} の JSON
 // 1 行を返す。プロトコルは凍結——design の refinement ソルバも同じ子（エントリの
@@ -34,7 +34,7 @@ export async function solveSmtChild(): Promise<string> {
   // 型依存を持ってはならない。
   // biome-ignore lint/suspicious/noExplicitAny: optional runtime, no type dep
   const Z3 = api.Context("main") as any;
-  const results: SatisfiabilityModuloTheoriesChildResult[] = [];
+  const results: SolverChildResult[] = [];
   // 決定化（#28）: z3-solver の高水準 API は JS ラッパの GC 時に
   // FinalizationRegistry 経由で dec_ref を発行する。負荷で GC タイミングが
   // 変わると z3 内部の解放・ID 再利用パターンが揺れ、制約上自由な変数の
@@ -60,14 +60,14 @@ export async function solveSmtChild(): Promise<string> {
       if (status === "sat") {
         const model = solver.model();
         retained.push(model);
-        const values: { [name: string]: string } = {};
+        const values: [string, string][] = [];
         for (const m of q.model) {
           const c = m.sort === "Bool" ? Z3.Bool.const(m.name) : Z3.Int.const(m.name);
           const evaluated = model.eval(c, true);
           retained.push(c, evaluated);
-          values[m.name] = evaluated.toString();
+          values.push([m.name, evaluated.toString()]);
         }
-        results.push({ id: q.id, status: "sat", model: values });
+        results.push({ id: q.id, status: "sat", model: Object.fromEntries(values) });
       } else if (status === "unsat") {
         const coreVec = solver.unsatCore();
         retained.push(coreVec);

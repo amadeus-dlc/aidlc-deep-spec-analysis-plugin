@@ -11,13 +11,11 @@ export { QuintClientImplementation } from "./quint-client-implementation.ts";
 export { compileQuintMachine, type QuintCompilation, qVar } from "./quint-compilation.ts";
 export { RequirementsSourceRepositoryImplementation } from "./requirements-source-repository-implementation.ts";
 export type { SatisfiabilityModuloTheoriesChildQuery } from "./satisfiability-modulo-theories-child-query.ts";
-export type { SatisfiabilityModuloTheoriesChildResult } from "./satisfiability-modulo-theories-child-result.ts";
 export {
   buildSmtPlan,
   decodeSolverModel,
   type SatisfiabilityModuloTheoriesPlan,
 } from "./satisfiability-modulo-theories-plan.ts";
-export { parseSmtChildResults } from "./smt-child-results-parser.ts";
 export {
   VERIFICATION_LOCK_BASENAME,
   VerificationDirectoryRepositoryImplementation,

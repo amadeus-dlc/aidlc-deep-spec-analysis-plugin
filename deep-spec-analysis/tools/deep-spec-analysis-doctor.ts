@@ -2214,24 +2214,22 @@ class FindingCount {
 // src/doctor/domain/unit-coverage-problem.ts
 class UnitCoverageProblem {
   #location;
-  #unit;
   #state;
-  constructor(location, unit, state) {
+  constructor(location, state) {
     this.#location = location;
-    this.#unit = unit;
     this.#state = state;
   }
   static of(location, unit, state) {
-    return new UnitCoverageProblem(location, unit, state);
+    return new UnitCoverageProblem(location, { kind: "valid", unit, coverage: state });
+  }
+  static invalid(location, detail) {
+    return new UnitCoverageProblem(location, { kind: "invalid", detail });
   }
   location() {
     return this.#location;
   }
-  unit() {
-    return this.#unit;
-  }
-  matchState(handlers) {
-    return this.#state.match(handlers);
+  match(handlers) {
+    return this.#state.kind === "valid" ? handlers.valid(this.#state.unit, this.#state.coverage) : handlers.invalid(this.#state.detail);
   }
 }
 
@@ -2245,13 +2243,14 @@ class FunctionalObservation {
   #hasFindings;
   #requirementsModelModifiedAt;
   constructor(props) {
-    if (props.units.length > 65536 || props.modelUnits.length > 65536 || props.completedUnits.length > 65536)
-      throw new IllegalArgumentException({ kind: "too-many-functional-units" });
+    const units = boundedCollectionSnapshot(props.units, 65536, "too-many-functional-units");
+    const modelUnits = boundedCollectionSnapshot(props.modelUnits, 65536, "too-many-functional-units");
+    const completedUnits = boundedCollectionSnapshot(props.completedUnits, 65536, "too-many-functional-units");
     this.#location = props.location;
-    this.#units = Object.freeze([...props.units]);
+    this.#units = units;
     this.#modelModifiedAt = props.modelModifiedAt;
-    this.#modelUnits = KeySet.of(props.modelUnits);
-    this.#completedUnits = KeySet.of(props.completedUnits);
+    this.#modelUnits = KeySet.of(modelUnits);
+    this.#completedUnits = KeySet.of(completedUnits);
     this.#hasFindings = props.hasFindings;
     this.#requirementsModelModifiedAt = props.requirementsModelModifiedAt;
   }
@@ -2749,45 +2748,54 @@ class StructuralObservation {
 }
 // src/doctor/domain/unit-coverage.ts
 class UnitCoverage {
-  #observations;
-  #scopes;
-  constructor(observations, scopes) {
-    const snapshot = boundedCollectionSnapshot(observations, 65536, "too-many-functional-observations");
-    let units = 0;
+  #state;
+  constructor(state) {
+    if (state.kind === "unavailable") {
+      this.#state = state;
+      return;
+    }
+    const snapshot = boundedCollectionSnapshot(state.observations, 65536, "too-many-functional-observations");
+    const invalidSnapshot = boundedCollectionSnapshot(state.invalidProblems, 65536, "too-many-invalid-functional-units");
+    let units = invalidSnapshot.length;
     for (const observation of snapshot) {
       units += observation.eligibleCount();
       if (units > 65536)
         throw new IllegalArgumentException({ kind: "too-many-covered-units", raw: units });
     }
-    this.#observations = snapshot;
-    this.#scopes = scopes;
+    this.#state = { kind: "ready", observations: snapshot, scopes: state.scopes, invalidProblems: invalidSnapshot };
   }
-  static of(observations, scopes) {
-    return new UnitCoverage(observations, scopes);
+  static of(observations, scopes, invalidProblems) {
+    return new UnitCoverage({ kind: "ready", observations, scopes, invalidProblems });
   }
-  static parse(observations, scopes) {
-    return parseConstruction(() => new UnitCoverage(observations, scopes));
+  static unavailable(scopes, reason) {
+    return new UnitCoverage({ kind: "unavailable", scopes, reason });
+  }
+  static parse(observations, scopes, invalidProblems) {
+    return parseConstruction(() => new UnitCoverage({ kind: "ready", observations, scopes, invalidProblems }));
   }
   hasEligible() {
-    return this.eligibleCount() > 0;
+    return this.#state.kind === "ready" && this.eligibleCount() > 0;
   }
   isClean() {
-    return this.problems().length === 0;
+    return this.#state.kind === "ready" && this.problems().length === 0;
   }
   verifiedCount() {
-    return this.eligibleCount() - this.problems().length;
+    return this.#state.kind === "ready" ? this.eligibleCount() - this.#state.observations.flatMap((observation) => observation.problems()).length : 0;
   }
   eligibleCount() {
-    return this.#observations.reduce((sum, observation) => sum + observation.eligibleCount(), 0);
+    return this.#state.kind === "ready" ? this.#state.observations.reduce((sum, observation) => sum + observation.eligibleCount(), 0) : 0;
   }
   problems() {
-    return this.#observations.flatMap((observation) => observation.problems());
+    return this.#state.kind === "ready" ? [...this.#state.invalidProblems, ...this.#state.observations.flatMap((observation) => observation.problems())] : [];
   }
   refinementStale() {
-    return this.#observations.filter((observation) => observation.refinementIsStale()).map((observation) => observation.location());
+    return this.#state.kind === "ready" ? this.#state.observations.filter((observation) => observation.refinementIsStale()).map((observation) => observation.location()) : [];
   }
   scopes() {
-    return this.#scopes;
+    return this.#state.scopes;
+  }
+  unavailableReason() {
+    return this.#state.kind === "unavailable" ? this.#state.reason : null;
   }
 }
 // src/doctor/domain/verification-staleness.ts
@@ -2941,6 +2949,16 @@ class DoctorPresenter {
     return rows;
   }
   functionalCoverage(coverage) {
+    const unavailable = coverage.unavailableReason();
+    if (unavailable !== null)
+      return [
+        Check.of({
+          pass: false,
+          label: `deep-spec-analysis: design verification coverage unavailable \u2014 ${unavailable.asString()}`,
+          fix: "Reduce the workspace's functional-design scope and run the doctor again.",
+          severity: CheckSeverity.advisory()
+        })
+      ];
     const rows = coverage.refinementStale().map((row) => Check.of({
       pass: false,
       label: `deep-spec-analysis: intent ${row.space().asString()}/${row.intent().asString()} re-verified its requirements after the last design verification (refinement evidence is stale)`,
@@ -2948,13 +2966,19 @@ class DoctorPresenter {
       severity: CheckSeverity.advisory()
     }));
     for (const row of coverage.problems()) {
-      const noun = row.matchState({
-        unverified: () => "has functional-design artifacts with no deep-spec design verification",
-        stale: () => "changed its functional-design artifacts after the last design verification"
+      const label = row.match({
+        valid: (unit, state) => {
+          const noun = state.match({
+            unverified: () => "has functional-design artifacts with no deep-spec design verification",
+            stale: () => "changed its functional-design artifacts after the last design verification"
+          });
+          return `deep-spec-analysis: unit ${row.location().space().asString()}/${row.location().intent().asString()}/${unit.asString()} ${noun}`;
+        },
+        invalid: (detail) => `deep-spec-analysis: unit ${row.location().space().asString()}/${row.location().intent().asString()}/<invalid-unit-name> has an invalid functional-design unit name (${detail.asString()})`
       });
       rows.push(Check.of({
         pass: false,
-        label: `deep-spec-analysis: unit ${row.location().space().asString()}/${row.location().intent().asString()}/${row.unit().asString()} ${noun}`,
+        label,
         fix: `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.location().intent().asString()}\`), ` + "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to verify its functional design without advancing the workflow.",
         severity: CheckSeverity.advisory()
       }));
@@ -2973,6 +2997,13 @@ class DoctorPresenter {
 // src/doctor/adapter/doctor-workspace-client-implementation.ts
 import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
+function invalidUnitProblem(location, error) {
+  const detail = ErrorMessage.parse(JSON.stringify(error));
+  if (!detail.ok)
+    throw new Error(`defect: unit name diagnostic could not be represented (${detail.error.kind})`);
+  return UnitCoverageProblem.invalid(location, detail.value);
+}
+
 class DoctorWorkspaceClientImplementation {
   #projectDir;
   #root;
@@ -3118,6 +3149,7 @@ class DoctorWorkspaceClientImplementation {
   functionalCoverage() {
     const scopes = this.#functionalScopes();
     const out = [];
+    const invalidUnits = [];
     for (const space of this.#spaces()) {
       for (const intent of this.#intents(space)) {
         const record = this.#record(space, intent);
@@ -3174,7 +3206,9 @@ class DoctorWorkspaceClientImplementation {
             hasFindings = false;
           }
         }
-        const units = unitDirs.map((unit) => {
+        const location = IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent));
+        const units = [];
+        for (const unit of unitDirs) {
           const fdDir = join(constructionDir, unit, "functional-design");
           let newest = 0;
           for (const f of ["entities.md", "rules.md", "functional-spec.md"]) {
@@ -3182,27 +3216,56 @@ class DoctorWorkspaceClientImplementation {
             if (existsSync(p))
               newest = Math.max(newest, statSync(p).mtimeMs);
           }
-          return FunctionalUnitObservation.of(UnitName.of(unit), ArtifactModifiedAt.of(newest));
-        });
+          const parsedUnit = UnitName.parse(unit);
+          if (!parsedUnit.ok) {
+            invalidUnits.push(invalidUnitProblem(location, parsedUnit.error));
+            continue;
+          }
+          units.push(FunctionalUnitObservation.of(parsedUnit.value, ArtifactModifiedAt.of(newest)));
+        }
         const reqModel = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
-        out.push(FunctionalObservation.of({
-          location: IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent)),
+        const modelUnitValues = [];
+        for (const name of modelUnits) {
+          const parsed = UnitName.parse(name);
+          if (parsed.ok)
+            modelUnitValues.push(parsed.value);
+          else
+            invalidUnits.push(invalidUnitProblem(location, parsed.error));
+        }
+        const completedUnitValues = [];
+        for (const name of completedUnits) {
+          const parsed = UnitName.parse(name);
+          if (parsed.ok)
+            completedUnitValues.push(parsed.value);
+          else
+            invalidUnits.push(invalidUnitProblem(location, parsed.error));
+        }
+        const observation = FunctionalObservation.parse({
+          location,
           units,
           modelModifiedAt: modelMtime === null ? null : ArtifactModifiedAt.of(modelMtime),
-          modelUnits: modelUnits.flatMap((name) => {
-            const parsed = UnitName.parse(name);
-            return parsed.ok ? [parsed.value] : [];
-          }),
-          completedUnits: [...completedUnits].flatMap((name) => {
-            const parsed = UnitName.parse(name);
-            return parsed.ok ? [parsed.value] : [];
-          }),
+          modelUnits: modelUnitValues,
+          completedUnits: completedUnitValues,
           hasFindings,
           requirementsModelModifiedAt: existsSync(reqModel) ? ArtifactModifiedAt.of(statSync(reqModel).mtimeMs) : null
-        }));
+        });
+        if (observation.ok)
+          out.push(observation.value);
+        else {
+          const detail2 = ErrorMessage.parse(`functional observation is unusable: ${observation.error.kind}`);
+          if (!detail2.ok)
+            throw new Error(`defect: observation diagnostic could not be represented (${detail2.error.kind})`);
+          return UnitCoverage.unavailable(scopes, detail2.value);
+        }
       }
     }
-    return UnitCoverage.of(out, scopes);
+    const coverage = UnitCoverage.parse(out, scopes, invalidUnits);
+    if (coverage.ok)
+      return coverage.value;
+    const detail = ErrorMessage.parse(`functional coverage is unusable: ${coverage.error.kind}`);
+    if (!detail.ok)
+      throw new Error(`defect: coverage diagnostic could not be represented (${detail.error.kind})`);
+    return UnitCoverage.unavailable(scopes, detail.value);
   }
 }
 // src/doctor/adapter/git-hub-release-tags-client-implementation.ts

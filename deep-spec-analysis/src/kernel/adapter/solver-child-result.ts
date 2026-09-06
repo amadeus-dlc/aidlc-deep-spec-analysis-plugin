@@ -1,4 +1,4 @@
-export interface SatisfiabilityModuloTheoriesChildResult {
+export interface SolverChildResult {
   id: string;
   status: "sat" | "unsat" | "unknown" | "budget" | "error";
   model?: { [name: string]: string };

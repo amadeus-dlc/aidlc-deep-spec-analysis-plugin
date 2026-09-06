@@ -22,6 +22,10 @@ export class FunctionalRequirementReferenceClaim {
     return this.#owner;
   }
 
+  referenceCount(): number {
+    return this.#functionalRequirementReferences.toArray().length;
+  }
+
   equals(other: FunctionalRequirementReferenceClaim): boolean {
     const refs = this.#functionalRequirementReferences.toArray();
     const otherRefs = other.#functionalRequirementReferences.toArray();

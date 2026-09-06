@@ -18,7 +18,7 @@ import {
 import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { ArtifactPath, ContentHash } from "@deep-spec-analysis/kernel-domain";
-import { err, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import { err, ok, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 
 import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
 import {
@@ -133,6 +133,9 @@ export class DesignRecordRepositoryImplementation implements DesignRecordReposit
       recordRoot !== null && basename(unitDir) !== "construction" && unitDir !== recordRoot
         ? basename(unitDir)
         : undefined;
+    const parsedUnit: Result<UnitName | undefined, ParseError> =
+      unit === undefined ? ok(undefined) : UnitName.parse(unit);
+    if (!parsedUnit.ok) return err({ kind: "corrupt", path: fdDir, cause: JSON.stringify(parsedUnit.error) });
 
     const entitiesPath = join(fdDir, "entities.md");
     const entities = load(entitiesPath, (t) => parseEntitiesDocument(t));
@@ -178,7 +181,7 @@ export class DesignRecordRepositoryImplementation implements DesignRecordReposit
     );
     if (!siblingInputs.ok) return err({ kind: "corrupt", path: fdDir, cause: JSON.stringify(siblingInputs.error) });
     return ok({
-      unit: unit === undefined ? undefined : UnitName.of(unit),
+      unit: parsedUnit.value,
       entitiesArtifact: ArtifactPath.of(rel(entitiesPath)),
       entities,
       rulesArtifact: ArtifactPath.of(rel(rulesPath)),

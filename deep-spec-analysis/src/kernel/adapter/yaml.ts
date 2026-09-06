@@ -95,7 +95,7 @@ function isMappingEntry(text: string): boolean {
 }
 
 function parseMapping(lines: YamlLine[], start: number, indent: number): [Yaml, number] {
-  const out: { [k: string]: Yaml } = {};
+  const entries: [string, Yaml][] = [];
   let i = start;
   while (i < lines.length) {
     const line = lines[i];
@@ -109,10 +109,10 @@ function parseMapping(lines: YamlLine[], start: number, indent: number): [Yaml, 
       const next = lines[i + 1];
       if (next && next.indent > indent) {
         const [child, ni] = parseBlock(lines, i + 1, next.indent);
-        out[key] = child;
+        entries.push([key, child]);
         i = ni;
       } else {
-        out[key] = null;
+        entries.push([key, null]);
         i++;
       }
       continue;
@@ -124,14 +124,14 @@ function parseMapping(lines: YamlLine[], start: number, indent: number): [Yaml, 
         parts.push(lines[j]?.text ?? "");
         j++;
       }
-      out[key] = parts.join(valPart.startsWith(">") ? " " : "\n");
+      entries.push([key, parts.join(valPart.startsWith(">") ? " " : "\n")]);
       i = j;
       continue;
     }
-    out[key] = parseScalar(valPart, line.n);
+    entries.push([key, parseScalar(valPart, line.n)]);
     i++;
   }
-  return [out, i];
+  return [Object.fromEntries(entries), i];
 }
 
 function unquote(s: string): string {

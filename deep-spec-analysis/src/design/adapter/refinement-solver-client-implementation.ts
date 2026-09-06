@@ -1,4 +1,4 @@
-import { combineResults, ok, traverseResult } from "@deep-spec-analysis/kernel-infrastructure";
+import { isObject, type Json } from "@deep-spec-analysis/kernel-infrastructure";
 // RefinementSolverClient の実 Gateway 実装。第 2 コンパイラでクエリ計画を組み、
 // PROVEN v1 z3 子（verify-smt entry の --smt-child）へ実行させ、生のテキスト
 // モデルを decode した型付き判定を返す。クエリゼロは子を起動しない（凍結）。
@@ -17,18 +17,11 @@ import {
 } from "@deep-spec-analysis/design-domain";
 
 import type { RefinementSolverClient } from "@deep-spec-analysis/design-usecase";
+import { parseSolverChildResults, type SolverChildResult } from "@deep-spec-analysis/kernel-adapter";
 import { ErrorMessage, QueryLabel } from "@deep-spec-analysis/kernel-domain";
 import type { RefinementChildQuery } from "./refinement-child-query.ts";
 import { buildRefinementQueries, decodeDesignModel } from "./refinement-query-plan.ts";
 import type { RefinementSolverClientConfiguration } from "./refinement-solver-client-configuration.ts";
-
-interface RefinementChildResult {
-  id: string;
-  status: "sat" | "unsat" | "unknown" | "budget" | "error";
-  model?: { [name: string]: string };
-  core?: string[];
-  error?: string;
-}
 
 export class RefinementSolverClientImplementation implements RefinementSolverClient {
   readonly #config: RefinementSolverClientConfiguration;
@@ -52,26 +45,24 @@ export class RefinementSolverClientImplementation implements RefinementSolverCli
     }
     const verdicts: RefinementQueryVerdictEntry[] = [];
     for (const [queryId, r] of child.results) {
-      const parsed = combineResults({
-        label: QueryLabel.parse(queryId),
-        core: r.core === undefined ? ok(undefined) : traverseResult(r.core, QueryLabel.parse),
-      });
-      if (!parsed.ok)
+      const label = QueryLabel.parse(queryId);
+      if (!label.ok)
         return RefinementCheck.unavailable(
           built.plan,
-          ErrorMessage.of(`invalid solver query label: ${JSON.stringify(parsed.error)}`),
+          ErrorMessage.of(`invalid solver query label: ${JSON.stringify(label.error)}`),
         );
-      verdicts.push(
-        RefinementQueryVerdictEntry.of(
-          parsed.value.label,
-          RefinementQueryVerdict.of({
-            status: r.status,
-            decodedModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, false) : undefined,
-            decodedPostModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, true) : undefined,
-            core: parsed.value.core?.map((label) => label.asString()),
-          }),
-        ),
-      );
+      const verdict = RefinementQueryVerdict.parse({
+        status: r.status,
+        decodedModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, false) : undefined,
+        decodedPostModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, true) : undefined,
+        core: r.core,
+      });
+      if (!verdict.ok)
+        return RefinementCheck.unavailable(
+          built.plan,
+          ErrorMessage.of(`invalid solver verdict: ${JSON.stringify(verdict.error)}`),
+        );
+      verdicts.push(RefinementQueryVerdictEntry.of(label.value, verdict.value));
     }
     const collected = RefinementQueryVerdicts.parse(verdicts);
     if (!collected.ok)
@@ -85,7 +76,7 @@ export class RefinementSolverClientImplementation implements RefinementSolverCli
   #runChild(
     queries: RefinementChildQuery[],
     budgetMs: number,
-  ): { results: Map<string, RefinementChildResult> | null; unavailable: string | null } {
+  ): { results: Map<string, SolverChildResult> | null; unavailable: string | null } {
     const payload = JSON.stringify({ queries, timeoutMs: this.#config.perQueryTimeoutMs, budgetMs });
     const runtimes = this.#config.runtimeOverride ? [this.#config.runtimeOverride] : ["node", "bun"];
     const attempts: string[] = [];
@@ -111,15 +102,24 @@ export class RefinementSolverClientImplementation implements RefinementSolverCli
         attempts.push(`${runtime}: ${res.error ? String(res.error) : `exit ${res.status}`}`);
         continue;
       }
+      let parsed: Json;
       try {
-        const parsed = JSON.parse((res.stdout ?? "").trim().split("\n").pop() ?? "");
-        if (typeof parsed.unavailable === "string") return { results: null, unavailable: parsed.unavailable };
-        const map = new Map<string, RefinementChildResult>();
-        for (const r of parsed.results ?? []) map.set(r.id, r);
-        return { results: map, unavailable: null };
+        parsed = JSON.parse((res.stdout ?? "").trim().split("\n").pop() ?? "") as Json;
       } catch {
         attempts.push(`${runtime}: solver child produced unreadable output`);
+        continue;
       }
+      if (isObject(parsed) && typeof parsed.unavailable === "string")
+        return { results: null, unavailable: parsed.unavailable };
+      const validated = parseSolverChildResults(
+        parsed,
+        queries.map((query) => query.id),
+      );
+      if (!validated.ok) {
+        attempts.push(`${runtime}: ${validated.error}`);
+        continue;
+      }
+      return { results: validated.value, unavailable: null };
     }
     return { results: null, unavailable: `no runtime could execute the z3 child process (${attempts.join("; ")})` };
   }
