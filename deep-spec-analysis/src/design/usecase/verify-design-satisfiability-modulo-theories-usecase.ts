@@ -63,20 +63,32 @@ export class VerifyDesignSatisfiabilityModuloTheoriesUseCase {
         report = report.unitTimedOut(unit);
         continue;
       }
-      const lowered = unit.lowered({ synthetics: true });
-      const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
-      if (remaining < 3_000) {
-        report = report.unitTimedOut(unit);
-        continue;
-      }
-      const run = this.#siblingBackendClient.runLowered("smt", unit, lowered, remaining);
-      report = run.recordedIn(report, model, unit, lowered);
-      if (run.isBackendUnavailable()) {
-        return matchResult(this.#finalizer.finalize(input.verifyDirectory, report, model), {
-          err: (error): VerifyDesignOutcome => ({ kind: "save-failed", error }),
-          ok: (): VerifyDesignOutcome => ({ kind: "backend-unavailable" }),
-        });
-      }
+      const terminal = unit.withLowering<VerifyDesignOutcome | null>(
+        { synthetics: true },
+        {
+          failed: (problem) => {
+            report = report.loweringFailed(unit, problem);
+            return null;
+          },
+          ready: (lowered) => {
+            const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
+            if (remaining < 3_000) {
+              report = report.unitTimedOut(unit);
+              return null;
+            }
+            const run = this.#siblingBackendClient.runLowered("smt", unit, lowered, remaining);
+            report = run.recordedIn(report, model, unit, lowered);
+            if (run.isBackendUnavailable()) {
+              return matchResult(this.#finalizer.finalize(input.verifyDirectory, report, model), {
+                err: (error): VerifyDesignOutcome => ({ kind: "save-failed", error }),
+                ok: (): VerifyDesignOutcome => ({ kind: "backend-unavailable" }),
+              });
+            }
+            return null;
+          },
+        },
+      );
+      if (terminal !== null) return terminal;
     }
     const materials = this.#refinementMaterialsRepository.findById(RefinementMaterialsIdentifier.of(input.modelId));
     report = matchResult(materials, {

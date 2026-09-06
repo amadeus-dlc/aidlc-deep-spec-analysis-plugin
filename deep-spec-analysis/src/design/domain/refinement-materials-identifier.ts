@@ -16,6 +16,10 @@ export class RefinementMaterialsIdentifier {
     return new RefinementMaterialsIdentifier(model);
   }
 
+  isFor(model: DesignModelIdentifier): boolean {
+    return this.#model.equals(model);
+  }
+
   equals(other: RefinementMaterialsIdentifier): boolean {
     return this.#model.equals(other.#model);
   }

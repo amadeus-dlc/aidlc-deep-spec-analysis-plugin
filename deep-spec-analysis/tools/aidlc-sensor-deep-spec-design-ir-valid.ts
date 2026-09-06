@@ -176,59 +176,88 @@ function resolveRef(root, ref) {
 }
 function validateSchema(root, schema, value, path, errors) {
   const before = errors.length;
+  for (const error of schemaErrors(root, schema, value, path))
+    errors.push(error);
+  return errors.length === before;
+}
+function matchesSchema(root, schema, value, path) {
+  if (typeof schema.$ref === "string")
+    return matchesSchema(root, resolveRef(root, schema.$ref), value, path);
+  if (Array.isArray(schema.oneOf))
+    return schemaErrors(root, schema, value, path).next().done === true;
+  if (isObject(value) && isObject(schema.properties)) {
+    for (const [key, property] of Object.entries(schema.properties)) {
+      if (!(key in value) || !isObject(property))
+        continue;
+      let resolved = property;
+      while (typeof resolved.$ref === "string")
+        resolved = resolveRef(root, resolved.$ref);
+      if (Array.isArray(resolved.oneOf))
+        continue;
+      const condition = {};
+      if ("const" in resolved)
+        condition.const = resolved.const;
+      if (Array.isArray(resolved.enum))
+        condition.enum = resolved.enum;
+      if (Object.keys(condition).length > 0 && !schemaErrors(root, condition, value[key], `${path}/${key}`).next().done)
+        return false;
+    }
+  }
+  return schemaErrors(root, schema, value, path).next().done === true;
+}
+function* schemaErrors(root, schema, value, path) {
   if (typeof schema.$ref === "string") {
-    return validateSchema(root, resolveRef(root, schema.$ref), value, path, errors);
+    yield* schemaErrors(root, resolveRef(root, schema.$ref), value, path);
+    return;
   }
   if (Array.isArray(schema.oneOf)) {
     let matched = 0;
     for (const branch of schema.oneOf) {
       if (!isObject(branch))
         continue;
-      const probe = [];
-      if (validateSchema(root, branch, value, path, probe))
+      if (matchesSchema(root, branch, value, path))
         matched++;
     }
     if (matched !== 1) {
-      errors.push(`${path}: matches ${matched} oneOf branches (must match exactly 1)`);
+      yield `${path}: matches ${matched} oneOf branches (must match exactly 1)`;
     }
-    return errors.length === before;
+    return;
   }
   if (typeof schema.type === "string" && !typeMatches(schema.type, value)) {
-    errors.push(`${path}: expected type ${schema.type}`);
-    return false;
+    yield `${path}: expected type ${schema.type}`;
+    return;
   }
   if ("const" in schema && JSON.stringify(schema.const) !== JSON.stringify(value)) {
-    errors.push(`${path}: expected const ${JSON.stringify(schema.const)}`);
-    return false;
+    yield `${path}: expected const ${JSON.stringify(schema.const)}`;
+    return;
   }
   if (Array.isArray(schema.enum)) {
     const hit = schema.enum.some((e) => JSON.stringify(e) === JSON.stringify(value));
     if (!hit) {
-      errors.push(`${path}: not one of ${JSON.stringify(schema.enum)}`);
-      return false;
+      yield `${path}: not one of ${JSON.stringify(schema.enum)}`;
+      return;
     }
   }
   if (typeof value === "string" && typeof schema.pattern === "string") {
     if (!new RegExp(schema.pattern).test(value)) {
-      errors.push(`${path}: does not match pattern ${schema.pattern}`);
+      yield `${path}: does not match pattern ${schema.pattern}`;
     }
   }
   if (Array.isArray(value)) {
     if (typeof schema.minItems === "number" && value.length < schema.minItems) {
-      errors.push(`${path}: fewer than ${schema.minItems} items`);
+      yield `${path}: fewer than ${schema.minItems} items`;
     }
     if (typeof schema.maxItems === "number" && value.length > schema.maxItems) {
-      errors.push(`${path}: more than ${schema.maxItems} items`);
+      yield `${path}: more than ${schema.maxItems} items`;
     }
     if (schema.uniqueItems === true) {
       const seen = new Set(value.map((v) => JSON.stringify(v)));
       if (seen.size !== value.length)
-        errors.push(`${path}: items are not unique`);
+        yield `${path}: items are not unique`;
     }
     if (isObject(schema.items)) {
-      value.forEach((item, i) => {
-        validateSchema(root, schema.items, item, `${path}/${i}`, errors);
-      });
+      for (const [index, item] of value.entries())
+        yield* schemaErrors(root, schema.items, item, `${path}/${index}`);
     }
   }
   if (isObject(value)) {
@@ -236,29 +265,29 @@ function validateSchema(root, schema, value, path, errors) {
     if (Array.isArray(schema.required)) {
       for (const key of schema.required) {
         if (typeof key === "string" && !(key in value)) {
-          errors.push(`${path}: missing required property "${key}"`);
+          yield `${path}: missing required property "${key}"`;
         }
       }
     }
     if (typeof schema.minProperties === "number" && Object.keys(value).length < schema.minProperties) {
-      errors.push(`${path}: fewer than ${schema.minProperties} properties`);
+      yield `${path}: fewer than ${schema.minProperties} properties`;
     }
     for (const [key, val] of Object.entries(value)) {
       if (key in props && isObject(props[key])) {
-        validateSchema(root, props[key], val, `${path}/${key}`, errors);
+        yield* schemaErrors(root, props[key], val, `${path}/${key}`);
       } else if (schema.additionalProperties === false) {
-        errors.push(`${path}: unexpected property "${key}"`);
+        yield `${path}: unexpected property "${key}"`;
       } else if (isObject(schema.additionalProperties)) {
-        validateSchema(root, schema.additionalProperties, val, `${path}/${key}`, errors);
+        yield* schemaErrors(root, schema.additionalProperties, val, `${path}/${key}`);
       }
       if (isObject(schema.propertyNames) && typeof schema.propertyNames.pattern === "string") {
         if (!new RegExp(schema.propertyNames.pattern).test(key)) {
-          errors.push(`${path}: property name "${key}" does not match required pattern`);
+          yield `${path}: property name "${key}" does not match required pattern`;
         }
       }
     }
   }
-  return errors.length === before;
+  return;
 }
 // src/kernel/domain/artifact-path.ts
 class ArtifactPath {
@@ -1359,26 +1388,28 @@ class ScenarioExpectation {
 // src/kernel/domain/scenario-verdict.ts
 class ScenarioVerdict {
   #backend;
+  #modelHash;
   #state;
   #target;
   #unit;
-  constructor(backend, target, unit, state) {
+  constructor(backend, modelHash, target, unit, state) {
     this.#backend = backend;
+    this.#modelHash = modelHash;
     this.#state = state;
     this.#target = target;
     this.#unit = unit;
   }
-  static clean(backend, target, unit) {
-    return new ScenarioVerdict(backend, target, unit, "clean");
+  static clean(backend, modelHash, target, unit) {
+    return new ScenarioVerdict(backend, modelHash, target, unit, "clean");
   }
-  static violated(backend, target, unit) {
-    return new ScenarioVerdict(backend, target, unit, "violated");
+  static violated(backend, modelHash, target, unit) {
+    return new ScenarioVerdict(backend, modelHash, target, unit, "violated");
   }
-  static skipped(backend, target, unit) {
-    return new ScenarioVerdict(backend, target, unit, "skipped");
+  static skipped(backend, modelHash, target, unit) {
+    return new ScenarioVerdict(backend, modelHash, target, unit, "skipped");
   }
-  static unavailable(backend, target, unit) {
-    return new ScenarioVerdict(backend, target, unit, "unavailable");
+  static unavailable(backend, modelHash, target, unit) {
+    return new ScenarioVerdict(backend, modelHash, target, unit, "unavailable");
   }
   backend() {
     return this.#backend;
@@ -1390,7 +1421,7 @@ class ScenarioVerdict {
     return this.#target.equals(target) && (this.#unit === null ? unit === null : unit !== null && this.#unit.equals(unit));
   }
   sameSubjectAs(other) {
-    return this.isFor(other.#target, other.#unit);
+    return this.#modelHash.equals(other.#modelHash) && this.isFor(other.#target, other.#unit);
   }
   agreesWith(other) {
     return this.#state === other.#state;
@@ -1413,9 +1444,9 @@ class ScenarioVerdicts {
         throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: snapshot.length + 1 });
       snapshot.push(value);
     }
-    if (snapshot.some((value) => !value.sameSubjectAs(snapshot[0])))
-      throw new IllegalArgumentException({ kind: "different-scenario-subjects" });
     const comparable = snapshot.filter((value) => value.isComparable());
+    if (comparable.some((value) => !value.sameSubjectAs(comparable[0])))
+      throw new IllegalArgumentException({ kind: "different-scenario-subjects" });
     if (KeySet.of(comparable.map((value) => value.backend())).size() !== comparable.length)
       throw new IllegalArgumentException({ kind: "duplicate-scenario-backend" });
     this.#values = [...comparable];
@@ -1756,10 +1787,16 @@ class CrossCheckedEntry {
   #targets;
   constructor(props) {
     this.#backend = props.backend;
+    for (const target of props.targets)
+      if (!target.asString().startsWith("SC-"))
+        throw new IllegalArgumentException({ kind: "invalid-cross-checked-target", raw: target.asString() });
     this.#targets = props.targets;
   }
   static of(props) {
     return new CrossCheckedEntry(props);
+  }
+  static parse(props) {
+    return parseConstruction(() => new CrossCheckedEntry(props));
   }
   backend() {
     return this.#backend;
@@ -2643,14 +2680,14 @@ class VerificationReport {
   scenarioVerdictFor(target, irHash) {
     const backend = this.#id.backendName();
     if (!this.#irHash.equals(irHash) || this.isUnavailable())
-      return ScenarioVerdict.unavailable(backend, target, null);
+      return ScenarioVerdict.unavailable(backend, this.#irHash, target, null);
     for (const skip of this.#skipped)
       if (skip.isFor(target))
-        return ScenarioVerdict.skipped(backend, target, null);
+        return ScenarioVerdict.skipped(backend, this.#irHash, target, null);
     for (const finding of this.#findings)
       if (finding.isKind("scenario-violation") && finding.implicates(target))
-        return ScenarioVerdict.violated(backend, target, null);
-    return ScenarioVerdict.clean(backend, target, null);
+        return ScenarioVerdict.violated(backend, this.#irHash, target, null);
+    return ScenarioVerdict.clean(backend, this.#irHash, target, null);
   }
   id() {
     return this.#id;
@@ -4495,35 +4532,38 @@ class AttributeCoverage {
 }
 // src/design/domain/refinement-map-defect.ts
 class RefinementMapDefect {
-  #kind;
-  #reqPath;
-  constructor(kind, reqPath) {
-    this.#kind = kind;
-    this.#reqPath = reqPath;
+  #state;
+  constructor(state) {
+    this.#state = state.kind === "invalid-expression" ? { ...state, problem: { ...state.problem } } : { ...state };
   }
-  static uncoveredAttribute(reqPath) {
-    return new RefinementMapDefect("uncovered-attribute", AttributePath.of(reqPath));
+  static uncoveredAttribute(path) {
+    return new RefinementMapDefect({ kind: "uncovered-attribute", path: AttributePath.of(path) });
   }
-  static enumMappingOutsideEquality(reqPath) {
-    return new RefinementMapDefect("enum-mapping-outside-equality", AttributePath.of(reqPath));
+  static enumMappingOutsideEquality(path) {
+    return new RefinementMapDefect({ kind: "enum-mapping-outside-equality", path: AttributePath.of(path) });
   }
-  static unspecifiedMapping(reqPath) {
-    return new RefinementMapDefect("unspecified-mapping", AttributePath.of(reqPath));
+  static unspecifiedMapping(path) {
+    return new RefinementMapDefect({ kind: "unspecified-mapping", path: AttributePath.of(path) });
   }
   static effectNotAssignmentConjunction() {
-    return new RefinementMapDefect("effect-not-assignment-conjunction", null);
+    return new RefinementMapDefect({ kind: "effect-not-assignment-conjunction" });
+  }
+  static invalidExpression(problem) {
+    return new RefinementMapDefect({ kind: "invalid-expression", problem });
   }
   message() {
-    const path = this.#reqPath?.asString() ?? "";
-    switch (this.#kind) {
+    const state = this.#state;
+    switch (state.kind) {
       case "uncovered-attribute":
-        return `requirements attribute "${path}" is not covered by the attrMap`;
+        return `requirements attribute "${state.path.asString()}" is not covered by the attrMap`;
       case "enum-mapping-outside-equality":
-        return `enum-mapped requirements attribute "${path}" is only legal inside eq/ne against an enum literal`;
+        return `enum-mapped requirements attribute "${state.path.asString()}" is only legal inside eq/ne against an enum literal`;
       case "unspecified-mapping":
-        return `attrMap entry for "${path}" declares neither an expression nor enum cases`;
-      default:
+        return `attrMap entry for "${state.path.asString()}" declares neither an expression nor enum cases`;
+      case "effect-not-assignment-conjunction":
         return "requirements effect is not a conjunction of primed assignments";
+      case "invalid-expression":
+        return `substituted expression could not be constructed: ${state.problem.kind}`;
     }
   }
   asCompileErrorSkip(target, unit) {
@@ -4799,6 +4839,13 @@ class AttributeMappings {
     return this.#byRequirementPath(reqPath) !== undefined;
   }
   substitute(e, post) {
+    const substituted = this.#substitute(e, post);
+    if (!substituted.ok)
+      return substituted;
+    const parsed = ExpressionTree.parse(substituted.value);
+    return parsed.ok ? ok(parsed.value.asExpression()) : err(RefinementMapDefect.invalidExpression(parsed.error));
+  }
+  #substitute(e, post) {
     if (e.op === "eq" || e.op === "ne") {
       const [a, b] = e.args ?? [];
       const refArg = a?.op === "ref" ? a : b?.op === "ref" ? b : null;
@@ -4818,7 +4865,7 @@ class AttributeMappings {
     if (e.args) {
       const args = [];
       for (const a of e.args) {
-        const sub = this.substitute(a, post);
+        const sub = this.#substitute(a, post);
         if (!sub.ok)
           return sub;
         args.push(sub.value);
@@ -4828,7 +4875,11 @@ class AttributeMappings {
     return ok(e);
   }
   equalityFor(reqPath) {
-    return this.#byRequirementPath(reqPath)?.abstractFrameEquality() ?? null;
+    const expression = this.#byRequirementPath(reqPath)?.abstractFrameEquality();
+    if (expression == null)
+      return ok(null);
+    const parsed = ExpressionTree.parse(expression);
+    return parsed.ok ? ok(parsed.value.asExpression()) : err(RefinementMapDefect.invalidExpression(parsed.error));
   }
   toArray() {
     return this.#values;
@@ -5318,13 +5369,24 @@ class DesignCrossCheckedEntries {
 // src/design/domain/design-cross-checked-entry.ts
 class DesignCrossCheckedEntry {
   #backend;
+  #unit;
   #targets;
   constructor(props) {
     this.#backend = props.backend;
+    this.#unit = props.unit;
+    for (const target of props.targets)
+      if (!target.asString().startsWith("DSC-"))
+        throw new IllegalArgumentException({ kind: "invalid-cross-checked-target", raw: target.asString() });
     this.#targets = props.targets;
   }
   static of(props) {
     return new DesignCrossCheckedEntry(props);
+  }
+  static parse(props) {
+    return parseConstruction(() => new DesignCrossCheckedEntry(props));
+  }
+  unit() {
+    return this.#unit;
   }
   backend() {
     return this.#backend;
@@ -5332,10 +5394,14 @@ class DesignCrossCheckedEntry {
   targets() {
     return this.#targets;
   }
-  compareByBackend(other) {
+  compareTo(other) {
     const a = this.#backend.asString();
     const b = other.#backend.asString();
-    return a < b ? -1 : a > b ? 1 : 0;
+    if (a !== b)
+      return a < b ? -1 : 1;
+    const unit = this.#unit.asString();
+    const otherUnit = other.#unit.asString();
+    return unit < otherUnit ? -1 : unit > otherUnit ? 1 : 0;
   }
 }
 // src/design/domain/design-entity-declaration.ts
@@ -5673,7 +5739,7 @@ class DesignEventRule {
     return this.#assignments?.rhsOf(AttributePath.of(path));
   }
   deadGuardProbe(id) {
-    return LoweredObligation.of({
+    return LoweredObligation.parse({
       id,
       origin: LoweredOrigin.of({ kind: "vac-dead", design: this.reference() }),
       nature: ObligationNature.of("invariant"),
@@ -5754,7 +5820,7 @@ class RuleSubsumptionProbe {
     return LoweredOriginReference.of(this.references().map((reference) => reference.asString()).join("|"));
   }
   loweredAs(id) {
-    return LoweredObligation.of({
+    return LoweredObligation.parse({
       id,
       origin: LoweredOrigin.of({ kind: "vac-shadow", probe: this }),
       nature: ObligationNature.of("invariant"),
@@ -6372,6 +6438,9 @@ class DesignReport {
   withInputs(inputs) {
     return this.#revised({ inputs: inputs.sortedByArtifact() });
   }
+  loweringFailed(unit, error) {
+    return this.unitUnverified(unit, SkipReason.compileError(), `design lowering failed: ${error.kind}`);
+  }
   unitTimedOut(unit) {
     const backend = this.#id.backendName().asString() === "smt" ? "solver" : "backend";
     return this.unitUnverified(unit, SkipReason.timeout(), `the per-run ${backend} budget was exhausted before this unit`);
@@ -6473,14 +6542,14 @@ class DesignReport {
   scenarioVerdictFor(unit, target, irHash) {
     const backend = this.#id.backendName();
     if (!this.#irHash.equals(irHash) || this.isUnavailable())
-      return ScenarioVerdict.unavailable(backend, target, unit);
+      return ScenarioVerdict.unavailable(backend, this.#irHash, target, unit);
     for (const skip of this.#skipped)
       if (skip.appliesTo(unit, target))
-        return ScenarioVerdict.skipped(backend, target, unit);
+        return ScenarioVerdict.skipped(backend, this.#irHash, target, unit);
     for (const finding of this.#findings)
       if (finding.violatesScenario(unit, target))
-        return ScenarioVerdict.violated(backend, target, unit);
-    return ScenarioVerdict.clean(backend, target, unit);
+        return ScenarioVerdict.violated(backend, this.#irHash, target, unit);
+    return ScenarioVerdict.clean(backend, this.#irHash, target, unit);
   }
   id() {
     return this.#id;
@@ -6559,9 +6628,12 @@ class DesignReport {
       return out;
     });
     const crossChecked = this.#crossChecked;
-    if (crossChecked !== null) {
-      ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }));
-    }
+    if (crossChecked !== null)
+      ordered.crossChecked = [...crossChecked].map((entry) => ({
+        backend: entry.backend().asString(),
+        unit: entry.unit().asString(),
+        targets: [...entry.targets().toStrings()]
+      }));
     return ordered;
   }
   conformedTo(schema) {
@@ -7181,9 +7253,6 @@ class DesignReports {
   static of(values) {
     return new DesignReports(values);
   }
-  add(value) {
-    return new DesignReports([...this.#values, value]);
-  }
   *[Symbol.iterator]() {
     yield* this.#values;
   }
@@ -7192,12 +7261,13 @@ class DesignReports {
   }
   crossChecked(id, model, irHash) {
     const findings = [];
-    let compared = KeyedIndex.empty();
+    const crossChecked = [];
     let failure = null;
     scenarios:
-      for (const unit of model.units())
+      for (const unit of model.units()) {
+        const unitName = UnitName.of(unit.name());
+        let compared = KeyedIndex.empty();
         for (const scenario of unit.scenarios()) {
-          const unitName = UnitName.of(unit.name());
           const target = TargetIdentifier.of(scenario.id().asString());
           const verdicts = ScenarioVerdicts.parse(this.#values.map((report2) => report2.scenarioVerdictFor(unitName, target, irHash)));
           if (!verdicts.ok) {
@@ -7217,10 +7287,15 @@ class DesignReports {
               findings.push(finding);
           }
         }
-    const crossChecked = [...compared].map(([backend, targets]) => DesignCrossCheckedEntry.of({
-      backend,
-      targets: TargetIdentifiers.of(targets).sortedUniqueCanonically()
-    })).sort((a, b) => a.compareByBackend(b));
+        for (const [backend, targets] of compared) {
+          crossChecked.push(DesignCrossCheckedEntry.of({
+            backend,
+            unit: unitName,
+            targets: TargetIdentifiers.of(targets).sortedUniqueCanonically()
+          }));
+        }
+      }
+    crossChecked.sort((a, b) => a.compareTo(b));
     const report = DesignReport.compose({
       id,
       irVersion: model.irVersion(),
@@ -7536,7 +7611,7 @@ class DesignTransition {
     return this.#effect === undefined ? base : { op: "and", args: [base, this.#effect] };
   }
   loweredAs(id, attrPath, machine) {
-    return LoweredObligation.of({
+    return LoweredObligation.parse({
       id,
       origin: this.loweredOrigin(machine, AttributePath.of(attrPath)),
       nature: ObligationNature.of("event"),
@@ -7753,6 +7828,8 @@ class LoweredIdentifier {
       throw new IllegalArgumentException({ kind: "lowered-id-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-lowered-token", raw });
+    if (!/^(OB|SC|BG)-[0-9]+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "invalid-lowered-identifier", raw });
     this.#value = raw;
   }
   static of(raw) {
@@ -7760,6 +7837,9 @@ class LoweredIdentifier {
   }
   static parse(raw) {
     return parseConstruction(() => new LoweredIdentifier(raw));
+  }
+  belongsTo(namespace) {
+    return this.#value.startsWith(`${namespace}-`);
   }
   equals(other) {
     return this.#value === other.#value;
@@ -7815,6 +7895,37 @@ class LoweredScenarios {
   }
 }
 
+// src/design/domain/issued-lowered-identifiers.ts
+class IssuedLoweredIdentifiers {
+  #values;
+  constructor(values) {
+    if (values.length > 65536)
+      throw new IllegalArgumentException({ kind: "too-many-lowered-identifiers", raw: values.length });
+    const snapshot = [];
+    for (const value of values) {
+      if (snapshot.length === 65536)
+        throw new IllegalArgumentException({ kind: "too-many-lowered-identifiers", raw: snapshot.length + 1 });
+      snapshot.push(value);
+    }
+    this.#values = KeySet.of(snapshot);
+    if (this.#values.size() !== snapshot.length)
+      throw new IllegalArgumentException({ kind: "duplicate-lowered-identifier" });
+  }
+  static of(values) {
+    return new IssuedLoweredIdentifiers(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new IssuedLoweredIdentifiers(values));
+  }
+  *availableObligations() {
+    for (let sequence = 1;sequence <= 65536; sequence++) {
+      const id = LoweredIdentifier.of(`OB-${sequence}`);
+      if (!this.#values.has(id))
+        yield id;
+    }
+  }
+}
+
 // src/design/domain/lowering-index.ts
 function designToken(id) {
   return id.replace(/[^A-Za-z0-9_]/g, "_");
@@ -7825,13 +7936,21 @@ class LoweringIndex {
   #scenarioDesignIds;
   #machinesByTransition;
   #attrPathsByMachine;
-  constructor(props) {
-    this.#origins = props.origins;
-    this.#scenarioDesignIds = props.scenarioDesignIds;
-    this.#machinesByTransition = props.machinesByTransition;
-    this.#attrPathsByMachine = props.attrPathsByMachine;
-  }
-  static fromLowered(obligations, scenarios, sourceMachines) {
+  #issued;
+  constructor(obligations, scenarios, sourceMachines, background) {
+    const ids = [];
+    for (const [namespace, entries] of [
+      ["OB", obligations],
+      ["SC", scenarios],
+      ["BG", background]
+    ])
+      for (const entry of entries) {
+        const id = entry.id();
+        if (!id.belongsTo(namespace))
+          throw new IllegalArgumentException({ kind: "lowered-identifier-namespace-mismatch", raw: id.asString() });
+        ids.push(id);
+      }
+    this.#issued = IssuedLoweredIdentifiers.of(ids);
     const machines = [];
     const attributes = [...sourceMachines].map((machine) => [machine.id(), AttributePath.of(DesignMachines.attrPathOf(machine))]);
     for (const obligation of obligations) {
@@ -7843,31 +7962,42 @@ class LoweringIndex {
         attributes.push([machine.id(), attribute]);
       }
     }
-    return new LoweringIndex({
-      origins: KeyedIndex.of([...obligations].map((obligation) => [obligation.id(), obligation.origin()])),
-      scenarioDesignIds: KeyedIndex.of([...scenarios].map((scenario) => [scenario.id(), scenario.origin()])),
-      machinesByTransition: KeyedIndex.of(machines),
-      attrPathsByMachine: KeyedIndex.of(attributes)
-    });
+    for (const obligation of obligations)
+      if (!obligation.origin().isSyntheticProbe())
+        TargetIdentifier.of(obligation.origin().design().asString());
+    this.#origins = KeyedIndex.of([...obligations].map((obligation) => [obligation.id(), obligation.origin()]));
+    this.#scenarioDesignIds = KeyedIndex.of([...scenarios].map((scenario) => [scenario.id(), scenario.origin()]));
+    this.#machinesByTransition = KeyedIndex.of(machines);
+    this.#attrPathsByMachine = KeyedIndex.of(attributes);
+  }
+  static of(obligations, scenarios, machines, background) {
+    return new LoweringIndex(obligations, scenarios, machines, background);
+  }
+  static parse(obligations, scenarios, machines, background) {
+    return parseConstruction(() => new LoweringIndex(obligations, scenarios, machines, background));
+  }
+  availableObligationIdentifiers() {
+    return this.#issued.availableObligations();
   }
   originOf(loweredId) {
-    return this.#origins.get(LoweredIdentifier.of(loweredId)) ?? null;
+    const id = LoweredIdentifier.parse(loweredId);
+    return id.ok ? this.#origins.get(id.value) ?? null : null;
   }
-  resolveDesignTarget(loweredId) {
-    const entry = this.#origins.get(LoweredIdentifier.of(loweredId)) ?? null;
-    if (entry)
-      return { design: entry.design().asString(), entry };
-    const dsc = this.#scenarioDesignIds.get(LoweredIdentifier.of(loweredId));
-    if (dsc)
-      return { design: dsc.asString(), entry: null };
-    return { design: loweredId, entry: null };
+  resolveDesignTarget(id) {
+    const entry = this.#origins.get(id);
+    if (entry !== undefined)
+      return ok({ design: entry.design(), entry });
+    const scenario = this.#scenarioDesignIds.get(id);
+    if (scenario !== undefined)
+      return ok({ design: LoweredOriginReference.of(scenario.asString()), entry: null });
+    return err({ kind: "unknown-lowered-target", raw: id.asString() });
   }
   rewriteLoweredIds(text) {
-    return text.replace(/\bOB-([0-9]+)\b/g, (m, num) => this.#origins.get(LoweredIdentifier.of(`OB-${num}`))?.design().asString() ?? m);
+    return text.replace(/\bOB-([0-9]+)\b/g, (m) => this.originOf(m)?.design().asString() ?? m);
   }
   rewriteLoweredIdTokens(label) {
     return label.replace(/OB_([0-9]+)/g, (m, num) => {
-      const entry = this.#origins.get(LoweredIdentifier.of(`OB-${num}`));
+      const entry = this.originOf(`OB-${num}`);
       return entry ? designToken(entry.design().asString()) : m;
     });
   }
@@ -7900,10 +8030,13 @@ class LoweredUnit {
     this.#machines = props.machines;
     this.#scenarios = props.scenarios;
     this.#background = props.background;
-    this.#index = LoweringIndex.fromLowered(props.obligations, props.scenarios, props.machines);
+    this.#index = LoweringIndex.of(props.obligations, props.scenarios, props.machines, props.background);
   }
   static of(props) {
     return new LoweredUnit(props);
+  }
+  static parse(props) {
+    return parseConstruction(() => new LoweredUnit(props));
   }
   obligations() {
     return this.#obligations;
@@ -7918,15 +8051,16 @@ class LoweredUnit {
     return this.#index;
   }
   extendedWith(invariants) {
-    let obligations = this.#obligations;
-    let sequence = obligations.count();
+    const obligations = [...this.#obligations];
+    const available = this.#index.availableObligationIdentifiers();
     for (const invariant of invariants) {
-      sequence += 1;
-      const identifier = LoweredIdentifier.of(`OB-${sequence}`);
-      obligations = obligations.add(invariant.loweredAs(identifier));
+      const next = available.next();
+      if (next.done)
+        return err({ kind: "too-many-lowered-identifiers" });
+      obligations.push(invariant.loweredAs(next.value));
     }
-    return new LoweredUnit({
-      obligations,
+    return LoweredUnit.parse({
+      obligations: LoweredObligations.of(obligations),
       machines: this.#machines,
       scenarios: this.#scenarios,
       background: this.#background
@@ -7991,6 +8125,10 @@ class DesignUnit {
   allTargets() {
     return TargetIdentifiers.of(Array.from([...this.#obligations.ids(), ...this.#machines.transitionIds(), ...this.#scenarios.ids()], (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically();
   }
+  withLowering(options, actions) {
+    const result = this.lowered(options);
+    return result.ok ? actions.ready(result.value) : actions.failed(result.error);
+  }
   lowered(opts) {
     const obligations = [];
     let n = 0;
@@ -8006,7 +8144,10 @@ class DesignUnit {
       const attrPath = DesignMachines.attrPathOf(sm);
       for (const tr of sm.transitions().sortedCanonically()) {
         const id = nextId();
-        obligations.push(tr.loweredAs(id, attrPath, sm));
+        const lowered = tr.loweredAs(id, attrPath, sm);
+        if (!lowered.ok)
+          return lowered;
+        obligations.push(lowered.value);
       }
       for (const ig of sm.ignores().sortedByStateTrigger()) {
         const id = nextId();
@@ -8014,11 +8155,21 @@ class DesignUnit {
       }
     }
     if (opts.synthetics) {
-      const events = DesignEventRuleCatalog.of(this);
-      for (const event of events)
-        obligations.push(event.deadGuardProbe(nextId()));
-      for (const probe of events.subsumptionProbes())
-        obligations.push(probe.loweredAs(nextId()));
+      const events = DesignEventRuleCatalog.parse(this);
+      if (!events.ok)
+        return events;
+      for (const event of events.value) {
+        const lowered = event.deadGuardProbe(nextId());
+        if (!lowered.ok)
+          return lowered;
+        obligations.push(lowered.value);
+      }
+      for (const probe of events.value.subsumptionProbes()) {
+        const lowered = probe.loweredAs(nextId());
+        if (!lowered.ok)
+          return lowered;
+        obligations.push(lowered.value);
+      }
     }
     const scenarios = [];
     let scN = 0;
@@ -8033,7 +8184,7 @@ class DesignUnit {
       bgN += 1;
       background.push(bg.loweredAs(LoweredIdentifier.of(`BG-${bgN}`)));
     }
-    return LoweredUnit.of({
+    return LoweredUnit.parse({
       machines: this.#machines,
       obligations: LoweredObligations.of(obligations),
       scenarios: LoweredScenarios.of(scenarios),
@@ -8783,14 +8934,21 @@ class UnitRefinementPlan {
     return !this.quintInvariants(this.#requirements).isEmpty();
   }
   loweredForQuint() {
-    return this.#unit.lowered({ synthetics: false }).extendedWith(this.quintInvariants(this.#requirements));
+    const lowered = this.#unit.lowered({ synthetics: false });
+    return lowered.ok ? lowered.value.extendedWith(this.quintInvariants(this.#requirements)) : lowered;
   }
   quintPreparedIn(report) {
     return report.withEvidence(this.#gaps, this.quintStatusSkips(this.#requirements, this.#unit.name()));
   }
   quintRecordedIn(report, result) {
-    const interpreted = result.interpretRefinement(this.#unit, this.loweredForQuint(), this.quintInvariants(this.#requirements));
+    const lowered = this.loweredForQuint();
+    if (!lowered.ok)
+      return this.loweringFailedIn(report, lowered.error);
+    const interpreted = result.interpretRefinement(this.#unit, lowered.value, this.quintInvariants(this.#requirements));
     return report.withEvidence(interpreted.findings, interpreted.skipped);
+  }
+  loweringFailedIn(report, problem) {
+    return this.unverifiedIn(report, SkipReason.compileError(), `refinement lowering failed: ${problem.kind}`);
   }
   quintTimedOut(report) {
     const skipped = DesignSkips.of([...this.quintInvariants(this.#requirements)].map((invariant) => DesignSkipped.of({
@@ -8913,6 +9071,8 @@ class RefinementMaterials {
     return new RefinementMaterials(id, { kind: "active", requirements, map });
   }
   prepare(model) {
+    if (!this.#id.isFor(model.id()))
+      throw new IllegalArgumentException({ kind: "refinement-model-mismatch" });
     if (this.#state.kind === "inactive")
       return RefinementPreparation.of([], DesignSkips.of([]), null);
     const requirements = this.#state.requirements;
@@ -8979,6 +9139,9 @@ class RefinementMaterialsIdentifier {
   }
   static of(model) {
     return new RefinementMaterialsIdentifier(model);
+  }
+  isFor(model) {
+    return this.#model.equals(model);
   }
   equals(other) {
     return this.#model.equals(other.#model);
@@ -9669,6 +9832,13 @@ class SiblingVerdictDocument {
     for (const source of docFindings) {
       const result = source.remap(unit, index);
       switch (result.kind) {
+        case "invalid":
+          return {
+            findings: DesignFindings.of([]),
+            skipped: DesignSkips.of([]),
+            method,
+            unavailable: `sibling finding target cannot be resolved: ${result.error.kind} (${result.error.raw})`
+          };
         case "finding":
           findings.push(result.finding);
           break;
@@ -9703,7 +9873,15 @@ class SiblingVerdictDocument {
     findings.push(...subsumptions.value.findingsExcept(TargetIdentifiers.of([...deadDesignIds].map(TargetIdentifier.of))));
     const seenSkip = new Set;
     for (const source of docSkipped) {
-      const mapped = source.remap(unit, index);
+      const resolved = source.remap(unit, index);
+      if (!resolved.ok)
+        return {
+          findings: DesignFindings.of([]),
+          skipped: DesignSkips.of([]),
+          method,
+          unavailable: `sibling skip target cannot be resolved: ${resolved.error.kind} (${resolved.error.raw})`
+        };
+      const mapped = resolved.value;
       if (mapped === null)
         continue;
       const key = `${mapped.target().asString()}|${mapped.reason()}`;
@@ -9733,7 +9911,10 @@ class SiblingVerdictFinding {
     return new SiblingVerdictFinding(props);
   }
   remap(unit, index) {
-    const mapped = this.#targets.map((target) => index.resolveDesignTarget(target.asString()));
+    const resolved = traverseResult(this.#targets, (target) => index.resolveDesignTarget(target));
+    if (!resolved.ok)
+      return { kind: "invalid", error: resolved.error };
+    const mapped = resolved.value;
     const witness = this.witnessRemappedBy((label) => index.rewriteLoweredIdTokens(label));
     const synthetic = mapped.find((target) => target.entry?.isSyntheticProbe());
     if (synthetic?.entry?.isKind("vac-dead") && this.isKind("conflict")) {
@@ -9759,7 +9940,7 @@ class SiblingVerdictFinding {
     }
     if (synthetic !== undefined)
       return { kind: "ignored" };
-    const targets = TargetIdentifiers.of(mapped.map((target) => TargetIdentifier.of(target.design))).sortedUniqueCanonically();
+    const targets = TargetIdentifiers.of(mapped.map((target) => TargetIdentifier.of(target.design.asString()))).sortedUniqueCanonically();
     if (this.isKind("conflict") && targets.count() > 0) {
       const machines = [...targets].map((target) => index.machineOfTransition(target.asString()));
       const machine = machines[0];
@@ -9845,15 +10026,18 @@ class SiblingVerdictSkip {
     return new SiblingVerdictSkip(props);
   }
   remap(unit, index) {
-    const mapped = index.resolveDesignTarget(this.#target.asString());
+    const resolved = index.resolveDesignTarget(this.#target);
+    if (!resolved.ok)
+      return resolved;
+    const mapped = resolved.value;
     if (mapped.entry?.isSyntheticProbe())
-      return null;
-    return DesignSkipped.of({
-      target: TargetIdentifier.of(mapped.design),
+      return ok(null);
+    return ok(DesignSkipped.of({
+      target: TargetIdentifier.of(mapped.design.asString()),
       reason: this.#reason,
       unit,
       ...this.#detail !== undefined ? { detail: index.rewriteLoweredIds(this.#detail) } : {}
-    });
+    }));
   }
 }
 // src/design/domain/sibling-verdict-skips.ts
@@ -10397,7 +10581,7 @@ function decodeFindingsDocument(raw) {
   }
   if (raw.checked !== undefined && !strings(raw.checked))
     return err("checked must be an array of strings");
-  if (raw.crossChecked !== undefined && (!Array.isArray(raw.crossChecked) || !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && strings(c.targets)))) {
+  if (raw.crossChecked !== undefined && (!Array.isArray(raw.crossChecked) || !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && (c.unit === undefined || typeof c.unit === "string") && strings(c.targets)))) {
     return err("crossChecked must be an array of backend comparisons");
   }
   return ok(raw);
@@ -10447,11 +10631,16 @@ function parseFindingsValues(raw) {
     crossChecked: doc.crossChecked === undefined ? ok(undefined) : traverseResult(doc.crossChecked, (entry) => {
       const fields = combineResults({
         backend: BackendName.parse(entry.backend),
+        unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit),
         targets: traverseResult(entry.targets, TargetIdentifier.parse)
       });
       if (!fields.ok)
         return fields;
-      return ok({ backend: fields.value.backend, targets: TargetIdentifiers.of(fields.value.targets) });
+      return ok({
+        backend: fields.value.backend,
+        unit: fields.value.unit,
+        targets: TargetIdentifiers.of(fields.value.targets)
+      });
     })
   });
   if (!parsed.ok)
@@ -10745,16 +10934,16 @@ class DesignIntermediateRepresentationValidationMaterialsRepositoryImplementatio
     if (!schema.ok) {
       return corrupt(`design IR schema unreadable: ${schema.error.cause}`);
     }
-    const schemaErrors = [];
-    validateSchema(schema.value, schema.value, ir, "", schemaErrors);
-    const messages = flatMapResult(traverseResult(schemaErrors, ErrorMessage.parse), ErrorMessages.parse);
+    const schemaErrors2 = [];
+    validateSchema(schema.value, schema.value, ir, "", schemaErrors2);
+    const messages = flatMapResult(traverseResult(schemaErrors2, ErrorMessage.parse), ErrorMessages.parse);
     if (!messages.ok)
       return corrupt(JSON.stringify(messages.error));
     const irVersion = IntermediateRepresentationVersion.parse(typeof ir.irVersion === "string" ? ir.irVersion : "");
     if (!irVersion.ok)
       return corrupt(JSON.stringify(irVersion.error));
     const major = irVersion.value.majorVersion();
-    const semanticGateOpen = schemaErrors.length === 0 && !(Number.isInteger(major) && major !== SUPPORTED_DESIGN_IR_MAJOR);
+    const semanticGateOpen = schemaErrors2.length === 0 && !(Number.isInteger(major) && major !== SUPPORTED_DESIGN_IR_MAJOR);
     const units = [];
     if (semanticGateOpen) {
       const recordRoot = findRecordRoot(dirname3(outputPath));
@@ -10821,6 +11010,14 @@ function parseSiblingDesignReportDocument(directory, fileName, raw) {
   const checked = doc.checked === undefined ? ok(undefined) : traverseResult(doc.checked, UnitName.parse);
   if (!checked.ok)
     return err(JSON.stringify(checked.error));
+  const comparisons = doc.crossChecked === undefined ? ok(null) : traverseResult(doc.crossChecked, (entry) => {
+    if (entry.unit === undefined)
+      return err("design cross-check requires a unit");
+    const parsed = DesignCrossCheckedEntry.parse({ ...entry, unit: entry.unit });
+    return parsed.ok ? ok(parsed.value) : err(JSON.stringify(parsed.error));
+  });
+  if (!comparisons.ok)
+    return comparisons;
   return ok(DesignReport.of({
     id: DesignReportIdentifier.of(directory, doc.backend.asString()),
     irVersion: doc.irVersion,
@@ -10830,7 +11027,7 @@ function parseSiblingDesignReportDocument(directory, fileName, raw) {
     skipped: DesignSkips.of(skipped),
     inputs: doc.inputs === undefined ? null : DesignInputAnchors.of(doc.inputs.map((entry) => DesignInputAnchor.of({ artifact: entry.artifact.asString(), sha256: entry.sha256 }))),
     checked: checked.value === undefined ? null : CheckedUnits.of(checked.value),
-    crossChecked: doc.crossChecked === undefined ? null : DesignCrossCheckedEntries.of(doc.crossChecked.map(DesignCrossCheckedEntry.of)),
+    crossChecked: comparisons.value === null ? null : DesignCrossCheckedEntries.of(comparisons.value),
     unavailableReason: doc.unavailable?.reason ?? null
   }));
 }
@@ -11585,7 +11782,7 @@ function buildRefinementQueries(plan) {
       sort: a.kind === "bool" ? "Bool" : "Int"
     }))
   ];
-  const catalog = DesignEventRuleCatalog.of(u);
+  const catalog = DesignEventRuleCatalog.parse(u);
   const queries = [];
   const pending = new Map;
   const compileSkips = [];
@@ -11599,101 +11796,110 @@ function buildRefinementQueries(plan) {
   };
   const failureMessage = (err2) => err2 instanceof Error ? err2.message : String(err2);
   const mappings = plan.attributeMappings();
-  for (const [obId, st] of plan.sortedObligationStatuses()) {
-    if (!st.isCheckable())
-      continue;
-    const ob = req.obligationById(obId);
-    if (!ob)
-      continue;
-    const assertion = ob.assertion();
-    if (ob.isInvariantLike() && assertion !== undefined) {
-      const alphaP = mappings.substitute(assertion, false);
-      if (!alphaP.ok) {
-        alphaFail(obId, alphaP.error.message());
+  obligations:
+    for (const [obId, st] of plan.sortedObligationStatuses()) {
+      if (!st.isCheckable())
         continue;
-      }
-      try {
-        const q = assembleQuery(`rv:${obId}`, pre.decls, [...pre.constraints, { name: smtName("neg", obId), smt: `(not ${smtOfExpr(ctx, alphaP.value)})` }], modelVars);
-        queries.push(q);
-        pending.set(q.id, RefinementProbe.invariant(ob, UnitName.of(u.name())));
-      } catch (err2) {
-        if (!(err2 instanceof SatisfiabilityModuloTheoriesCompileError))
-          throw err2;
-        alphaFail(obId, failureMessage(err2));
-      }
-      continue;
-    }
-    const event = ob.eventDefinition();
-    if (event !== null) {
-      const mapped = plan.mappedTransitionsOf(obId);
-      const alphaG = mappings.substitute(event.guard, false);
-      if (!alphaG.ok) {
-        alphaFail(obId, alphaG.error.message());
+      const ob = req.obligationById(obId);
+      if (!ob)
         continue;
-      }
-      try {
-        const designGuards = mapped.map((id) => catalog.eventOf(TargetIdentifier.of(id.asString()))).filter((d) => d !== null).map((d) => smtOfExpr(ctx, d.guard()));
-        const notEnabled = designGuards.length === 0 ? "true" : `(not (or ${designGuards.join(" ")}))`;
-        const qe = assembleQuery(`re:${obId}`, pre.decls, [
-          ...pre.constraints,
-          { name: smtName("ag", obId), smt: smtOfExpr(ctx, alphaG.value) },
-          { name: smtName("ne", obId), smt: notEnabled }
-        ], modelVars);
-        queries.push(qe);
-        pending.set(qe.id, RefinementProbe.enabledness(ob, UnitName.of(u.name()), TransitionReferences.of(plan.mappedTransitionsOf(obId))));
-        const decomposed = EffectAssignments.parse(event.effect);
-        if (!decomposed.ok) {
-          alphaFail(obId, decomposed.error.kind === "effect-not-assignment-conjunction" ? RefinementMapDefect.effectNotAssignmentConjunction().message() : JSON.stringify(decomposed.error));
+      const assertion = ob.assertion();
+      if (ob.isInvariantLike() && assertion !== undefined) {
+        const alphaP = mappings.substitute(assertion, false);
+        if (!alphaP.ok) {
+          alphaFail(obId, alphaP.error.message());
           continue;
         }
-        const assigned = decomposed.value;
-        const frameParts = [];
-        for (const a of req.attributes().sortedByPath()) {
-          if (assigned.covers(a.path()))
-            continue;
-          const eq = mappings.equalityFor(a.path().asString());
-          if (eq !== null)
-            frameParts.push(smtOfExpr(ctx, eq));
+        try {
+          const q = assembleQuery(`rv:${obId}`, pre.decls, [...pre.constraints, { name: smtName("neg", obId), smt: `(not ${smtOfExpr(ctx, alphaP.value)})` }], modelVars);
+          queries.push(q);
+          pending.set(q.id, RefinementProbe.invariant(ob, UnitName.of(u.name())));
+        } catch (err2) {
+          if (!(err2 instanceof SatisfiabilityModuloTheoriesCompileError))
+            throw err2;
+          alphaFail(obId, failureMessage(err2));
         }
-        const alphaF = mappings.substitute(event.effect, false);
-        if (!alphaF.ok) {
-          alphaFail(obId, alphaF.error.message());
+        continue;
+      }
+      const event = ob.eventDefinition();
+      if (event !== null) {
+        const mapped = plan.mappedTransitionsOf(obId);
+        if (!catalog.ok) {
+          alphaFail(obId, `design event catalog could not be constructed: ${catalog.error.kind}`);
           continue;
         }
-        const fBar = smtOfExpr(ctx, alphaF.value);
-        const postCond = frameParts.length === 0 ? fBar : `(and ${fBar} ${frameParts.join(" ")})`;
-        for (const designId of mapped) {
-          const ev = catalog.eventOf(TargetIdentifier.of(designId.asString()));
-          if (!ev)
-            continue;
-          const stepParts = [smtOfExpr(ctx, ev.guard())];
-          for (const attr of ctx.attrs) {
-            const rhs = ev.assignedRhsOf(attr.path);
-            const target = smtVar(attr.path, true);
-            if (rhs) {
-              const rhsSmt = rhs.op === "enum" && typeof rhs.value === "string" ? String(enumCode(ctx, attr.path, rhs.value)) : smtOfExpr(ctx, rhs);
-              stepParts.push(`(= ${target} ${rhsSmt})`);
-            } else {
-              stepParts.push(`(= ${target} ${smtVar(attr.path, false)})`);
-            }
-          }
-          const qs = assembleQuery(`rs2:${obId}:${designId.asString()}`, [...pre.decls, ...post.decls], [
+        const alphaG = mappings.substitute(event.guard, false);
+        if (!alphaG.ok) {
+          alphaFail(obId, alphaG.error.message());
+          continue;
+        }
+        try {
+          const designGuards = mapped.map((id) => catalog.value.eventOf(TargetIdentifier.of(id.asString()))).filter((d) => d !== null).map((d) => smtOfExpr(ctx, d.guard()));
+          const notEnabled = designGuards.length === 0 ? "true" : `(not (or ${designGuards.join(" ")}))`;
+          const qe = assembleQuery(`re:${obId}`, pre.decls, [
             ...pre.constraints,
-            ...post.constraints,
-            { name: smtName("step", designId.asString()), smt: `(and ${stepParts.join(" ")})` },
-            { name: smtName("ag2", obId), smt: smtOfExpr(ctx, alphaG.value) },
-            { name: smtName("viol", obId), smt: `(not ${postCond})` }
-          ], modelVarsBoth);
-          queries.push(qs);
-          pending.set(qs.id, RefinementProbe.simulation(ob, UnitName.of(u.name()), designId));
+            { name: smtName("ag", obId), smt: smtOfExpr(ctx, alphaG.value) },
+            { name: smtName("ne", obId), smt: notEnabled }
+          ], modelVars);
+          queries.push(qe);
+          pending.set(qe.id, RefinementProbe.enabledness(ob, UnitName.of(u.name()), TransitionReferences.of(plan.mappedTransitionsOf(obId))));
+          const decomposed = EffectAssignments.parse(event.effect);
+          if (!decomposed.ok) {
+            alphaFail(obId, decomposed.error.kind === "effect-not-assignment-conjunction" ? RefinementMapDefect.effectNotAssignmentConjunction().message() : JSON.stringify(decomposed.error));
+            continue;
+          }
+          const assigned = decomposed.value;
+          const frameParts = [];
+          for (const a of req.attributes().sortedByPath()) {
+            if (assigned.covers(a.path()))
+              continue;
+            const eq = mappings.equalityFor(a.path().asString());
+            if (!eq.ok) {
+              alphaFail(obId, eq.error.message());
+              continue obligations;
+            }
+            if (eq.value !== null)
+              frameParts.push(smtOfExpr(ctx, eq.value));
+          }
+          const alphaF = mappings.substitute(event.effect, false);
+          if (!alphaF.ok) {
+            alphaFail(obId, alphaF.error.message());
+            continue;
+          }
+          const fBar = smtOfExpr(ctx, alphaF.value);
+          const postCond = frameParts.length === 0 ? fBar : `(and ${fBar} ${frameParts.join(" ")})`;
+          for (const designId of mapped) {
+            const ev = catalog.value.eventOf(TargetIdentifier.of(designId.asString()));
+            if (!ev)
+              continue;
+            const stepParts = [smtOfExpr(ctx, ev.guard())];
+            for (const attr of ctx.attrs) {
+              const rhs = ev.assignedRhsOf(attr.path);
+              const target = smtVar(attr.path, true);
+              if (rhs) {
+                const rhsSmt = rhs.op === "enum" && typeof rhs.value === "string" ? String(enumCode(ctx, attr.path, rhs.value)) : smtOfExpr(ctx, rhs);
+                stepParts.push(`(= ${target} ${rhsSmt})`);
+              } else {
+                stepParts.push(`(= ${target} ${smtVar(attr.path, false)})`);
+              }
+            }
+            const qs = assembleQuery(`rs2:${obId}:${designId.asString()}`, [...pre.decls, ...post.decls], [
+              ...pre.constraints,
+              ...post.constraints,
+              { name: smtName("step", designId.asString()), smt: `(and ${stepParts.join(" ")})` },
+              { name: smtName("ag2", obId), smt: smtOfExpr(ctx, alphaG.value) },
+              { name: smtName("viol", obId), smt: `(not ${postCond})` }
+            ], modelVarsBoth);
+            queries.push(qs);
+            pending.set(qs.id, RefinementProbe.simulation(ob, UnitName.of(u.name()), designId));
+          }
+        } catch (err2) {
+          if (!(err2 instanceof SatisfiabilityModuloTheoriesCompileError))
+            throw err2;
+          alphaFail(obId, failureMessage(err2));
         }
-      } catch (err2) {
-        if (!(err2 instanceof SatisfiabilityModuloTheoriesCompileError))
-          throw err2;
-        alphaFail(obId, failureMessage(err2));
       }
     }
-  }
   for (const [scId, st] of plan.sortedScenarioStatuses()) {
     if (!st.isCheckable())
       continue;
@@ -11870,7 +12076,12 @@ class SiblingBackendClientImplementation {
     return SiblingVerificationResult.completed(document, run.exit === 0 ? null : refinementFailure);
   }
   runRefinement(plan, wallTimeoutMs) {
-    return this.runLowered("quint", plan.unit(), plan.loweredForQuint(), wallTimeoutMs);
+    const lowered = plan.loweredForQuint();
+    if (!lowered.ok) {
+      const reason = ErrorMessage.of(`refinement lowering failed: ${lowered.error.kind}`);
+      return SiblingVerificationResult.incomplete(reason, reason);
+    }
+    return this.runLowered("quint", plan.unit(), lowered.value, wallTimeoutMs);
   }
   probeState(probe, wallTimeoutMs) {
     const variant = reachabilityVariant(renderLoweredDocument(probe.unit(), probe.lowered()), probe.attributePath(), probe.state());
@@ -12015,32 +12226,42 @@ class VerifyDesignQuintUseCase {
         report = report.unitTimedOut(unit);
         continue;
       }
-      const lowered = unit.lowered({ synthetics: false });
-      const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
-      if (remaining < 3000) {
-        report = report.unitTimedOut(unit);
-        continue;
-      }
-      const run = this.#siblingBackendClient.runLowered("quint", unit, lowered, remaining);
-      report = run.recordedIn(report, model, unit, lowered);
-      if (run.isBackendUnavailable()) {
-        return matchResult(this.#finalizer.finalize(input.verifyDirectory, report, model), {
-          err: (error) => ({ kind: "save-failed", error }),
-          ok: () => ({ kind: "backend-unavailable" })
-        });
-      }
-      if (!run.canInspectReachability())
-        continue;
-      for (let machine of report.planReachability(unit, lowered)) {
-        for (const probe of machine) {
-          const probeRemaining = Math.min(UNIT_WALL_TIMEOUT_MS, UNREACH_BUDGET_MS - (this.#clock.now() - started));
-          if (probesUsed >= this.#unreachCap || probeRemaining < 3000)
-            continue;
-          probesUsed += 1;
-          machine = machine.withVerdict(probe, this.#siblingBackendClient.probeState(probe, probeRemaining));
+      const terminal = unit.withLowering({ synthetics: false }, {
+        failed: (problem) => {
+          report = report.loweringFailed(unit, problem);
+          return null;
+        },
+        ready: (lowered) => {
+          const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
+          if (remaining < 3000) {
+            report = report.unitTimedOut(unit);
+            return null;
+          }
+          const run = this.#siblingBackendClient.runLowered("quint", unit, lowered, remaining);
+          report = run.recordedIn(report, model, unit, lowered);
+          if (run.isBackendUnavailable()) {
+            return matchResult(this.#finalizer.finalize(input.verifyDirectory, report, model), {
+              err: (error) => ({ kind: "save-failed", error }),
+              ok: () => ({ kind: "backend-unavailable" })
+            });
+          }
+          if (!run.canInspectReachability())
+            return null;
+          for (let machine of report.planReachability(unit, lowered)) {
+            for (const probe of machine) {
+              const probeRemaining = Math.min(UNIT_WALL_TIMEOUT_MS, UNREACH_BUDGET_MS - (this.#clock.now() - started));
+              if (probesUsed >= this.#unreachCap || probeRemaining < 3000)
+                continue;
+              probesUsed += 1;
+              machine = machine.withVerdict(probe, this.#siblingBackendClient.probeState(probe, probeRemaining));
+            }
+            report = machine.recordedIn(report, probesUsed >= this.#unreachCap, this.#unreachCap);
+          }
+          return null;
         }
-        report = machine.recordedIn(report, probesUsed >= this.#unreachCap, this.#unreachCap);
-      }
+      });
+      if (terminal !== null)
+        return terminal;
     }
     const materials = this.#refinementMaterialsRepository.findById(RefinementMaterialsIdentifier.of(input.modelId));
     report = matchResult(materials, {
@@ -12107,20 +12328,30 @@ class VerifyDesignSatisfiabilityModuloTheoriesUseCase {
         report = report.unitTimedOut(unit);
         continue;
       }
-      const lowered = unit.lowered({ synthetics: true });
-      const remaining = Math.min(UNIT_WALL_TIMEOUT_MS2, RUN_BUDGET_MS2 - (this.#clock.now() - started));
-      if (remaining < 3000) {
-        report = report.unitTimedOut(unit);
-        continue;
-      }
-      const run = this.#siblingBackendClient.runLowered("smt", unit, lowered, remaining);
-      report = run.recordedIn(report, model, unit, lowered);
-      if (run.isBackendUnavailable()) {
-        return matchResult(this.#finalizer.finalize(input.verifyDirectory, report, model), {
-          err: (error) => ({ kind: "save-failed", error }),
-          ok: () => ({ kind: "backend-unavailable" })
-        });
-      }
+      const terminal = unit.withLowering({ synthetics: true }, {
+        failed: (problem) => {
+          report = report.loweringFailed(unit, problem);
+          return null;
+        },
+        ready: (lowered) => {
+          const remaining = Math.min(UNIT_WALL_TIMEOUT_MS2, RUN_BUDGET_MS2 - (this.#clock.now() - started));
+          if (remaining < 3000) {
+            report = report.unitTimedOut(unit);
+            return null;
+          }
+          const run = this.#siblingBackendClient.runLowered("smt", unit, lowered, remaining);
+          report = run.recordedIn(report, model, unit, lowered);
+          if (run.isBackendUnavailable()) {
+            return matchResult(this.#finalizer.finalize(input.verifyDirectory, report, model), {
+              err: (error) => ({ kind: "save-failed", error }),
+              ok: () => ({ kind: "backend-unavailable" })
+            });
+          }
+          return null;
+        }
+      });
+      if (terminal !== null)
+        return terminal;
     }
     const materials = this.#refinementMaterialsRepository.findById(RefinementMaterialsIdentifier.of(input.modelId));
     report = matchResult(materials, {

@@ -64,8 +64,8 @@ export class RuleSubsumptionProbe {
         .join("|"),
     );
   }
-  loweredAs(id: LoweredIdentifier): LoweredObligation {
-    return LoweredObligation.of({
+  loweredAs(id: LoweredIdentifier): Result<LoweredObligation, ParseError> {
+    return LoweredObligation.parse({
       id,
       origin: LoweredOrigin.of({ kind: "vac-shadow", probe: this }),
       nature: ObligationNature.of("invariant"),

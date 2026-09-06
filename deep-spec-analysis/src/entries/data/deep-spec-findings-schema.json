@@ -65,16 +65,52 @@
       "type": "array",
       "description": "Which sibling backends were compared, and on which targets. Records the cross-check surface even when no disagreement was found (no-silence).",
       "items": {
-        "type": "object",
-        "required": ["backend", "targets"],
-        "additionalProperties": false,
-        "properties": {
-          "backend": { "type": "string" },
-          "targets": {
-            "type": "array",
-            "items": { "$ref": "#/definitions/targetId" }
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "backend",
+              "targets"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "backend": {
+                "type": "string"
+              },
+              "targets": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^SC-[0-9]+$"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "backend",
+              "unit",
+              "targets"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "backend": {
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              },
+              "targets": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^DSC-[0-9]+$"
+                }
+              }
+            }
           }
-        }
+        ]
       }
     }
   },

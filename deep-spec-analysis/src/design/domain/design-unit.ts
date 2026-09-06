@@ -131,7 +131,18 @@ export class DesignUnit {
 
   // このユニットの lowering。synthetics は設計だけの 2 検査（到達不能・包摂）を
   // 前件空虚クエリへ相乗りさせる合成トートロジーの生成可否（SMT のみ true）。
-  lowered(opts: { synthetics: boolean }): LoweredUnit {
+  withLowering<T>(
+    options: { synthetics: boolean },
+    actions: {
+      failed: (problem: ParseError) => T;
+      ready: (lowered: LoweredUnit) => T;
+    },
+  ): T {
+    const result = this.lowered(options);
+    return result.ok ? actions.ready(result.value) : actions.failed(result.error);
+  }
+
+  lowered(opts: { synthetics: boolean }): Result<LoweredUnit, ParseError> {
     const obligations: LoweredObligation[] = [];
     let n = 0;
     const nextId = (): LoweredIdentifier => {
@@ -152,7 +163,9 @@ export class DesignUnit {
       const attrPath = DesignMachines.attrPathOf(sm);
       for (const tr of sm.transitions().sortedCanonically()) {
         const id = nextId();
-        obligations.push(tr.loweredAs(id, attrPath, sm));
+        const lowered = tr.loweredAs(id, attrPath, sm);
+        if (!lowered.ok) return lowered;
+        obligations.push(lowered.value);
       }
       for (const ig of sm.ignores().sortedByStateTrigger()) {
         const id = nextId();
@@ -163,9 +176,18 @@ export class DesignUnit {
     // 3) 合成トートロジー（SMT lowering のみ）：死ガードと包摂が v1 の前件
     //    空虚検査に相乗りする。
     if (opts.synthetics) {
-      const events = DesignEventRuleCatalog.of(this);
-      for (const event of events) obligations.push(event.deadGuardProbe(nextId()));
-      for (const probe of events.subsumptionProbes()) obligations.push(probe.loweredAs(nextId()));
+      const events = DesignEventRuleCatalog.parse(this);
+      if (!events.ok) return events;
+      for (const event of events.value) {
+        const lowered = event.deadGuardProbe(nextId());
+        if (!lowered.ok) return lowered;
+        obligations.push(lowered.value);
+      }
+      for (const probe of events.value.subsumptionProbes()) {
+        const lowered = probe.loweredAs(nextId());
+        if (!lowered.ok) return lowered;
+        obligations.push(lowered.value);
+      }
     }
 
     // 4) シナリオと背景。
@@ -183,7 +205,7 @@ export class DesignUnit {
       background.push(bg.loweredAs(LoweredIdentifier.of(`BG-${bgN}`)));
     }
 
-    return LoweredUnit.of({
+    return LoweredUnit.parse({
       machines: this.#machines,
       obligations: LoweredObligations.of(obligations),
       scenarios: LoweredScenarios.of(scenarios),

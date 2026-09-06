@@ -81,6 +81,7 @@ import {
   VerificationReports,
   VerificationSkips,
 } from "@deep-spec-analysis/requirements-domain";
+import { requireSuccess } from "./result-fixtures.ts";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const data = join(pluginRoot, "src/entries/data");
@@ -156,7 +157,7 @@ const cleanSibling: SiblingBackendClient = {
       null,
     ),
   runRefinement(plan, timeout) {
-    return this.runLowered("quint", plan.unit(), plan.loweredForQuint(), timeout);
+    return this.runLowered("quint", plan.unit(), requireSuccess(plan.loweredForQuint()), timeout);
   },
   probeState: () => ReachabilityVerdict.unverified(),
 };
@@ -216,7 +217,7 @@ describe("到達性は完了した検査または到達の証跡からだけ判�
       }),
     ).toBe("BOUNDED");
     const unit = ws.model.units().toArray()[0];
-    const remapped = readable.remapVerdicts(unit, unit.lowered({ synthetics: false }).index());
+    const remapped = readable.remapVerdicts(unit, requireSuccess(unit.lowered({ synthetics: false })).index());
     expect(remapped.unavailable).toBeNull();
     if (remapped.unavailable === null) expect(remapped.method.toUpperCase()).toBe("BOUNDED");
     expect(
@@ -644,7 +645,12 @@ describe("設計検証の判断は取得した材料と判定値が所有する"
                   ),
                   failure,
                 );
-      const report = result.recordedIn(base, ws.model, plan.unit(), plan.unit().lowered({ synthetics: false }));
+      const report = result.recordedIn(
+        base,
+        ws.model,
+        plan.unit(),
+        requireSuccess(plan.unit().lowered({ synthetics: false })),
+      );
       expect(report.isUnavailable()).toBe(kind === "backend-unavailable");
       expect(result.canInspectReachability()).toBe(kind === "nonzero");
       if (kind !== "nonzero") expect(report.skippedCount()).toBeGreaterThan(0);
@@ -838,7 +844,7 @@ describe("設計検証の構築契約と診断予算", () => {
     if (machine === undefined) throw new Error("fixture has no machine");
     const probe = ReachabilityProbe.of(
       unit,
-      unit.lowered({ synthetics: false }),
+      requireSuccess(unit.lowered({ synthetics: false })),
       machine,
       AttributePath.of("ticket.phase"),
       EnumerationMember.of("closed"),
@@ -890,7 +896,7 @@ describe("設計検証の構築契約と診断予算", () => {
     const unit = preparation.unit();
     const machine = unit.machines().toArray()[0];
     if (machine === undefined) throw new Error("fixture has no machine");
-    const lowered = unit.lowered({ synthetics: false });
+    const lowered = requireSuccess(unit.lowered({ synthetics: false }));
     const probe = ReachabilityProbe.of(
       unit,
       lowered,

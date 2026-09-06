@@ -1,4 +1,4 @@
-import { type ArtifactPath, AttributePath, type Expression } from "@deep-spec-analysis/kernel-domain";
+import { type ArtifactPath, AttributePath, type Expression, ExpressionTree } from "@deep-spec-analysis/kernel-domain";
 import { err, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import { AttributeCoverage } from "./attribute-coverage.ts";
 import type { AttributeMapping } from "./attribute-mapping.ts";
@@ -101,6 +101,13 @@ export class AttributeMappings {
   // 要件の式を承認済み写像で設計の式へ書き換える。enum 属性の比較は「その要件値へ
   // 写る設計値」の選言へ展開し、post（primed）文脈では代入式の全参照を prime する。
   substitute(e: Expression, post: boolean): Result<Expression, RefinementMapDefect> {
+    const substituted = this.#substitute(e, post);
+    if (!substituted.ok) return substituted;
+    const parsed = ExpressionTree.parse(substituted.value);
+    return parsed.ok ? ok(parsed.value.asExpression()) : err(RefinementMapDefect.invalidExpression(parsed.error));
+  }
+
+  #substitute(e: Expression, post: boolean): Result<Expression, RefinementMapDefect> {
     if (e.op === "eq" || e.op === "ne") {
       const [a, b] = e.args ?? [];
       const refArg = a?.op === "ref" ? a : b?.op === "ref" ? b : null;
@@ -123,7 +130,7 @@ export class AttributeMappings {
       // 引数は宣言順に書き換え、最初の欠陥で止まる（旧 throw の順序と同じ）。
       const args: Expression[] = [];
       for (const a of e.args) {
-        const sub = this.substitute(a, post);
+        const sub = this.#substitute(a, post);
         if (!sub.ok) return sub;
         args.push(sub.value);
       }
@@ -133,8 +140,11 @@ export class AttributeMappings {
   }
 
   // alpha(a)(pre) == alpha(a)(post) — 抽象フレーム（Q2）に使う等式。写像が無ければ null。
-  equalityFor(reqPath: string): Expression | null {
-    return this.#byRequirementPath(reqPath)?.abstractFrameEquality() ?? null;
+  equalityFor(reqPath: string): Result<Expression | null, RefinementMapDefect> {
+    const expression = this.#byRequirementPath(reqPath)?.abstractFrameEquality();
+    if (expression == null) return ok(null);
+    const parsed = ExpressionTree.parse(expression);
+    return parsed.ok ? ok(parsed.value.asExpression()) : err(RefinementMapDefect.invalidExpression(parsed.error));
   }
 
   toArray(): readonly AttributeMapping[] {

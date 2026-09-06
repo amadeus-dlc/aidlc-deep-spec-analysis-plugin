@@ -9,6 +9,8 @@ export class LoweredIdentifier {
   private constructor(raw: string) {
     if (raw.length > 128) throw new IllegalArgumentException({ kind: "lowered-id-too-long", raw: raw.length });
     if (raw === "") throw new IllegalArgumentException({ kind: "empty-lowered-token", raw });
+    if (!/^(OB|SC|BG)-[0-9]+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "invalid-lowered-identifier", raw });
     this.#value = raw;
   }
 
@@ -18,6 +20,10 @@ export class LoweredIdentifier {
 
   static parse(raw: string): Result<LoweredIdentifier, ParseError> {
     return parseConstruction(() => new LoweredIdentifier(raw));
+  }
+
+  belongsTo(namespace: "OB" | "SC" | "BG"): boolean {
+    return this.#value.startsWith(`${namespace}-`);
   }
 
   equals(other: LoweredIdentifier): boolean {

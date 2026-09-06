@@ -43,6 +43,15 @@ export function parseSiblingDesignReportDocument(
   }
   const checked = doc.checked === undefined ? ok(undefined) : traverseResult(doc.checked, UnitName.parse);
   if (!checked.ok) return err(JSON.stringify(checked.error));
+  const comparisons =
+    doc.crossChecked === undefined
+      ? ok(null)
+      : traverseResult(doc.crossChecked, (entry) => {
+          if (entry.unit === undefined) return err("design cross-check requires a unit");
+          const parsed = DesignCrossCheckedEntry.parse({ ...entry, unit: entry.unit });
+          return parsed.ok ? ok(parsed.value) : err(JSON.stringify(parsed.error));
+        });
+  if (!comparisons.ok) return comparisons;
   return ok(
     DesignReport.of({
       id: DesignReportIdentifier.of(directory, doc.backend.asString()),
@@ -60,10 +69,7 @@ export function parseSiblingDesignReportDocument(
               ),
             ),
       checked: checked.value === undefined ? null : CheckedUnits.of(checked.value),
-      crossChecked:
-        doc.crossChecked === undefined
-          ? null
-          : DesignCrossCheckedEntries.of(doc.crossChecked.map(DesignCrossCheckedEntry.of)),
+      crossChecked: comparisons.value === null ? null : DesignCrossCheckedEntries.of(comparisons.value),
       unavailableReason: doc.unavailable?.reason ?? null,
     }),
   );

@@ -2379,3 +2379,14 @@ exit 1 し何も公開せず、design IR を読めなくすると凍結の降格
 - 規則・義務・シナリオ・背景仮定・属性の各宣言が、自己の診断文言と証拠を組み立てる。集合は重複識別子・被覆・診断順を所有する。要件と設計の列挙値検査の意図した仕様差は維持する。
 
 移行後の生Map・生配列を受ける互換APIと、診断移譲により不要になったgetter／visitorは削除した。回帰テストは公開APIを使い、構築違反のpanic、`parse`の非例外`ParseError`、検査対象の部分欠落、外部変更からの独立性、比較対象の帰属を確認する。
+
+
+## 検証対象の識別と演算契約を一貫させる（2026-09-06）
+
+追加精査のR1〜R5を是正した。
+
+- スキーマ検査は診断を遅延生成し、oneOf候補の不一致が確定した時点でその候補を打ち切る。const/enumの照合を先に行い、入力のキー順や参照された条件によって無関係な子式の再帰が増えないようにした。公開診断の順序と文言は維持する。
+- DesignUnit.lowered、合成プローブ、遷移のloweredAs、精緻化のloweringはResultで不成立を返す。式置換・抽象フレームもExpressionTreeの生成契約を通す。SMT／Quintのユースケースは失敗を報告へ依頼し、compile-errorとして対象を記録する。ofのpanicを捕捉する互換処理は追加しない。
+- IssuedLoweredIdentifiersが発行IDの一意性・65,536件の予算・衝突しない追加採番を所有する。LoweredIdentifierはOB／SC／BGの形式、LoweringIndexは各コレクションの名前空間を保証する。再構成はof、想定内の不適合を扱う生成はparseを使う。未知のfinding／skip対象は通常のpassthroughへ補完せず、兄弟文書を不成立として扱う。
+- 設計のcrossCheckedはbackend・unit・targetsを保持し、backend→unit順に整列する。契約2は要件用のSC対象と、unit必須の設計用DSC対象を区別する。decoder・serializer・golden・配布スキーマを更新し、unitのない設計用記録を旧形式として補完しない。比較結果は派生物なので、不正な過去のcross-checkは再計算対象となる。
+- ScenarioVerdictはレポート自身のirHashを保持する。比較可能な判定はモデルの版・unit・対象が一致し、backendが異なる組に限る。レポートの文書契約がモデル内容を同定するirHashを持つため、この同一性を比較へ運ぶ。精緻化材料は成果物としてのModelIdentifierにも束縛されるため、prepare時に所属IDを照合し、別モデルの指定は契約違反として送出する。

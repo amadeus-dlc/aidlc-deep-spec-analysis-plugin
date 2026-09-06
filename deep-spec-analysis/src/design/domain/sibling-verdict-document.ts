@@ -146,6 +146,13 @@ export class SiblingVerdictDocument {
     for (const source of docFindings) {
       const result = source.remap(unit, index);
       switch (result.kind) {
+        case "invalid":
+          return {
+            findings: DesignFindings.of([]),
+            skipped: DesignSkips.of([]),
+            method,
+            unavailable: `sibling finding target cannot be resolved: ${result.error.kind} (${result.error.raw})`,
+          };
         case "finding":
           findings.push(result.finding);
           break;
@@ -184,7 +191,15 @@ export class SiblingVerdictDocument {
 
     const seenSkip = new Set<string>();
     for (const source of docSkipped) {
-      const mapped = source.remap(unit, index);
+      const resolved = source.remap(unit, index);
+      if (!resolved.ok)
+        return {
+          findings: DesignFindings.of([]),
+          skipped: DesignSkips.of([]),
+          method,
+          unavailable: `sibling skip target cannot be resolved: ${resolved.error.kind} (${resolved.error.raw})`,
+        };
+      const mapped = resolved.value;
       if (mapped === null) continue;
       const key = `${mapped.target().asString()}|${mapped.reason()}`;
       if (!seenSkip.has(key)) {

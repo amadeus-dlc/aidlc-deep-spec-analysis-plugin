@@ -22,9 +22,9 @@ export class ScenarioVerdicts {
         throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: snapshot.length + 1 });
       snapshot.push(value);
     }
-    if (snapshot.some((value) => !value.sameSubjectAs(snapshot[0])))
-      throw new IllegalArgumentException({ kind: "different-scenario-subjects" });
     const comparable = snapshot.filter((value) => value.isComparable());
+    if (comparable.some((value) => !value.sameSubjectAs(comparable[0])))
+      throw new IllegalArgumentException({ kind: "different-scenario-subjects" });
     if (KeySet.of(comparable.map((value) => value.backend())).size() !== comparable.length)
       throw new IllegalArgumentException({ kind: "duplicate-scenario-backend" });
     this.#values = [...comparable];

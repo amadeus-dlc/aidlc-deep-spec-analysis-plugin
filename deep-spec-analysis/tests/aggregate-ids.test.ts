@@ -498,6 +498,7 @@ describe("design first-class collections", () => {
     const cc = DesignCrossCheckedEntries.of([]).add(
       DesignCrossCheckedEntry.of({
         backend: BackendName.of("smt"),
+        unit: UnitName.of("u1"),
         targets: TargetIdentifiers.of(Array.from(["DSC-1"], (raw) => TargetIdentifier.of(raw))),
       }),
     );

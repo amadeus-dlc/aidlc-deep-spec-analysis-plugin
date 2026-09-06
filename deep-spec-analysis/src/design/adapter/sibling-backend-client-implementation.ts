@@ -65,7 +65,12 @@ export class SiblingBackendClientImplementation implements SiblingBackendClient 
   }
 
   runRefinement(plan: UnitRefinementPlan, wallTimeoutMs: number): SiblingVerificationResult {
-    return this.runLowered("quint", plan.unit(), plan.loweredForQuint(), wallTimeoutMs);
+    const lowered = plan.loweredForQuint();
+    if (!lowered.ok) {
+      const reason = ErrorMessage.of(`refinement lowering failed: ${lowered.error.kind}`);
+      return SiblingVerificationResult.incomplete(reason, reason);
+    }
+    return this.runLowered("quint", plan.unit(), lowered.value, wallTimeoutMs);
   }
 
   probeState(probe: ReachabilityProbe, wallTimeoutMs: number): ReachabilityVerdict {

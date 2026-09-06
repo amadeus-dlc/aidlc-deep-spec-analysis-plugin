@@ -90,8 +90,8 @@ import {
   TriggerName,
   UnitName,
 } from "@deep-spec-analysis/kernel-domain";
-
 import { scenarioBindings } from "./binding-fixtures.ts";
+import { requireSuccess } from "./result-fixtures.ts";
 
 // レイヤード refinement パイプラインの in-process 検証（PR6、#19）。
 //
@@ -724,18 +724,18 @@ describe("alpha substitution", () => {
   });
 
   test("alphaEquality builds frame equalities: expression eq, enum class-iff, null for unmapped/unspecified", () => {
-    expect(ctx.equalityFor("R.flag")).toEqual({
+    expect(requireSuccess(ctx.equalityFor("R.flag"))).toEqual({
       op: "eq",
       args: [
         { op: "ref", path: "D.flag" },
         { op: "ref", path: "D.flag", prime: true },
       ],
     });
-    const enumEq = ctx.equalityFor("R.state");
+    const enumEq = requireSuccess(ctx.equalityFor("R.state"));
     expect(enumEq?.op).toBe("and");
     expect(enumEq?.args?.length).toBe(2); // closed / open の 2 類
-    expect(ctx.equalityFor("R.missing")).toBe(null);
-    expect(ctx.equalityFor("R.none")).toBe(null);
+    expect(requireSuccess(ctx.equalityFor("R.missing"))).toBe(null);
+    expect(requireSuccess(ctx.equalityFor("R.none"))).toBe(null);
   });
 });
 

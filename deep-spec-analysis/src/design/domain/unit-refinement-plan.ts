@@ -114,8 +114,9 @@ export class UnitRefinementPlan {
     return !this.quintInvariants(this.#requirements).isEmpty();
   }
 
-  loweredForQuint(): LoweredUnit {
-    return this.#unit.lowered({ synthetics: false }).extendedWith(this.quintInvariants(this.#requirements));
+  loweredForQuint(): Result<LoweredUnit, ParseError> {
+    const lowered = this.#unit.lowered({ synthetics: false });
+    return lowered.ok ? lowered.value.extendedWith(this.quintInvariants(this.#requirements)) : lowered;
   }
 
   quintPreparedIn(report: DesignReport): DesignReport {
@@ -123,12 +124,14 @@ export class UnitRefinementPlan {
   }
 
   quintRecordedIn(report: DesignReport, result: SiblingVerificationResult): DesignReport {
-    const interpreted = result.interpretRefinement(
-      this.#unit,
-      this.loweredForQuint(),
-      this.quintInvariants(this.#requirements),
-    );
+    const lowered = this.loweredForQuint();
+    if (!lowered.ok) return this.loweringFailedIn(report, lowered.error);
+    const interpreted = result.interpretRefinement(this.#unit, lowered.value, this.quintInvariants(this.#requirements));
     return report.withEvidence(interpreted.findings, interpreted.skipped);
+  }
+
+  loweringFailedIn(report: DesignReport, problem: ParseError): DesignReport {
+    return this.unverifiedIn(report, SkipReason.compileError(), `refinement lowering failed: ${problem.kind}`);
   }
 
   quintTimedOut(report: DesignReport): DesignReport {

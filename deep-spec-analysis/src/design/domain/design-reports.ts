@@ -28,10 +28,6 @@ export class DesignReports {
     return new DesignReports(values);
   }
 
-  add(value: DesignReport): DesignReports {
-    return new DesignReports([...this.#values, value]);
-  }
-
   *[Symbol.iterator](): Iterator<DesignReport> {
     yield* this.#values;
   }
@@ -42,11 +38,12 @@ export class DesignReports {
   // レポート自身が判定を決め、共通の比較規則からシナリオに診断を依頼する。
   crossChecked(id: DesignReportIdentifier, model: DesignModel, irHash: ContentHash): DesignReport {
     const findings: DesignFinding[] = [];
-    let compared = KeyedIndex.empty<BackendName, TargetIdentifier[]>();
+    const crossChecked: DesignCrossCheckedEntry[] = [];
     let failure: ParseError | null = null;
-    scenarios: for (const unit of model.units())
+    scenarios: for (const unit of model.units()) {
+      const unitName = UnitName.of(unit.name());
+      let compared = KeyedIndex.empty<BackendName, TargetIdentifier[]>();
       for (const scenario of unit.scenarios()) {
-        const unitName = UnitName.of(unit.name());
         const target = TargetIdentifier.of(scenario.id().asString());
         const verdicts = ScenarioVerdicts.parse(
           this.#values.map((report) => report.scenarioVerdictFor(unitName, target, irHash)),
@@ -65,14 +62,17 @@ export class DesignReports {
           if (finding !== null) findings.push(finding);
         }
       }
-    const crossChecked = [...compared]
-      .map(([backend, targets]) =>
-        DesignCrossCheckedEntry.of({
-          backend,
-          targets: TargetIdentifiers.of(targets).sortedUniqueCanonically(),
-        }),
-      )
-      .sort((a, b) => a.compareByBackend(b));
+      for (const [backend, targets] of compared) {
+        crossChecked.push(
+          DesignCrossCheckedEntry.of({
+            backend,
+            unit: unitName,
+            targets: TargetIdentifiers.of(targets).sortedUniqueCanonically(),
+          }),
+        );
+      }
+    }
+    crossChecked.sort((a, b) => a.compareTo(b));
     const report = DesignReport.compose({
       id,
       irVersion: model.irVersion(),

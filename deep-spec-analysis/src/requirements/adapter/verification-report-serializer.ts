@@ -1,6 +1,6 @@
 import { parseFindingsValues } from "@deep-spec-analysis/kernel-adapter";
 import type { ArtifactPath } from "@deep-spec-analysis/kernel-domain";
-import { err, type Json, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import { err, type Json, ok, type Result, traverseResult } from "@deep-spec-analysis/kernel-infrastructure";
 import {
   CrossCheckedEntries,
   CrossCheckedEntry,
@@ -40,6 +40,15 @@ export function parseSiblingReportDocument(
       }),
     );
   }
+  const comparisons =
+    doc.crossChecked === undefined
+      ? ok(null)
+      : traverseResult(doc.crossChecked, (entry) => {
+          if (entry.unit !== undefined) return err("requirements cross-check must not carry a unit");
+          const parsed = CrossCheckedEntry.parse(entry);
+          return parsed.ok ? ok(parsed.value) : err(JSON.stringify(parsed.error));
+        });
+  if (!comparisons.ok) return comparisons;
   return ok(
     VerificationReport.of({
       id: VerificationReportIdentifier.of(directory, doc.backend.asString()),
@@ -48,8 +57,7 @@ export function parseSiblingReportDocument(
       method: doc.method,
       findings: VerificationFindings.of(findings),
       skipped: VerificationSkips.of(doc.skipped.map((entry) => VerificationSkipped.of(entry))),
-      crossChecked:
-        doc.crossChecked === undefined ? null : CrossCheckedEntries.of(doc.crossChecked.map(CrossCheckedEntry.of)),
+      crossChecked: comparisons.value === null ? null : CrossCheckedEntries.of(comparisons.value),
       unavailableReason: doc.unavailable?.reason ?? null,
     }),
   );

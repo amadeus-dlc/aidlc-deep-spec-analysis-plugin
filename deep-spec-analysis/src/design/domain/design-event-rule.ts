@@ -92,8 +92,8 @@ export class DesignEventRule {
   assignedRhsOf(path: string): Expression | undefined {
     return this.#assignments?.rhsOf(AttributePath.of(path));
   }
-  deadGuardProbe(id: LoweredIdentifier): LoweredObligation {
-    return LoweredObligation.of({
+  deadGuardProbe(id: LoweredIdentifier): Result<LoweredObligation, ParseError> {
+    return LoweredObligation.parse({
       id,
       origin: LoweredOrigin.of({ kind: "vac-dead", design: this.reference() }),
       nature: ObligationNature.of("invariant"),
