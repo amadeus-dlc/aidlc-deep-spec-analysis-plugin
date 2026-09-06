@@ -2,11 +2,17 @@ import {
   AttributeKind,
   type Expression,
   FunctionalRequirementReferences,
+  ObligationNature,
   RequirementIdentifier,
+  ScenarioExpectation,
   TargetIdentifier,
   TargetIdentifiers,
   TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
+import {
+  IntermediateRepresentationAttributeCatalog,
+  IntermediateRepresentationEntityDeclarations,
+} from "@deep-spec-analysis/requirements-domain";
 import { scenarioBindings } from "./binding-fixtures.ts";
 
 // requirements/domain の単体テスト（TDA 波3 — 90% カバレッジ床の維持）。
@@ -25,7 +31,6 @@ import {
   IntermediateRepresentationTemporalDeclaration,
   Obligation,
   ObligationIdentifier,
-  ObligationNature,
   QuintMachineRunVerdict,
   QuintScenarioVerdict,
   QuintTemporalVerdict,
@@ -156,7 +161,7 @@ describe("scenario", () => {
   const scenario = (kind: "accept" | "reject") =>
     Scenario.of({
       id: ScenarioIdentifier.of("SC-1"),
-      kind,
+      expectation: ScenarioExpectation.of(kind),
       functionalRequirementReferences: FunctionalRequirementReferences.of(
         Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw)),
       ),
@@ -166,7 +171,7 @@ describe("scenario", () => {
   test("of round-trips every field through the accessors", () => {
     const withEvent = Scenario.of({
       id: ScenarioIdentifier.of("SC-2"),
-      kind: "accept",
+      expectation: ScenarioExpectation.of("accept"),
       functionalRequirementReferences: FunctionalRequirementReferences.of(
         Array.from(["FR-1", "FR-2"], (raw) => RequirementIdentifier.of(raw)),
       ),
@@ -178,15 +183,15 @@ describe("scenario", () => {
     expect(withEvent.kind()).toBe("accept");
     expect(withEvent.functionalRequirementReferences().toStrings()).toEqual(["FR-1", "FR-2"]);
     expect(withEvent.eventTrigger()?.asString()).toBe("submit");
-    expect(withEvent.expectation()).toEqual(lit(true));
+    expect(withEvent.expectedExpression()).toEqual(lit(true));
     expect(withEvent.isAccept()).toBe(true);
     expect(withEvent.isReject()).toBe(false);
-    expect(withEvent.hasEvent()).toBe(true);
+    expect(withEvent.hasEventRule()).toBe(true);
     expect(scenario("reject").isAccept()).toBe(false);
     expect(scenario("reject").isReject()).toBe(true);
-    expect(scenario("reject").hasEvent()).toBe(false);
+    expect(scenario("reject").hasEventRule()).toBe(false);
     expect(scenario("reject").eventTrigger()).toBeUndefined();
-    expect(scenario("reject").expectation()).toBeUndefined();
+    expect(scenario("reject").expectedExpression()).toBeUndefined();
   });
 
   test("isViolatedBySatisfiability is the accept/reject truth table", () => {
@@ -213,22 +218,20 @@ describe("scenario", () => {
 });
 
 describe("ir background decl", () => {
-  test("inspectExpressions visits the assertion with primes forbidden, and silence when absent", () => {
-    const withAssert = IntermediateRepresentationBackgroundDeclaration.of({
+  test("背景仮定が参照先を検査し、式がない場合は診断を出さない", () => {
+    const catalog = IntermediateRepresentationAttributeCatalog.of(IntermediateRepresentationEntityDeclarations.of([]));
+    const declared = IntermediateRepresentationBackgroundDeclaration.of({
       id: BackgroundAssumptionIdentifier.of("BG-1"),
       assert: { op: "ref", path: "a.b" },
     });
-    const seen: [string, boolean][] = [];
-    withAssert.inspectExpressions((expression, primesAllowed) => seen.push([expression.op, primesAllowed]));
-    expect(seen).toEqual([["ref", false]]);
-    expect(withAssert.id().asString()).toBe("BG-1");
-    expect(withAssert.assertion()).toEqual({ op: "ref", path: "a.b" });
-
+    expect(
+      declared
+        .diagnostics(catalog)
+        .toArray()
+        .map((message) => message.asString()),
+    ).toEqual(['background BG-1: unresolvable reference "a.b"']);
     const bare = IntermediateRepresentationBackgroundDeclaration.of({ id: BackgroundAssumptionIdentifier.of("BG-2") });
-    const none: unknown[] = [];
-    bare.inspectExpressions((expression, primesAllowed) => none.push([expression.op, primesAllowed]));
-    expect(none).toEqual([]);
-    expect(bare.assertion()).toBeUndefined();
+    expect(bare.diagnostics(catalog).isEmpty()).toBe(true);
   });
 });
 

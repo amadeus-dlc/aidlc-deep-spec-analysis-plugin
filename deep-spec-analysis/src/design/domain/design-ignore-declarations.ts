@@ -1,6 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { DesignIgnoreDeclaration } from "./design-ignore-declaration.ts";
 
-export class DesignIgnoreDeclarations {
+export class DesignIgnoreDeclarations
+  implements FirstClassCollection, IterableFirstClassCollection<DesignIgnoreDeclaration>
+{
   readonly #values: readonly DesignIgnoreDeclaration[];
 
   private constructor(values: readonly DesignIgnoreDeclaration[]) {
@@ -21,5 +24,9 @@ export class DesignIgnoreDeclarations {
 
   toArray(): readonly DesignIgnoreDeclaration[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   AttributeMapping,
+  DesignScenarioIdentifier,
   DesignWitness,
   LoweredIdentifier,
   LoweredScenario,
@@ -17,6 +18,7 @@ import {
   FindingsSchema,
   FunctionalRequirementReferences,
   ScenarioBindings,
+  ScenarioExpectation,
   TargetIdentifier,
   TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
@@ -175,8 +177,9 @@ test("Result composition propagates a non-exception failure without running the 
 test("lowered event data and sibling targets do not retain mutable argument containers", () => {
   const event = { trigger: TriggerName.of("go") };
   const lowered = LoweredScenario.of({
+    origin: DesignScenarioIdentifier.of("DSC-1"),
     id: LoweredIdentifier.of("SC-1"),
-    kind: "accept",
+    expectation: ScenarioExpectation.of("accept"),
     functionalRequirementReferences: FunctionalRequirementReferences.of([]),
     bindings: ScenarioBindings.of([]),
     event,

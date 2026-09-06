@@ -41,7 +41,7 @@ export function renderLoweredDocument(u: DesignUnit, low: LoweredUnit): Json {
       };
       const event = sc.event();
       if (event) out.event = event as unknown as Json;
-      const expectation = sc.expectation();
+      const expectation = sc.expectedExpression();
       if (expectation) out.expect = expectation as unknown as Json;
       return out;
     });

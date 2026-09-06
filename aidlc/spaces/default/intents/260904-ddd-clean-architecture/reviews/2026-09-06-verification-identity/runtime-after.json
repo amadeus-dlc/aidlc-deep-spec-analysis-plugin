@@ -1,0 +1,194 @@
+{
+  "source": "90874c14037b73824372d2ca2ebb6bfe9beabb22",
+  "crossCheckedScopeLoss": {
+    "compared": [
+      "u1のみ",
+      "u2のみ",
+      "両方"
+    ],
+    "documentsIdentical": false,
+    "u1Only": {
+      "backend": "cross-check",
+      "irVersion": "1.0.0",
+      "irHash": "4e81c2a606939bcc5abf33d0d28afa350647d34522935e38d7e67bd8951d8fc2",
+      "method": "exhaustive",
+      "findings": [],
+      "skipped": [],
+      "crossChecked": [
+        {
+          "backend": "quint",
+          "unit": "u1",
+          "targets": [
+            "DSC-1"
+          ]
+        },
+        {
+          "backend": "smt",
+          "unit": "u1",
+          "targets": [
+            "DSC-1"
+          ]
+        }
+      ]
+    },
+    "u2Only": {
+      "backend": "cross-check",
+      "irVersion": "1.0.0",
+      "irHash": "4e81c2a606939bcc5abf33d0d28afa350647d34522935e38d7e67bd8951d8fc2",
+      "method": "exhaustive",
+      "findings": [],
+      "skipped": [],
+      "crossChecked": [
+        {
+          "backend": "quint",
+          "unit": "u2",
+          "targets": [
+            "DSC-1"
+          ]
+        },
+        {
+          "backend": "smt",
+          "unit": "u2",
+          "targets": [
+            "DSC-1"
+          ]
+        }
+      ]
+    },
+    "both": {
+      "backend": "cross-check",
+      "irVersion": "1.0.0",
+      "irHash": "4e81c2a606939bcc5abf33d0d28afa350647d34522935e38d7e67bd8951d8fc2",
+      "method": "exhaustive",
+      "findings": [],
+      "skipped": [],
+      "crossChecked": [
+        {
+          "backend": "quint",
+          "unit": "u1",
+          "targets": [
+            "DSC-1"
+          ]
+        },
+        {
+          "backend": "quint",
+          "unit": "u2",
+          "targets": [
+            "DSC-1"
+          ]
+        },
+        {
+          "backend": "smt",
+          "unit": "u1",
+          "targets": [
+            "DSC-1"
+          ]
+        },
+        {
+          "backend": "smt",
+          "unit": "u2",
+          "targets": [
+            "DSC-1"
+          ]
+        }
+      ]
+    }
+  },
+  "unissuedTarget": {
+    "known": {
+      "schemaAccepted": true,
+      "readable": true,
+      "unavailable": null,
+      "remappedTargets": [
+        "DSC-1"
+      ],
+      "crossCheckFindings": 1,
+      "crossChecked": [
+        {
+          "backend": "quint",
+          "unit": "u1",
+          "targets": [
+            "DSC-1"
+          ]
+        },
+        {
+          "backend": "smt",
+          "unit": "u1",
+          "targets": [
+            "DSC-1"
+          ]
+        }
+      ]
+    },
+    "unknown": {
+      "schemaAccepted": true,
+      "readable": true,
+      "unavailable": "sibling finding target cannot be resolved: unknown-lowered-target (SC-999)",
+      "remappedTargets": [],
+      "crossCheckFindings": 0,
+      "crossChecked": []
+    }
+  },
+  "loweredIdentityCollision": {
+    "before": "DOB-1",
+    "after": "DOB-1",
+    "duplicateIds": [
+      "OB-2",
+      "OB-1"
+    ]
+  },
+  "expressionComposition": [
+    {
+      "inputNodes": 9998,
+      "inputExpressionAccepted": true,
+      "schemaAccepted": true,
+      "ordinaryLoweringAccepted": true,
+      "failure": null
+    },
+    {
+      "inputNodes": 10000,
+      "inputExpressionAccepted": true,
+      "schemaAccepted": true,
+      "ordinaryLoweringAccepted": true,
+      "failure": {
+        "kind": "expression-too-large"
+      }
+    }
+  ],
+  "transitionComposition": [
+    {
+      "inputNodes": 9996,
+      "inputExpressionAccepted": true,
+      "schemaAccepted": true,
+      "synthetics": false,
+      "failure": null
+    },
+    {
+      "inputNodes": 10000,
+      "inputExpressionAccepted": true,
+      "schemaAccepted": true,
+      "synthetics": false,
+      "failure": {
+        "kind": "expression-too-large"
+      }
+    }
+  ],
+  "comparisonModelScope": {
+    "sameHash": false,
+    "comparisonAccepted": false,
+    "comparisonDisagrees": null,
+    "normalReportPathFindings": 0,
+    "normalReportPathComparisons": 0
+  },
+  "materialModelScope": {
+    "materialsFor": "/records/a/model.md",
+    "requestedModel": "/records/b/model.md",
+    "sameModelId": false,
+    "sameContentHash": true,
+    "plansForCorrectModel": 1,
+    "foreignFailure": {
+      "name": "IllegalArgumentException",
+      "message": "Illegal argument: refinement-model-mismatch"
+    }
+  }
+}

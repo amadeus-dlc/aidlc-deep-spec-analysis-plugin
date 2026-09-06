@@ -147,59 +147,88 @@ function resolveRef(root, ref) {
 }
 function validateSchema(root, schema, value, path, errors) {
   const before = errors.length;
+  for (const error of schemaErrors(root, schema, value, path))
+    errors.push(error);
+  return errors.length === before;
+}
+function matchesSchema(root, schema, value, path) {
+  if (typeof schema.$ref === "string")
+    return matchesSchema(root, resolveRef(root, schema.$ref), value, path);
+  if (Array.isArray(schema.oneOf))
+    return schemaErrors(root, schema, value, path).next().done === true;
+  if (isObject(value) && isObject(schema.properties)) {
+    for (const [key, property] of Object.entries(schema.properties)) {
+      if (!(key in value) || !isObject(property))
+        continue;
+      let resolved = property;
+      while (typeof resolved.$ref === "string")
+        resolved = resolveRef(root, resolved.$ref);
+      if (Array.isArray(resolved.oneOf))
+        continue;
+      const condition = {};
+      if ("const" in resolved)
+        condition.const = resolved.const;
+      if (Array.isArray(resolved.enum))
+        condition.enum = resolved.enum;
+      if (Object.keys(condition).length > 0 && !schemaErrors(root, condition, value[key], `${path}/${key}`).next().done)
+        return false;
+    }
+  }
+  return schemaErrors(root, schema, value, path).next().done === true;
+}
+function* schemaErrors(root, schema, value, path) {
   if (typeof schema.$ref === "string") {
-    return validateSchema(root, resolveRef(root, schema.$ref), value, path, errors);
+    yield* schemaErrors(root, resolveRef(root, schema.$ref), value, path);
+    return;
   }
   if (Array.isArray(schema.oneOf)) {
     let matched = 0;
     for (const branch of schema.oneOf) {
       if (!isObject(branch))
         continue;
-      const probe = [];
-      if (validateSchema(root, branch, value, path, probe))
+      if (matchesSchema(root, branch, value, path))
         matched++;
     }
     if (matched !== 1) {
-      errors.push(`${path}: matches ${matched} oneOf branches (must match exactly 1)`);
+      yield `${path}: matches ${matched} oneOf branches (must match exactly 1)`;
     }
-    return errors.length === before;
+    return;
   }
   if (typeof schema.type === "string" && !typeMatches(schema.type, value)) {
-    errors.push(`${path}: expected type ${schema.type}`);
-    return false;
+    yield `${path}: expected type ${schema.type}`;
+    return;
   }
   if ("const" in schema && JSON.stringify(schema.const) !== JSON.stringify(value)) {
-    errors.push(`${path}: expected const ${JSON.stringify(schema.const)}`);
-    return false;
+    yield `${path}: expected const ${JSON.stringify(schema.const)}`;
+    return;
   }
   if (Array.isArray(schema.enum)) {
     const hit = schema.enum.some((e) => JSON.stringify(e) === JSON.stringify(value));
     if (!hit) {
-      errors.push(`${path}: not one of ${JSON.stringify(schema.enum)}`);
-      return false;
+      yield `${path}: not one of ${JSON.stringify(schema.enum)}`;
+      return;
     }
   }
   if (typeof value === "string" && typeof schema.pattern === "string") {
     if (!new RegExp(schema.pattern).test(value)) {
-      errors.push(`${path}: does not match pattern ${schema.pattern}`);
+      yield `${path}: does not match pattern ${schema.pattern}`;
     }
   }
   if (Array.isArray(value)) {
     if (typeof schema.minItems === "number" && value.length < schema.minItems) {
-      errors.push(`${path}: fewer than ${schema.minItems} items`);
+      yield `${path}: fewer than ${schema.minItems} items`;
     }
     if (typeof schema.maxItems === "number" && value.length > schema.maxItems) {
-      errors.push(`${path}: more than ${schema.maxItems} items`);
+      yield `${path}: more than ${schema.maxItems} items`;
     }
     if (schema.uniqueItems === true) {
       const seen = new Set(value.map((v) => JSON.stringify(v)));
       if (seen.size !== value.length)
-        errors.push(`${path}: items are not unique`);
+        yield `${path}: items are not unique`;
     }
     if (isObject(schema.items)) {
-      value.forEach((item, i) => {
-        validateSchema(root, schema.items, item, `${path}/${i}`, errors);
-      });
+      for (const [index, item] of value.entries())
+        yield* schemaErrors(root, schema.items, item, `${path}/${index}`);
     }
   }
   if (isObject(value)) {
@@ -207,29 +236,29 @@ function validateSchema(root, schema, value, path, errors) {
     if (Array.isArray(schema.required)) {
       for (const key of schema.required) {
         if (typeof key === "string" && !(key in value)) {
-          errors.push(`${path}: missing required property "${key}"`);
+          yield `${path}: missing required property "${key}"`;
         }
       }
     }
     if (typeof schema.minProperties === "number" && Object.keys(value).length < schema.minProperties) {
-      errors.push(`${path}: fewer than ${schema.minProperties} properties`);
+      yield `${path}: fewer than ${schema.minProperties} properties`;
     }
     for (const [key, val] of Object.entries(value)) {
       if (key in props && isObject(props[key])) {
-        validateSchema(root, props[key], val, `${path}/${key}`, errors);
+        yield* schemaErrors(root, props[key], val, `${path}/${key}`);
       } else if (schema.additionalProperties === false) {
-        errors.push(`${path}: unexpected property "${key}"`);
+        yield `${path}: unexpected property "${key}"`;
       } else if (isObject(schema.additionalProperties)) {
-        validateSchema(root, schema.additionalProperties, val, `${path}/${key}`, errors);
+        yield* schemaErrors(root, schema.additionalProperties, val, `${path}/${key}`);
       }
       if (isObject(schema.propertyNames) && typeof schema.propertyNames.pattern === "string") {
         if (!new RegExp(schema.propertyNames.pattern).test(key)) {
-          errors.push(`${path}: property name "${key}" does not match required pattern`);
+          yield `${path}: property name "${key}" does not match required pattern`;
         }
       }
     }
   }
-  return errors.length === before;
+  return;
 }
 // src/doctor/domain/artifact-modified-at.ts
 class ArtifactModifiedAt {
@@ -405,6 +434,9 @@ class DesignArtifacts {
   }
   *[Symbol.iterator]() {
     yield* this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/doctor/domain/digest-anchor.ts
@@ -750,6 +782,9 @@ class DeclaredBindings {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/kernel/domain/declared-bound.ts
 class DeclaredBound {
@@ -860,6 +895,9 @@ class EnumerationMembers {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/kernel/domain/error-message.ts
 class ErrorMessage {
@@ -969,6 +1007,24 @@ class ExpressionTree {
     };
     go(this.#root);
   }
+  inspectTerms(handlers) {
+    const compared = new Map;
+    this.walk((node) => {
+      const args = node.args ?? [];
+      if (args.length !== 2)
+        return;
+      const reference = args.find((arg) => arg.op === "ref" && typeof arg.path === "string");
+      const literal = args.find((arg) => arg.op === "enum");
+      if (reference?.path !== undefined && literal !== undefined)
+        compared.set(literal, reference.path);
+    });
+    this.walk((node) => {
+      if (node.op === "ref" && typeof node.path === "string")
+        handlers.reference(node.path, node.prime === true);
+      if (node.op === "enum" && typeof node.value === "string")
+        handlers.enumLiteral(node.value, compared.get(node));
+    });
+  }
   usesPrime() {
     let found = false;
     this.walk((node) => {
@@ -1074,6 +1130,56 @@ class FindingKind {
   }
   asString() {
     return this.#value;
+  }
+}
+// src/kernel/domain/finding-targets.ts
+var MAX_FINDING_TARGETS = 65536;
+
+class FindingTargets {
+  #values;
+  constructor(head, tail) {
+    if (tail.length >= MAX_FINDING_TARGETS)
+      throw new IllegalArgumentException({ kind: "too-many-finding-targets", raw: tail.length + 1 });
+    const snapshot = [head];
+    for (const value of tail) {
+      if (snapshot.length === MAX_FINDING_TARGETS)
+        throw new IllegalArgumentException({ kind: "too-many-finding-targets", raw: snapshot.length + 1 });
+      snapshot.push(value);
+    }
+    this.#values = Object.freeze(snapshot);
+  }
+  static of(head, tail) {
+    return new FindingTargets(head, tail);
+  }
+  static parse(head, tail) {
+    return parseConstruction(() => new FindingTargets(head, tail));
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  count() {
+    return this.#values.length;
+  }
+  includes(value) {
+    return this.#values.some((target) => target.equals(value));
+  }
+  sortedCanonically() {
+    const [head, ...tail] = [...this.#values].sort((a, b) => a.compareTo(b));
+    return new FindingTargets(head, tail);
+  }
+  sortedUniqueCanonically() {
+    const unique = new Map(this.#values.map((target) => [target.asString(), target]));
+    const [head, ...tail] = [...unique.values()].sort((a, b) => a.compareTo(b));
+    return new FindingTargets(head, tail);
+  }
+  joined(separator) {
+    return this.toStrings().join(separator);
+  }
+  toArray() {
+    return this.#values;
+  }
+  toStrings() {
+    return this.#values.map((target) => target.asString());
   }
 }
 // src/kernel/domain/findings-schema.ts
@@ -1391,6 +1497,9 @@ class RequirementIdentifiers {
   toStrings() {
     return this.#values.toArray().map((v) => v.asString());
   }
+  isEmpty() {
+    return this.#values.isEmpty();
+  }
 }
 // src/kernel/domain/scenario-binding.ts
 class ScenarioBinding {
@@ -1451,6 +1560,162 @@ class ScenarioBindings {
   }
   toDocument() {
     return Object.fromEntries(this.entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()]));
+  }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
+}
+// src/kernel/domain/scenario-comparison.ts
+class ScenarioComparison {
+  #first;
+  #second;
+  constructor(first, second) {
+    if (!first.sameSubjectAs(second))
+      throw new IllegalArgumentException({ kind: "different-comparison-subjects" });
+    if (!first.isComparable() || !second.isComparable())
+      throw new IllegalArgumentException({ kind: "uncomparable-scenario-verdict" });
+    if (first.backend().equals(second.backend()))
+      throw new IllegalArgumentException({ kind: "same-comparison-backend" });
+    this.#first = first;
+    this.#second = second;
+  }
+  static of(first, second) {
+    return new ScenarioComparison(first, second);
+  }
+  static parse(first, second) {
+    return parseConstruction(() => new ScenarioComparison(first, second));
+  }
+  isFor(target, unit) {
+    return this.#first.isFor(target, unit);
+  }
+  disagrees() {
+    return !this.#first.agreesWith(this.#second);
+  }
+  backends() {
+    return [this.#first.backend(), this.#second.backend()];
+  }
+  description() {
+    return `Backends "${this.#first.backend().asString()}" and "${this.#second.backend().asString()}"`;
+  }
+  toVerdictTable() {
+    return Object.fromEntries([
+      [this.#first.backend().asString(), this.#first.verdictLabel()],
+      [this.#second.backend().asString(), this.#second.verdictLabel()]
+    ]);
+  }
+}
+// src/kernel/domain/scenario-expectation.ts
+class ScenarioExpectation {
+  #kind;
+  constructor(value) {
+    if (value.length > 6)
+      throw new IllegalArgumentException({ kind: "scenario-expectation-too-long", raw: value.length });
+    if (value !== "accept" && value !== "reject")
+      throw new IllegalArgumentException({ kind: "unknown-scenario-expectation", raw: value });
+    this.#kind = value;
+  }
+  static of(value) {
+    return new ScenarioExpectation(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new ScenarioExpectation(value));
+  }
+  isAccept() {
+    return this.#kind === "accept";
+  }
+  isReject() {
+    return this.#kind === "reject";
+  }
+  isViolatedBySatisfiability(satisfiable) {
+    return this.#kind === "accept" ? !satisfiable : satisfiable;
+  }
+  asString() {
+    return this.#kind;
+  }
+}
+// src/kernel/domain/scenario-verdict.ts
+class ScenarioVerdict {
+  #backend;
+  #modelHash;
+  #state;
+  #target;
+  #unit;
+  constructor(backend, modelHash, target, unit, state) {
+    this.#backend = backend;
+    this.#modelHash = modelHash;
+    this.#state = state;
+    this.#target = target;
+    this.#unit = unit;
+  }
+  static clean(backend, modelHash, target, unit) {
+    return new ScenarioVerdict(backend, modelHash, target, unit, "clean");
+  }
+  static violated(backend, modelHash, target, unit) {
+    return new ScenarioVerdict(backend, modelHash, target, unit, "violated");
+  }
+  static skipped(backend, modelHash, target, unit) {
+    return new ScenarioVerdict(backend, modelHash, target, unit, "skipped");
+  }
+  static unavailable(backend, modelHash, target, unit) {
+    return new ScenarioVerdict(backend, modelHash, target, unit, "unavailable");
+  }
+  backend() {
+    return this.#backend;
+  }
+  isComparable() {
+    return this.#state === "clean" || this.#state === "violated";
+  }
+  isFor(target, unit) {
+    return this.#target.equals(target) && (this.#unit === null ? unit === null : unit !== null && this.#unit.equals(unit));
+  }
+  sameSubjectAs(other) {
+    return this.#modelHash.equals(other.#modelHash) && this.isFor(other.#target, other.#unit);
+  }
+  agreesWith(other) {
+    return this.#state === other.#state;
+  }
+  verdictLabel() {
+    if (this.#state !== "clean" && this.#state !== "violated")
+      throw new Error("defect: an unverified scenario has no verdict label");
+    return this.#state;
+  }
+}
+// src/kernel/domain/scenario-verdicts.ts
+class ScenarioVerdicts {
+  #values;
+  constructor(values) {
+    if (values.length > 128)
+      throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: values.length });
+    const snapshot = [];
+    for (const value of values) {
+      if (snapshot.length === 128)
+        throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: snapshot.length + 1 });
+      snapshot.push(value);
+    }
+    const comparable = snapshot.filter((value) => value.isComparable());
+    if (comparable.some((value) => !value.sameSubjectAs(comparable[0])))
+      throw new IllegalArgumentException({ kind: "different-scenario-subjects" });
+    if (KeySet.of(comparable.map((value) => value.backend())).size() !== comparable.length)
+      throw new IllegalArgumentException({ kind: "duplicate-scenario-backend" });
+    this.#values = [...comparable];
+  }
+  static of(values) {
+    return new ScenarioVerdicts(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ScenarioVerdicts(values));
+  }
+  *comparisons() {
+    for (let i = 0;i < this.#values.length; i++)
+      for (let j = i + 1;j < this.#values.length; j++) {
+        const comparison = ScenarioComparison.parse(this.#values[i], this.#values[j]);
+        if (!comparison.ok)
+          throw new Error(`defect: validated scenario verdicts cannot be compared (${comparison.error.kind})`);
+        yield comparison.value;
+      }
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/kernel/domain/skip-reason.ts
@@ -1544,6 +1809,9 @@ class TargetIdentifier {
   compareTo(other) {
     return compareCanonically(this.#value, other.#value);
   }
+  isRequirementObligation() {
+    return this.#value.startsWith("OB-");
+  }
   asString() {
     return this.#value;
   }
@@ -1590,6 +1858,9 @@ class TargetIdentifiers {
   }
   toStrings() {
     return this.#values.map((v) => v.asString());
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/kernel/domain/trigger-name.ts
@@ -1671,6 +1942,9 @@ class VerificationMethod {
   }
   static parse(raw) {
     return parseConstruction(() => new VerificationMethod(raw));
+  }
+  isBounded() {
+    return this.#value === "bounded";
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1785,6 +2059,9 @@ class HealthVerdict {
   }
   document() {
     return { checks: this.#values.map((c) => c.toDocument()) };
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/doctor/domain/manifest-entry.ts
@@ -2093,6 +2370,9 @@ class StableReleases {
         latest = version;
     return latest === null ? VersionAdvisory.skipped(installed, ErrorMessage.of("GitHub returned no stable Semantic Versioning tag")) : installed.assessLatest(latest);
   }
+  isEmpty() {
+    return this.#versions.length === 0;
+  }
 }
 // src/doctor/domain/stage-scope.ts
 class StageScope {
@@ -2137,6 +2417,9 @@ class StageScopes {
   *[Symbol.iterator]() {
     yield* this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/doctor/domain/structural-debt.ts
 class StructuralDebt {
@@ -2163,6 +2446,9 @@ class StructuralDebt {
   }
   rows() {
     return this.#observations.filter((observation) => observation.hasDebt());
+  }
+  isEmpty() {
+    return this.#observations.length === 0;
   }
 }
 // src/doctor/domain/structural-observation.ts

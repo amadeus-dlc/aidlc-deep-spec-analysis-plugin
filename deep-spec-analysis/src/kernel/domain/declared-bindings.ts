@@ -5,9 +5,11 @@ import {
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { BindingDeclaration } from "./binding-declaration.ts";
+import type { FirstClassCollection } from "./first-class-collection.ts";
+import type { IterableFirstClassCollection } from "./iterable-first-class-collection.ts";
 
 // 診断用の束縛宣言列。宣言順序を保ち、入力側に配列の所有権を残さない。
-export class DeclaredBindings {
+export class DeclaredBindings implements FirstClassCollection, IterableFirstClassCollection<BindingDeclaration> {
   readonly #values: readonly BindingDeclaration[];
 
   /** 1シナリオの宣言数の処理予算は10,000件。 */
@@ -32,5 +34,9 @@ export class DeclaredBindings {
   }
   toArray(): readonly BindingDeclaration[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

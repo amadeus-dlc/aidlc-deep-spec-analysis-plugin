@@ -16,7 +16,7 @@
 
 import type { UnitName } from "@deep-spec-analysis/kernel-domain";
 import { ArtifactPath, type RequirementIdentifiers } from "@deep-spec-analysis/kernel-domain";
-import { err, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import { err, ok, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { ComponentCatalogOutcome } from "./component-catalog-outcome.ts";
 import { COMPONENT_FAMILIES } from "./component-check-families.ts";
 import { CONTRACT_FAMILIES } from "./contract-check-families.ts";
@@ -63,7 +63,7 @@ type DesignRecordParam = {
     readonly requirements: { readonly input: InputAnchor; readonly outcome: RequirementIdentifiers } | null;
     readonly componentsArtifact: ArtifactPath;
     readonly components: { readonly input: InputAnchor; readonly outcome: DomainEntitiesOutcome } | null;
-    readonly siblingUnits: SiblingUnitIndex;
+    readonly siblingUnits: Result<SiblingUnitIndex, ParseError>;
     readonly siblingInputs: InputAnchors;
   } | null;
 };

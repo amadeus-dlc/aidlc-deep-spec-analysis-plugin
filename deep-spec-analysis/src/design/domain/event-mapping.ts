@@ -1,4 +1,6 @@
 import type { TriggerName } from "@deep-spec-analysis/kernel-domain";
+import type { DesignUnit } from "./design-unit.ts";
+import { RefinementStatus } from "./refinement-status.ts";
 import type { TransitionReferences } from "./transition-references.ts";
 
 // eventMap の 1 エントリ——要件トリガから設計 遷移/義務 id 群への写像。
@@ -25,6 +27,22 @@ export class EventMapping {
       transitions: props.transitions,
       reason: props.waived?.reason ?? null,
     });
+  }
+
+  statusIn(unit: DesignUnit): RefinementStatus {
+    if (this.#reason !== null) return RefinementStatus.waived(this.#reason);
+    if (this.#transitions.isEmpty())
+      return RefinementStatus.gap(
+        `requirements event trigger "${this.#reqTrigger.asString()}" has no eventMap entry (map it to design transitions or waive it)`,
+      );
+    const unknown = this.#transitions.unknownAmong(
+      new Set([...unit.obligations().ids(), ...unit.machines().transitionIds()]),
+    );
+    return unknown.length > 0
+      ? RefinementStatus.gap(
+          `eventMap for "${this.#reqTrigger.asString()}" names unknown design id(s) ${unknown.join(", ")}`,
+        )
+      : RefinementStatus.checkable();
   }
 
   isForTrigger(reqTrigger: TriggerName): boolean {

@@ -1,10 +1,13 @@
-import type { ArtifactPath } from "@deep-spec-analysis/kernel-domain";
+import type {
+  ArtifactPath,
+  FirstClassCollection,
+  IterableFirstClassCollection,
+} from "@deep-spec-analysis/kernel-domain";
 import type { DeclaredEntities } from "./declared-entities.ts";
-import { FD_S1, FD_S2 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { StateMachineSketch } from "./state-machine-sketch.ts";
 
-export class StateMachineSketches {
+export class StateMachineSketches implements FirstClassCollection, IterableFirstClassCollection<StateMachineSketch> {
   readonly #values: readonly StateMachineSketch[];
 
   private constructor(values: readonly StateMachineSketch[]) {
@@ -31,29 +34,15 @@ export class StateMachineSketches {
     return this.#values;
   }
 
-  // FD-S1／S2（種別規律の裁定 13）: 機械が一つも無ければライフサイクル実体
-  // ごとに skip、あれば各機械に entities.md との整合を判定させる（発生順は
-  // 機械の出現順、凍結）。
+  // 各図の整合と、ライフサイクル対象全体の被覆を確認する。
   check(
     report: ReferenceCheckReport,
     specArtifact: ArtifactPath,
     entitiesArtifact: ArtifactPath,
     entities: DeclaredEntities,
   ): void {
-    if (this.isEmpty()) {
-      for (const e of entities.entities().lifecycleOnly()) {
-        report.skip(
-          FD_S1,
-          "unrecognized-format",
-          `no \`### State Machine: ${e.name().asString()}\` heading with a stateDiagram fence found for lifecycle entity "${e.name().asString()}"`,
-        );
-        report.skip(
-          FD_S2,
-          "unrecognized-format",
-          `no \`### State Machine: ${e.name().asString()}\` heading with a stateDiagram fence found for lifecycle entity "${e.name().asString()}"`,
-        );
-      }
-    }
+    for (const entity of entities.entities().lifecycleOnly())
+      if (!this.#values.some((machine) => machine.coversLifecycleOf(entity))) entity.reportMissingLifecycleIn(report);
     for (const m of this) {
       m.check(report, specArtifact, entitiesArtifact, entities);
     }

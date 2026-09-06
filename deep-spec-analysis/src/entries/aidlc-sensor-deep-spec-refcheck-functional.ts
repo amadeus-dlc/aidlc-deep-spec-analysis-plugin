@@ -14,8 +14,10 @@
 // できたときだけ）は DesignRecordRepositoryImplementation が実装する。
 //
 // Sensor contract: parses --stage / --output-path (+ --report-only);
-// pass-through on writes outside a functional-design directory; one JSON
-// verdict line on stdout; always exit 0.
+// pass-through on writes outside a functional-design directory. Verdicts
+// (including not-applicable) emit one JSON line on stdout and exit 0. A missing/
+// invalid --output-path or report save failure emits a diagnostic on stderr,
+// no verdict, and exits 1.
 
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

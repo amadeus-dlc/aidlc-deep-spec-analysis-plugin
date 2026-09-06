@@ -1,7 +1,8 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { Scenario } from "./scenario.ts";
 
 // シナリオのファーストクラスコレクション。id 検索と id 列の導出を所有する。
-export class Scenarios {
+export class Scenarios implements FirstClassCollection, IterableFirstClassCollection<Scenario> {
   readonly #values: readonly Scenario[];
 
   private constructor(values: readonly Scenario[]) {
@@ -30,5 +31,9 @@ export class Scenarios {
 
   toArray(): readonly Scenario[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

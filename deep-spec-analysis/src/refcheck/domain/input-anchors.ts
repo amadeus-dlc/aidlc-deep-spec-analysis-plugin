@@ -1,8 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { InputAnchor } from "./input-anchor.ts";
 
 // inputs[] のファーストクラスコレクション。artifact 順の整列（irHash の
 // 材料になる凍結正準形）という集合の知識を所有する。
-export class InputAnchors {
+export class InputAnchors implements FirstClassCollection, IterableFirstClassCollection<InputAnchor> {
   readonly #values: readonly InputAnchor[];
 
   private constructor(values: readonly InputAnchor[]) {
@@ -31,5 +32,9 @@ export class InputAnchors {
 
   toArray(): readonly InputAnchor[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

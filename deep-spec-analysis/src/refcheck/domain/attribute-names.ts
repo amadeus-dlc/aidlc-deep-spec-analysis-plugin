@@ -1,10 +1,11 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { AttributeName } from "./attribute-name.ts";
 
 // ---- ファーストクラスコレクション（語彙） -----------------------------------
 // ドメイン層は配列を生で扱わない。集合の知識（正規化照合・差分・所属）は
 // コレクション自身が所有し、toArray() は境界（描画・アダプタ）専用の脱出口。
 
-export class AttributeNames {
+export class AttributeNames implements FirstClassCollection, IterableFirstClassCollection<AttributeName> {
   readonly #values: readonly AttributeName[];
 
   private constructor(values: readonly AttributeName[]) {
@@ -35,5 +36,9 @@ export class AttributeNames {
   // 境界: 描画・アダプタ専用。
   toArray(): readonly AttributeName[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

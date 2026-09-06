@@ -1,6 +1,7 @@
 import {
   BusinessRuleReference,
   BusinessRuleReferences,
+  DesignAttributeCatalog,
   DesignAttributeName,
   DesignBackgroundAssumption,
   DesignBackgroundAssumptions,
@@ -14,7 +15,6 @@ import {
   type DesignModel,
   DesignObligation,
   DesignObligationIdentifier,
-  DesignObligationNature,
   DesignObligationOrigin,
   DesignObligations,
   DesignScenario,
@@ -33,20 +33,17 @@ import {
   type Expression,
   FunctionalRequirementReferences,
   IntermediateRepresentationVersion,
+  ObligationNature,
   RequirementIdentifier,
+  ScenarioExpectation,
   TriggerName,
   UnitName,
 } from "@deep-spec-analysis/kernel-domain";
-import { flatMapResult } from "@deep-spec-analysis/kernel-infrastructure";
-
-// 契約3 設計 IR（生 Json）→ Parameters<typeof DesignModel.compose>[0] の寛容パース。欠損・型不一致
-// のエントリは黙って落とす（旧 parseDesignIr の凍結挙動——design-ir-valid
-// センサーが別途厳密検査を担う）。集約として成立しない形はResultのエラーで返す。ユニットのソートは DesignModel.compose の不変条件。
-// 旧 deep-spec-design-lib.ts の parseDesignIr からの逐語移植。
 
 import {
   combineResults,
   err,
+  flatMapResult,
   isObject,
   type Json,
   ok,
@@ -54,6 +51,11 @@ import {
   strArr,
   traverseResult,
 } from "@deep-spec-analysis/kernel-infrastructure";
+
+// 契約3 設計 IR（生 Json）→ Parameters<typeof DesignModel.compose>[0] の寛容パース。欠損・型不一致
+// のエントリは黙って落とす（旧 parseDesignIr の凍結挙動——design-ir-valid
+// センサーが別途厳密検査を担う）。集約として成立しない形はResultのエラーで返す。ユニットのソートは DesignModel.compose の不変条件。
+// 旧 deep-spec-design-lib.ts の parseDesignIr からの逐語移植。
 
 import { parseDesignEntities } from "./design-entities-parser.ts";
 
@@ -71,6 +73,8 @@ export function parseDesignModel(
     const schema = isObject(rawUnit.schema) ? rawUnit.schema : {};
     const entities = parseDesignEntities(schema);
     if (!entities.ok) return err(JSON.stringify(entities.error));
+    const catalog = DesignAttributeCatalog.parse(entities.value);
+    if (!catalog.ok) return err(JSON.stringify(catalog.error));
     const unit = UnitName.parse(rawUnit.unit);
     if (!unit.ok) return err(JSON.stringify(unit.error));
     const obligations: DesignObligation[] = [];
@@ -79,7 +83,7 @@ export function parseDesignModel(
       const parsed = combineResults({
         id: DesignObligationIdentifier.parse(ob.id),
         origin: DesignObligationOrigin.parse(typeof ob.origin === "string" ? ob.origin : ""),
-        nature: DesignObligationNature.parse(ob.nature),
+        nature: ObligationNature.parse(ob.nature),
         brRefs: flatMapResult(
           traverseResult(strArr(ob.brRefs), BusinessRuleReference.parse),
           BusinessRuleReferences.parse,
@@ -175,6 +179,7 @@ export function parseDesignModel(
       if (kind === null || !isObject(sc.bindings)) continue;
       const parsed = combineResults({
         id: DesignScenarioIdentifier.parse(sc.id),
+        expectation: ScenarioExpectation.parse(kind),
         bindings: decodeScenarioBindings(sc.bindings),
         brRefs: flatMapResult(
           traverseResult(strArr(sc.brRefs), BusinessRuleReference.parse),
@@ -192,7 +197,7 @@ export function parseDesignModel(
       if (!parsed.ok) return err(JSON.stringify(parsed.error));
       const constructed = DesignScenario.parse({
         id: parsed.value.id,
-        kind,
+        expectation: parsed.value.expectation,
         businessRuleReferences: parsed.value.brRefs,
         functionalRequirementReferences: parsed.value.frRefs,
         bindings: parsed.value.bindings,
@@ -216,8 +221,8 @@ export function parseDesignModel(
     }
     units.push(
       DesignUnit.of({
-        unit: unit.value.asString(),
-        entities: entities.value,
+        unit: unit.value,
+        catalog: catalog.value,
         obligations: DesignObligations.of(obligations),
         machines: DesignMachines.of(machines),
         scenarios: DesignScenarios.of(scenarios),

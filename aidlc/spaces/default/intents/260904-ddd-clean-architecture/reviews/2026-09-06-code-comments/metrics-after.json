@@ -1,0 +1,434 @@
+{
+  "head": "3c588ff1e010cbdcbf6ed648877fffbcbb1c767e",
+  "summary": [
+    {
+      "prefix": "src/",
+      "files": 516,
+      "comments": 2758,
+      "commentLines": 2763,
+      "lines": 31192
+    },
+    {
+      "prefix": "scripts/",
+      "files": 8,
+      "comments": 182,
+      "commentLines": 188,
+      "lines": 2048
+    },
+    {
+      "prefix": "tests/",
+      "files": 50,
+      "comments": 1029,
+      "commentLines": 1029,
+      "lines": 23029
+    }
+  ],
+  "changedFileMetrics": [
+    {
+      "path": "src/design/adapter/refinement-map-parse.ts",
+      "sha256": "c236662322732f1ea277d663647f876544a370310b8517520ba29cfaf0f5f578",
+      "lines": 7,
+      "commentCount": 2,
+      "commentLines": 2,
+      "statements": 2,
+      "functions": 0,
+      "throws": 0,
+      "illegalArgumentThrows": 0,
+      "imports": [
+        {
+          "line": 1,
+          "text": "import type { RefinementMap } from \"@deep-spec-analysis/design-domain\";"
+        }
+      ]
+    },
+    {
+      "path": "src/design/domain/index.ts",
+      "sha256": "728a0a7032cde9d4f5fd7eb9ecd67c4bccb764e04672228e6ad15b94b10e6f9c",
+      "lines": 140,
+      "commentCount": 5,
+      "commentLines": 5,
+      "statements": 127,
+      "functions": 0,
+      "throws": 0,
+      "illegalArgumentThrows": 0,
+      "imports": []
+    },
+    {
+      "path": "src/entries/aidlc-sensor-deep-spec-refcheck-contract.ts",
+      "sha256": "24ead93c2bd27198144e47448295321708735da6befd4b6de3f8d48f2a4c6477",
+      "lines": 88,
+      "commentCount": 22,
+      "commentLines": 22,
+      "statements": 9,
+      "functions": 1,
+      "throws": 0,
+      "illegalArgumentThrows": 0,
+      "imports": [
+        {
+          "line": 21,
+          "text": "import { basename, dirname, join } from \"node:path\";"
+        },
+        {
+          "line": 22,
+          "text": "import { fileURLToPath } from \"node:url\";"
+        },
+        {
+          "line": 23,
+          "text": "import { parseFlags, readFindingsSchema, renderVerdictLine } from \"@deep-spec-analysis/kernel-adapter\";"
+        },
+        {
+          "line": 24,
+          "text": "import { ArtifactPath } from \"@deep-spec-analysis/kernel-domain\";"
+        },
+        {
+          "line": 25,
+          "text": "import {\n  DesignRecordRepositoryImplementation,\n  ReferenceCheckReportRepositoryImplementation,\n} from \"@deep-spec-analysis/refcheck-adapter\";"
+        },
+        {
+          "line": 29,
+          "text": "import { DesignRecordIdentifier } from \"@deep-spec-analysis/refcheck-domain\";"
+        },
+        {
+          "line": 30,
+          "text": "import { CheckContractSummaryUseCase } from \"@deep-spec-analysis/refcheck-usecase\";"
+        }
+      ]
+    },
+    {
+      "path": "src/entries/aidlc-sensor-deep-spec-refcheck-domain.ts",
+      "sha256": "e714b67da0b1b4060fc840c7732af57fae07a1eb529fa38ee6a49a42dbb0cd21",
+      "lines": 90,
+      "commentCount": 24,
+      "commentLines": 24,
+      "statements": 9,
+      "functions": 1,
+      "throws": 0,
+      "illegalArgumentThrows": 0,
+      "imports": [
+        {
+          "line": 23,
+          "text": "import { basename, dirname, join } from \"node:path\";"
+        },
+        {
+          "line": 24,
+          "text": "import { fileURLToPath } from \"node:url\";"
+        },
+        {
+          "line": 25,
+          "text": "import { parseFlags, readFindingsSchema, renderVerdictLine } from \"@deep-spec-analysis/kernel-adapter\";"
+        },
+        {
+          "line": 26,
+          "text": "import { ArtifactPath } from \"@deep-spec-analysis/kernel-domain\";"
+        },
+        {
+          "line": 27,
+          "text": "import {\n  DesignRecordRepositoryImplementation,\n  ReferenceCheckReportRepositoryImplementation,\n} from \"@deep-spec-analysis/refcheck-adapter\";"
+        },
+        {
+          "line": 31,
+          "text": "import { DesignRecordIdentifier } from \"@deep-spec-analysis/refcheck-domain\";"
+        },
+        {
+          "line": 32,
+          "text": "import { CheckDomainComponentsUseCase } from \"@deep-spec-analysis/refcheck-usecase\";"
+        }
+      ]
+    },
+    {
+      "path": "src/entries/aidlc-sensor-deep-spec-refcheck-functional.ts",
+      "sha256": "b64c4d52d16892084e55ac5c4eab57f59ff7eb859410e836ede223e9ca4676b8",
+      "lines": 90,
+      "commentCount": 23,
+      "commentLines": 23,
+      "statements": 9,
+      "functions": 1,
+      "throws": 0,
+      "illegalArgumentThrows": 0,
+      "imports": [
+        {
+          "line": 22,
+          "text": "import { basename, dirname, join } from \"node:path\";"
+        },
+        {
+          "line": 23,
+          "text": "import { fileURLToPath } from \"node:url\";"
+        },
+        {
+          "line": 24,
+          "text": "import { parseFlags, readFindingsSchema, renderVerdictLine } from \"@deep-spec-analysis/kernel-adapter\";"
+        },
+        {
+          "line": 25,
+          "text": "import { ArtifactPath } from \"@deep-spec-analysis/kernel-domain\";"
+        },
+        {
+          "line": 26,
+          "text": "import {\n  DesignRecordRepositoryImplementation,\n  ReferenceCheckReportRepositoryImplementation,\n} from \"@deep-spec-analysis/refcheck-adapter\";"
+        },
+        {
+          "line": 30,
+          "text": "import { DesignRecordIdentifier } from \"@deep-spec-analysis/refcheck-domain\";"
+        },
+        {
+          "line": 31,
+          "text": "import { CheckFunctionalDesignUseCase } from \"@deep-spec-analysis/refcheck-usecase\";"
+        }
+      ]
+    },
+    {
+      "path": "src/kernel/adapter/read-if-exists.ts",
+      "sha256": "9dbdd1c5594d8252918b7b3465ff11aedaa7f7da535a66e6a0bf0680628374ee",
+      "lines": 5,
+      "commentCount": 0,
+      "commentLines": 0,
+      "statements": 2,
+      "functions": 1,
+      "throws": 0,
+      "illegalArgumentThrows": 0,
+      "imports": [
+        {
+          "line": 1,
+          "text": "import { existsSync, readFileSync } from \"node:fs\";"
+        }
+      ]
+    },
+    {
+      "path": "src/kernel/infrastructure/canonical-order.ts",
+      "sha256": "9c98fc2dced9e6e4519a2ddd441011e221f561be4739140b6161acc8f452fccd",
+      "lines": 25,
+      "commentCount": 3,
+      "commentLines": 3,
+      "statements": 3,
+      "functions": 4,
+      "throws": 0,
+      "illegalArgumentThrows": 0,
+      "imports": []
+    },
+    {
+      "path": "src/kernel/infrastructure/result.ts",
+      "sha256": "a9f3173bcce889b21cc00d041d7a67b3bb827a36477ef341908804afccab5303",
+      "lines": 17,
+      "commentCount": 1,
+      "commentLines": 1,
+      "statements": 6,
+      "functions": 3,
+      "throws": 1,
+      "illegalArgumentThrows": 0,
+      "imports": [
+        {
+          "line": 1,
+          "text": "import type { ResultFailure } from \"./result-failure.ts\";"
+        },
+        {
+          "line": 2,
+          "text": "import type { ResultSuccess } from \"./result-success.ts\";"
+        }
+      ]
+    },
+    {
+      "path": "src/refcheck/adapter/functional-design-parser.ts",
+      "sha256": "85147424b8a88a9168423ea1291c51405381f67afe4b86726a8b0b4d49231460",
+      "lines": 402,
+      "commentCount": 7,
+      "commentLines": 7,
+      "statements": 14,
+      "functions": 20,
+      "throws": 0,
+      "illegalArgumentThrows": 0,
+      "imports": [
+        {
+          "line": 1,
+          "text": "import { FenceCount } from \"@deep-spec-analysis/refcheck-domain\";"
+        },
+        {
+          "line": 6,
+          "text": "import { extractFences, parseYamlSubset } from \"@deep-spec-analysis/kernel-adapter\";"
+        },
+        {
+          "line": 7,
+          "text": "import { RequirementIdentifiers } from \"@deep-spec-analysis/kernel-domain\";"
+        },
+        {
+          "line": 8,
+          "text": "import {\n  combineResults,\n  err,\n  isObject,\n  type Json,\n  ok,\n  type Result,\n  traverseResult,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        },
+        {
+          "line": 18,
+          "text": "import {\n  AllowedValue,\n  AllowedValues,\n  AppliesTo,\n  AttributeDeclaration,\n  AttributeDeclarations,\n  AttributeDefault,\n  AttributeName,\n  AttributeNames,\n  CardinalityNotation,\n  ComponentName,\n  DeclaredEntities,\n  DeclaredRuleIdentifier,\n  DomainEntitiesOutcome,\n  DomainEntitySketch,\n  DomainEntitySketches,\n  ElementPath,\n  EntitiesOutcome,\n  EntityDeclaration,\n  EntityDeclarations,\n  EntityName,\n  FunctionalSpecificationOutcome,\n  LineNumber,\n  MachineSpecification,\n  NumericBound,\n  ReferenceTarget,\n  RelationshipDeclaration,\n  RelationshipDeclarations,\n  RuleCategory,\n  RuleDeclaration,\n  RuleDeclarations,\n  RulesOutcome,\n  ShapeError,\n  ShapeErrors,\n  SiblingUnitIndex,\n  SourceIdentifier,\n  SourceIdentifiers,\n  StateMachineSketch,\n  StateMachineSketches,\n  StateName,\n  StateNames,\n  TypeName,\n} from \"@deep-spec-analysis/refcheck-domain\";"
+        }
+      ]
+    },
+    {
+      "path": "src/refcheck/domain/reference-check-report.ts",
+      "sha256": "f5bbd07ad6a3ecc15df04710ba011487b9579b9754243119dda4bbbe72ef09c3",
+      "lines": 274,
+      "commentCount": 39,
+      "commentLines": 39,
+      "statements": 15,
+      "functions": 25,
+      "throws": 0,
+      "illegalArgumentThrows": 0,
+      "imports": [
+        {
+          "line": 1,
+          "text": "import {\n  ContentHash,\n  type FindingKind,\n  type FindingsSchema,\n  FunctionalRequirementReferences,\n  RequirementIdentifier,\n  SkipReason,\n  TargetIdentifier,\n  TargetIdentifiers,\n  type UnitName,\n} from \"@deep-spec-analysis/kernel-domain\";"
+        },
+        {
+          "line": 28,
+          "text": "import { canonicalStringify, type Json } from \"@deep-spec-analysis/kernel-infrastructure\";"
+        },
+        {
+          "line": 29,
+          "text": "import { CATALOG_VERSION } from \"./catalog-version.ts\";"
+        },
+        {
+          "line": 30,
+          "text": "import type { CheckFamilies } from \"./check-families.ts\";"
+        },
+        {
+          "line": 31,
+          "text": "import type { CheckFamily } from \"./check-family.ts\";"
+        },
+        {
+          "line": 32,
+          "text": "import { Finding } from \"./finding.ts\";"
+        },
+        {
+          "line": 33,
+          "text": "import { Findings } from \"./findings.ts\";"
+        },
+        {
+          "line": 34,
+          "text": "import type { InputAnchor } from \"./input-anchor.ts\";"
+        },
+        {
+          "line": 35,
+          "text": "import { InputAnchors } from \"./input-anchors.ts\";"
+        },
+        {
+          "line": 36,
+          "text": "import type { ReferenceCheckReportIdentifier } from \"./reference-check-report-identifier.ts\";"
+        },
+        {
+          "line": 37,
+          "text": "import { Skipped } from \"./skipped.ts\";"
+        },
+        {
+          "line": 38,
+          "text": "import { Skips } from \"./skips.ts\";"
+        },
+        {
+          "line": 40,
+          "text": "import type { WitnessReference } from \"./witness-reference.ts\";"
+        },
+        {
+          "line": 41,
+          "text": "import { WitnessReferences } from \"./witness-references.ts\";"
+        }
+      ]
+    },
+    {
+      "path": "tests/architecture/rules.ts",
+      "sha256": "a55bbcbc845c63d63d763b502e24ac525aa07c05683a36074e0d14aa271fd3dd",
+      "lines": 1072,
+      "commentCount": 166,
+      "commentLines": 166,
+      "statements": 55,
+      "functions": 54,
+      "throws": 0,
+      "illegalArgumentThrows": 0,
+      "imports": []
+    },
+    {
+      "path": "tests/intent-e2e.test.ts",
+      "sha256": "270b6df91cb92759f66d72f47e0b6f2c0d1b1a9956786bda63243160a4c377ae",
+      "lines": 1120,
+      "commentCount": 107,
+      "commentLines": 107,
+      "statements": 36,
+      "functions": 118,
+      "throws": 3,
+      "illegalArgumentThrows": 0,
+      "imports": [
+        {
+          "line": 16,
+          "text": "import { afterAll, beforeAll, describe, expect, test } from \"bun:test\";"
+        },
+        {
+          "line": 17,
+          "text": "import { spawnSync } from \"node:child_process\";"
+        },
+        {
+          "line": 18,
+          "text": "import { createHash } from \"node:crypto\";"
+        },
+        {
+          "line": 19,
+          "text": "import {\n  cpSync,\n  existsSync,\n  mkdirSync,\n  mkdtempSync,\n  readdirSync,\n  readFileSync,\n  rmSync,\n  symlinkSync,\n  utimesSync,\n  writeFileSync,\n} from \"node:fs\";"
+        },
+        {
+          "line": 31,
+          "text": "import { tmpdir } from \"node:os\";"
+        },
+        {
+          "line": 32,
+          "text": "import { dirname, join } from \"node:path\";"
+        },
+        {
+          "line": 33,
+          "text": "import { fileURLToPath } from \"node:url\";"
+        }
+      ]
+    },
+    {
+      "path": "tests/refcheck-report.test.ts",
+      "sha256": "e50666596f8674c594baaf1fa15e10bcb262c754232c010655d05df832120a3c",
+      "lines": 283,
+      "commentCount": 7,
+      "commentLines": 7,
+      "statements": 20,
+      "functions": 28,
+      "throws": 1,
+      "illegalArgumentThrows": 0,
+      "imports": [
+        {
+          "line": 1,
+          "text": "import {\n  ArtifactPath,\n  ContentHash,\n  FindingKind,\n  FindingsSchema,\n  FunctionalRequirementReferences,\n  TargetIdentifier,\n  TargetIdentifiers,\n} from \"@deep-spec-analysis/kernel-domain\";"
+        },
+        {
+          "line": 17,
+          "text": "import { describe, expect, test } from \"bun:test\";"
+        },
+        {
+          "line": 18,
+          "text": "import { mkdtempSync, rmSync, writeFileSync } from \"node:fs\";"
+        },
+        {
+          "line": 19,
+          "text": "import { tmpdir } from \"node:os\";"
+        },
+        {
+          "line": 20,
+          "text": "import { dirname, join } from \"node:path\";"
+        },
+        {
+          "line": 21,
+          "text": "import { fileURLToPath } from \"node:url\";"
+        },
+        {
+          "line": 22,
+          "text": "import { readContractSchema } from \"@deep-spec-analysis/kernel-adapter\";"
+        },
+        {
+          "line": 31,
+          "text": "import {\n  parseContractsTable,\n  ReferenceCheckReportRepositoryImplementation,\n  renderReportBytes,\n} from \"@deep-spec-analysis/refcheck-adapter\";"
+        },
+        {
+          "line": 37,
+          "text": "import {\n  CheckFamilies,\n  CheckFamily,\n  Finding,\n  Findings,\n  InputAnchor,\n  InputAnchors,\n  ReferenceCheckReport,\n  ReferenceCheckReportIdentifier,\n  type Skipped,\n  Skips,\n  UnitName,\n  WitnessReferences,\n} from \"@deep-spec-analysis/refcheck-domain\";"
+        }
+      ]
+    }
+  ]
+}

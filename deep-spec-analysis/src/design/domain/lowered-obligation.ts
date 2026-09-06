@@ -1,8 +1,14 @@
-import type { FunctionalRequirementReferences } from "@deep-spec-analysis/kernel-domain";
-import { type Expression, ExpressionTree, ObligationNature, TriggerName } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  type Expression,
+  ExpressionTree,
+  type FunctionalRequirementReferences,
+  type ObligationNature,
+  type TriggerName,
+} from "@deep-spec-analysis/kernel-domain";
 
+import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
+import type { LoweredOrigin } from "./lowered-origin.ts";
 
 // lowered v1 義務（兄弟バックエンドへ渡す契約1 の形）。id は lowered 語彙
 // （OB-n）、nature は分類文字列、trigger は lowered 文書の生トリガ名。ペイロード
@@ -11,10 +17,11 @@ import type { LoweredIdentifier } from "./lowered-identifier.ts";
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type LoweredObligationParam = {
   id: LoweredIdentifier;
-  nature: string;
+  origin: LoweredOrigin;
+  nature: ObligationNature;
   functionalRequirementReferences: FunctionalRequirementReferences;
   assert?: Expression;
-  trigger?: string;
+  trigger?: TriggerName;
   guard?: Expression;
   effect?: Expression;
   temporal?: {
@@ -27,6 +34,7 @@ type LoweredObligationParam = {
 
 export class LoweredObligation {
   readonly #id: LoweredIdentifier;
+  readonly #origin: LoweredOrigin;
   readonly #nature: ObligationNature;
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #assert: Expression | undefined;
@@ -39,10 +47,11 @@ export class LoweredObligation {
 
   private constructor(props: LoweredObligationParam) {
     this.#id = props.id;
-    this.#nature = ObligationNature.of(props.nature);
+    this.#origin = props.origin;
+    this.#nature = props.nature;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
-    this.#trigger = props.trigger === undefined ? undefined : TriggerName.of(props.trigger);
+    this.#trigger = props.trigger;
     this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
     this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
     this.#temporal =
@@ -66,6 +75,10 @@ export class LoweredObligation {
 
   static of(props: LoweredObligationParam): LoweredObligation {
     return new LoweredObligation(props);
+  }
+
+  origin(): LoweredOrigin {
+    return this.#origin;
   }
 
   id(): LoweredIdentifier {

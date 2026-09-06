@@ -30,6 +30,7 @@ import {
   RefinementCheck,
   RefinementMaterials,
   RefinementMaterialsIdentifier,
+  RefinementObligation,
   RefinementPreparation,
   RefinementProbe,
   RefinementSolverPlan,
@@ -46,9 +47,11 @@ import {
   VerifyDesignQuintUseCase,
   VerifyDesignSatisfiabilityModuloTheoriesUseCase,
 } from "@deep-spec-analysis/design-usecase";
+import { parseFindingsValues } from "@deep-spec-analysis/kernel-adapter";
 import {
   ArtifactPath,
   AttributePath,
+  ContentHash,
   EnumerationMember,
   ErrorMessage,
   ErrorMessages,
@@ -80,6 +83,7 @@ import {
   VerificationReports,
   VerificationSkips,
 } from "@deep-spec-analysis/requirements-domain";
+import { requireSuccess } from "./result-fixtures.ts";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const data = join(pluginRoot, "src/entries/data");
@@ -155,7 +159,7 @@ const cleanSibling: SiblingBackendClient = {
       null,
     ),
   runRefinement(plan, timeout) {
-    return this.runLowered("quint", plan.unit(), plan.loweredForQuint(), timeout);
+    return this.runLowered("quint", plan.unit(), requireSuccess(plan.loweredForQuint()), timeout);
   },
   probeState: () => ReachabilityVerdict.unverified(),
 };
@@ -215,7 +219,7 @@ describe("到達性は完了した検査または到達の証跡からだけ判�
       }),
     ).toBe("BOUNDED");
     const unit = ws.model.units().toArray()[0];
-    const remapped = readable.remapVerdicts(unit, unit.lowered({ synthetics: false }).index());
+    const remapped = readable.remapVerdicts(unit, requireSuccess(unit.lowered({ synthetics: false })).index());
     expect(remapped.unavailable).toBeNull();
     if (remapped.unavailable === null) expect(remapped.method.toUpperCase()).toBe("BOUNDED");
     expect(
@@ -643,7 +647,12 @@ describe("設計検証の判断は取得した材料と判定値が所有する"
                   ),
                   failure,
                 );
-      const report = result.recordedIn(base, ws.model, plan.unit(), plan.unit().lowered({ synthetics: false }));
+      const report = result.recordedIn(
+        base,
+        ws.model,
+        plan.unit(),
+        requireSuccess(plan.unit().lowered({ synthetics: false })),
+      );
       expect(report.isUnavailable()).toBe(kind === "backend-unavailable");
       expect(result.canInspectReachability()).toBe(kind === "nonzero");
       if (kind !== "nonzero") expect(report.skippedCount()).toBeGreaterThan(0);
@@ -837,7 +846,7 @@ describe("設計検証の構築契約と診断予算", () => {
     if (machine === undefined) throw new Error("fixture has no machine");
     const probe = ReachabilityProbe.of(
       unit,
-      unit.lowered({ synthetics: false }),
+      requireSuccess(unit.lowered({ synthetics: false })),
       machine,
       AttributePath.of("ticket.phase"),
       EnumerationMember.of("closed"),
@@ -889,7 +898,7 @@ describe("設計検証の構築契約と診断予算", () => {
     const unit = preparation.unit();
     const machine = unit.machines().toArray()[0];
     if (machine === undefined) throw new Error("fixture has no machine");
-    const lowered = unit.lowered({ synthetics: false });
+    const lowered = requireSuccess(unit.lowered({ synthetics: false }));
     const probe = ReachabilityProbe.of(
       unit,
       lowered,
@@ -909,7 +918,13 @@ describe("設計検証の構築契約と診断予算", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe("reachability-observation-outside-plan");
     const pending = KeyedIndex.of([
-      [QueryLabel.of("rv:OB-1"), RefinementProbe.invariant(ObligationIdentifier.of("OB-1"))] as const,
+      [
+        QueryLabel.of("rv:OB-1"),
+        RefinementProbe.invariant(
+          fixtureSubject(preparation.requirements().obligationById("OB-1")),
+          UnitName.of(preparation.unit().name()),
+        ),
+      ] as const,
     ]);
     const wrongSkips = DesignSkips.of([
       DesignSkipped.of({
@@ -929,7 +944,18 @@ describe("設計検証の構築契約と診断予算", () => {
     const unknown = {
       preparation,
       pending: KeyedIndex.of([
-        [QueryLabel.of("rv:OB-999"), RefinementProbe.invariant(ObligationIdentifier.of("OB-999"))] as const,
+        [
+          QueryLabel.of("rv:OB-999"),
+          RefinementProbe.invariant(
+            RefinementObligation.of({
+              id: ObligationIdentifier.of("OB-999"),
+              nature: ObligationNature.of("invariant"),
+              functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+              assert: { op: "bool", value: true },
+            }),
+            UnitName.of(preparation.unit().name()),
+          ),
+        ] as const,
       ]),
       compileSkips: DesignSkips.of([]),
     };
@@ -953,7 +979,10 @@ describe("設計検証の構築契約と診断予算", () => {
       ...value(ws.materials.findById(RefinementMaterialsIdentifier.of(ws.modelId))).prepare(ws.model),
     ][0];
     if (preparation === undefined) throw new Error("fixture has no plan");
-    const probe = RefinementProbe.invariant(ObligationIdentifier.of("OB-1"));
+    const probe = RefinementProbe.invariant(
+      fixtureSubject(preparation.requirements().obligationById("OB-1")),
+      UnitName.of(preparation.unit().name()),
+    );
     const entries = Array.from({ length: 65_536 }, (_, index) => [QueryLabel.of(`rv:OB-1:${index}`), probe] as const);
     const maximum = { preparation, pending: KeyedIndex.of(entries), compileSkips: DesignSkips.of([]) };
     expect([...RefinementSolverPlan.of(maximum)]).toHaveLength(65_536);
@@ -968,4 +997,27 @@ describe("設計検証の構築契約と診断予算", () => {
       expect(result.error).not.toBeInstanceOf(Error);
     }
   });
+});
+
+function fixtureSubject<T>(subject: T | undefined): T {
+  if (subject === undefined) throw new Error("fixture subject is absent");
+  return subject;
+}
+
+test("finding対象の件数超過を要素の読取・VO生成より前に拒否する", () => {
+  const targets: string[] = Array(65_537).fill("OB-1");
+  Object.defineProperty(targets, 0, {
+    get: () => {
+      throw new Error("oversized targets must not be inspected");
+    },
+  });
+  const parsed = parseFindingsValues({
+    backend: "smt",
+    irVersion: "1.0.0",
+    irHash: ContentHash.ofText("fixture").asString(),
+    method: "static",
+    findings: [{ kind: "conflict", frRefs: [], targets, witness: { core: [] }, detail: "x" }],
+    skipped: [],
+  });
+  expect(parsed).toEqual({ ok: false, error: "findings must be an array of complete finding records" });
 });

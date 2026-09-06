@@ -1,0 +1,328 @@
+{
+  "baseMain": "33be9c6efd87750b6e58d0ce592e8c6cf6a2bb47",
+  "localBranch": "docs/one-language-per-doc",
+  "localHead": "ac4309c94c409b20479752f658878afbe650dcd0",
+  "unmergedPullRequest": 152,
+  "reviewRecords": [
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-code-comments/derive-static-evidence.ts",
+      "classification": "identical_to_main",
+      "localSha256": "0a5505bcf45b2f018ec9858a9ff6dc426f405302c1217de23ffa326ff2acef7b",
+      "mainSha256": "0a5505bcf45b2f018ec9858a9ff6dc426f405302c1217de23ffa326ff2acef7b",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-code-comments/inventory.json",
+      "classification": "identical_to_main",
+      "localSha256": "69e06b197d93c1ff6d8549bf333fc11609b57d3fc2b56350eccce6f50c6aa310",
+      "mainSha256": "69e06b197d93c1ff6d8549bf333fc11609b57d3fc2b56350eccce6f50c6aa310",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-code-comments/runtime-evidence.json",
+      "classification": "identical_to_main",
+      "localSha256": "ce3434297b6e855a310d464f25b3d6675abd42200e2b03f915a2f233ad8dbb0a",
+      "mainSha256": "ce3434297b6e855a310d464f25b3d6675abd42200e2b03f915a2f233ad8dbb0a",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-code-comments/static-evidence.json",
+      "classification": "identical_to_main",
+      "localSha256": "d706666b21d94694f879f0887e064d970d93e02a65fbfd6a7528ae81b1b4ca33",
+      "mainSha256": "d706666b21d94694f879f0887e064d970d93e02a65fbfd6a7528ae81b1b4ca33",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-collection-contracts/inventory.json",
+      "classification": "identical_to_main",
+      "localSha256": "075d7991ae550354e2a4f056a6e2cf2ddbcabcaa70248aaef5eb2c44deae3611",
+      "mainSha256": "075d7991ae550354e2a4f056a6e2cf2ddbcabcaa70248aaef5eb2c44deae3611",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion-followup/measure-structure.ts",
+      "classification": "identical_to_main",
+      "localSha256": "2711a8124e2ca4bd5a30af8fb2fdf2709c2e0b967481be2cc153f012d2b78971",
+      "mainSha256": "2711a8124e2ca4bd5a30af8fb2fdf2709c2e0b967481be2cc153f012d2b78971",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion-followup/method-sizes.json",
+      "classification": "identical_to_main",
+      "localSha256": "496529ebd0de752e3356cedfe23ab1d283acaae0cc683919def56e6a06a09d3e",
+      "mainSha256": "496529ebd0de752e3356cedfe23ab1d283acaae0cc683919def56e6a06a09d3e",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion-followup/probe.ts",
+      "classification": "identical_to_main",
+      "localSha256": "007212e220052f6933ad9bef904021104fdeaae4ebf8f7adf2f508c775aa053f",
+      "mainSha256": "007212e220052f6933ad9bef904021104fdeaae4ebf8f7adf2f508c775aa053f",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion-followup/probe.tsconfig.json",
+      "classification": "identical_to_main",
+      "localSha256": "a8e211cf0211e268a5b626e33b363b1d66ed4704ffc9c0ad031f7d8c1b691d9c",
+      "mainSha256": "a8e211cf0211e268a5b626e33b363b1d66ed4704ffc9c0ad031f7d8c1b691d9c",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion-followup/report.md",
+      "classification": "identical_to_main",
+      "localSha256": "3daa56c9488974deb10361b5657e9a7160d4955390ab4e55b908e06c78356d58",
+      "mainSha256": "3daa56c9488974deb10361b5657e9a7160d4955390ab4e55b908e06c78356d58",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion-followup/runtime-evidence.json",
+      "classification": "identical_to_main",
+      "localSha256": "d0b99d764c63182fc1b429faf9a99668bfb35718d12bf64f1eb8183fdcc99a8c",
+      "mainSha256": "d0b99d764c63182fc1b429faf9a99668bfb35718d12bf64f1eb8183fdcc99a8c",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion-followup/structure-evidence.json",
+      "classification": "identical_to_main",
+      "localSha256": "9c8f16c9516c02049fb91adecd75b1ccaa7341e52b8e44bd46b10d31a75c9396",
+      "mainSha256": "9c8f16c9516c02049fb91adecd75b1ccaa7341e52b8e44bd46b10d31a75c9396",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion-followup/test-output.txt",
+      "classification": "identical_to_main",
+      "localSha256": "18ed801602b07cfeeb54dfd060a2ec16a83516b2d13bba85ac8eefe1aabf4392",
+      "mainSha256": "18ed801602b07cfeeb54dfd060a2ec16a83516b2d13bba85ac8eefe1aabf4392",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion-followup/verification.json",
+      "classification": "identical_to_main",
+      "localSha256": "fa890b4f3a7e2281ad307a3f66bfcfdb3798779d7c34a7099dbd197ccc55003e",
+      "mainSha256": "fa890b4f3a7e2281ad307a3f66bfcfdb3798779d7c34a7099dbd197ccc55003e",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion/measure-structure.ts",
+      "classification": "identical_to_main",
+      "localSha256": "2711a8124e2ca4bd5a30af8fb2fdf2709c2e0b967481be2cc153f012d2b78971",
+      "mainSha256": "2711a8124e2ca4bd5a30af8fb2fdf2709c2e0b967481be2cc153f012d2b78971",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion/method-sizes.json",
+      "classification": "identical_to_main",
+      "localSha256": "724d2dee001e3dac0539ffbccb21142ae530d2cf7e1b718929e99ac7bde3dd36",
+      "mainSha256": "724d2dee001e3dac0539ffbccb21142ae530d2cf7e1b718929e99ac7bde3dd36",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion/probe.ts",
+      "classification": "identical_to_main",
+      "localSha256": "7d6ccec61feeb9f6f16d28efbd6aa5ba61f031f314dcd8be0213c238b450b495",
+      "mainSha256": "7d6ccec61feeb9f6f16d28efbd6aa5ba61f031f314dcd8be0213c238b450b495",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion/proposal.md",
+      "classification": "identical_to_main",
+      "localSha256": "eeff4c58c5c56ad278a4b88c9e42781b2c935b62d72339359c30814002e61383",
+      "mainSha256": "eeff4c58c5c56ad278a4b88c9e42781b2c935b62d72339359c30814002e61383",
+      "selected": "main",
+      "reason": "ローカルは未実装時の旧提案。main版は承認後のhead/tail、非空型にisEmptyを置かない裁定と実装結果を反映。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion/runtime-evidence.json",
+      "classification": "identical_to_main",
+      "localSha256": "c027dcb2b9deaf3430d1360cd8285a987a67743cbd2ae4a29bcc930f883edc43",
+      "mainSha256": "c027dcb2b9deaf3430d1360cd8285a987a67743cbd2ae4a29bcc930f883edc43",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion/structure-evidence.json",
+      "classification": "identical_to_main",
+      "localSha256": "abb9659e6112643f2275a24e71311a7493b3e31d718b34f7154bbf5460e99a35",
+      "mainSha256": "abb9659e6112643f2275a24e71311a7493b3e31d718b34f7154bbf5460e99a35",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion/verification.json",
+      "classification": "identical_to_main",
+      "localSha256": "d12bc345af8afeaed69357ef4fc658efb66d659be4eb6b9aefdac1a210e04457",
+      "mainSha256": "d12bc345af8afeaed69357ef4fc658efb66d659be4eb6b9aefdac1a210e04457",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-verification-identity/external-review.json",
+      "classification": "identical_to_main",
+      "localSha256": "eeb76b677c808a8dc2f371ab910c258d61656ab427d265eac595132ed3d35275",
+      "mainSha256": "eeb76b677c808a8dc2f371ab910c258d61656ab427d265eac595132ed3d35275",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-verification-identity/measure-structure.ts",
+      "classification": "identical_to_main",
+      "localSha256": "2711a8124e2ca4bd5a30af8fb2fdf2709c2e0b967481be2cc153f012d2b78971",
+      "mainSha256": "2711a8124e2ca4bd5a30af8fb2fdf2709c2e0b967481be2cc153f012d2b78971",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-verification-identity/method-sizes.json",
+      "classification": "identical_to_main",
+      "localSha256": "7db26ab5e81ce46ba0fe3796b857cf5948b4f6cca4a1648bf2afa25f673868be",
+      "mainSha256": "7db26ab5e81ce46ba0fe3796b857cf5948b4f6cca4a1648bf2afa25f673868be",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-verification-identity/probe.ts",
+      "classification": "identical_to_main",
+      "localSha256": "4ad41e1723b0f5d86df53806910ec47e13c92250208f938f1144f0341979fafc",
+      "mainSha256": "4ad41e1723b0f5d86df53806910ec47e13c92250208f938f1144f0341979fafc",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-verification-identity/probe.tsconfig.json",
+      "classification": "identical_to_main",
+      "localSha256": "3281780f1a35cd8e37434fc3f97389da19d6e8f8b25f8b7f1feac940da3603e4",
+      "mainSha256": "3281780f1a35cd8e37434fc3f97389da19d6e8f8b25f8b7f1feac940da3603e4",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-verification-identity/report.md",
+      "classification": "identical_to_main",
+      "localSha256": "f5b3ef165c13267828afc40c7da3635e41fa4d56e8ec98323ac6bac0579be9c6",
+      "mainSha256": "f5b3ef165c13267828afc40c7da3635e41fa4d56e8ec98323ac6bac0579be9c6",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-verification-identity/run-schema-cost.py",
+      "classification": "identical_to_main",
+      "localSha256": "85983585927056082c181810f475d23044456cf446ebff0e8af95bf79aa772ad",
+      "mainSha256": "85983585927056082c181810f475d23044456cf446ebff0e8af95bf79aa772ad",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-verification-identity/runtime-evidence.json",
+      "classification": "identical_to_main",
+      "localSha256": "827a0ec87e1de6f046b553c75fa9c75ef9fc25ccf664e94288b564534d8268e0",
+      "mainSha256": "827a0ec87e1de6f046b553c75fa9c75ef9fc25ccf664e94288b564534d8268e0",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-verification-identity/schema-cost-evidence.json",
+      "classification": "identical_to_main",
+      "localSha256": "fc8327df115a6765d12ee300f0a52fb4712abae3f6d4173cb4e550469ca91f97",
+      "mainSha256": "fc8327df115a6765d12ee300f0a52fb4712abae3f6d4173cb4e550469ca91f97",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-verification-identity/schema-cost.ts",
+      "classification": "identical_to_main",
+      "localSha256": "b59a90806e612cccea9114fa7159ab3c0013f4134518e8426dea4c32f239c58e",
+      "mainSha256": "b59a90806e612cccea9114fa7159ab3c0013f4134518e8426dea4c32f239c58e",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-verification-identity/structure-evidence.json",
+      "classification": "identical_to_main",
+      "localSha256": "03f51f995feb0be587ea5240075d65fd90640a6f21a1bc2dea3b58e5152c7944",
+      "mainSha256": "03f51f995feb0be587ea5240075d65fd90640a6f21a1bc2dea3b58e5152c7944",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-verification-identity/test-output.txt",
+      "classification": "identical_to_main",
+      "localSha256": "39c064efc46ed5fa37b1ec87e8106fc9a7852001234383964636c1e25d9a1ecd",
+      "mainSha256": "39c064efc46ed5fa37b1ec87e8106fc9a7852001234383964636c1e25d9a1ecd",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-verification-identity/verification.json",
+      "classification": "identical_to_main",
+      "localSha256": "8302e36330da2a81e52b9b4602fa1987edfb628df6444949c46cfca9c71de918",
+      "mainSha256": "8302e36330da2a81e52b9b4602fa1987edfb628df6444949c46cfca9c71de918",
+      "selected": "main",
+      "reason": "mainと同一の控え。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-code-comments/measure-comments.ts",
+      "classification": "different_from_main",
+      "localSha256": "57ff6c8ff459fdbfd2245cbad17a9800de7dd701f631185151e3c59e55136173",
+      "mainSha256": "710f750423b8552309479cdbde0c94693a57d8b4f5dbad12435c536fb7eef5ec",
+      "selected": "main",
+      "reason": "main版は出力先指定を追加し、基線の計測結果の上書きを避けられる。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-code-comments/report.md",
+      "classification": "different_from_main",
+      "localSha256": "143d221022b734d5acb249a5df2a409c93d4702c0800d4db14d103890ec6e357",
+      "mainSha256": "a63aff6411305cd377fe4a29dd3ff378601459e30e3d3e2699629f1a6d8ca84c",
+      "selected": "main",
+      "reason": "main版は基線コミットへのリンク、是正記録への参照、再実行手順を追加した確定版。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-code-comments/reproduce.ts",
+      "classification": "different_from_main",
+      "localSha256": "80d4e6dc44d22d201818ace728ff128ad5cbbb52fa6bb6d969a2d463b28ba2ab",
+      "mainSha256": "824b9238361cd2e5ce61cf67f9d8d8953ce9bead20f8497ef704a682f324668b",
+      "selected": "main",
+      "reason": "main版は出力先指定と、是正後に削除されたファイルの存在確認を追加している。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-collection-contracts/proposal.md",
+      "classification": "different_from_main",
+      "localSha256": "fa8e590c7d5d04108b0d278e2fde625244c1e62fdf044aaa5f6ba77d107ba9f0",
+      "mainSha256": "61555b45a1ca5186a3153c2471c3c5d76ba9150288fb85dab96b54ed0fefa6e7",
+      "selected": "main",
+      "reason": "ローカルは未実装時の旧提案。main版は承認後のhead/tail、非空型にisEmptyを置かない裁定と実装結果を反映。"
+    },
+    {
+      "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion/report.md",
+      "classification": "different_from_main",
+      "localSha256": "26a79d71f2a358ebc0fbbba533627d525d88fd92f7adc525c38d1eb2345a133b",
+      "mainSha256": "68aa92745d1ad84b8608853316957fdaa8c054004b0fbff223b274824aad27aa",
+      "selected": "main",
+      "reason": "本文内容は同じ。main版のリンクは監査時点のコミットに固定され、行移動後も根拠を参照できる。"
+    }
+  ],
+  "audit": {
+    "path": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/audit/j5ik2o-mac-studio-lan-e37058768244.md",
+    "appendOnly": true,
+    "additionalLines": 56,
+    "localSha256": "7b7ff37cfca1cce3d3d979593c3337033d96f67f45950e6f7f1f8a8154607d48",
+    "action": "元の監査行を変えず追記を統合する"
+  },
+  "originalWorkspace": "元のブランチ・ローカル控えは保全し、main統合後は別worktreeを継続先にする"
+}

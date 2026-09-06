@@ -8,13 +8,16 @@ import {
   FindingsSchema,
   IntermediateRepresentationVersion,
   KeyedIndex,
+  ObligationNature,
   RequirementIdentifier,
+  ScenarioExpectation,
   SkipReason,
   TargetIdentifier,
   TriggerName,
   VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
 import { scenarioBindings } from "./binding-fixtures.ts";
+import { requireSuccess } from "./result-fixtures.ts";
 
 // レイヤード verify-quint パイプラインの in-process 検証（PR4、#17）。
 //
@@ -58,7 +61,6 @@ import {
   Obligation,
   ObligationIdentifier,
   ObligationIdentifiers,
-  ObligationNature,
   Obligations,
   QuintCheckResult,
   QuintMachineComponent,
@@ -122,7 +124,10 @@ type RawObligation = Omit<Parameters<typeof Obligation.of>[0], "functionalRequir
   frRefs: string[];
   trigger?: string;
 };
-type RawScenario = Omit<Parameters<typeof Scenario.of>[0], "functionalRequirementReferences"> & { frRefs: string[] };
+type RawScenario = Omit<Parameters<typeof Scenario.of>[0], "functionalRequirementReferences" | "expectation"> & {
+  kind: "accept" | "reject";
+  frRefs: string[];
+};
 function model(seed: {
   irVersion?: IntermediateRepresentationVersion;
   attributes?: RawAttributeDeclaration[];
@@ -161,6 +166,7 @@ function model(seed: {
       (seed.scenarios ?? []).map((s) =>
         Scenario.of({
           ...s,
+          expectation: ScenarioExpectation.of(s.kind),
           functionalRequirementReferences: FunctionalRequirementReferences.of(
             Array.from(s.frRefs, (raw) => RequirementIdentifier.of(raw)),
           ),
@@ -576,15 +582,17 @@ describe("quint verdict interpretation", () => {
     method = "simulation",
     compileSkips: { target: string; reason: string }[] = [],
   ) =>
-    plan.interpret(
-      machineModel,
-      VerificationSkips.of(
-        compileSkips.map((k) =>
-          VerificationSkipped.of({ target: TargetIdentifier.of(k.target), reason: SkipReason.of(k.reason) }),
+    requireSuccess(
+      plan.interpret(
+        machineModel,
+        VerificationSkips.of(
+          compileSkips.map((k) =>
+            VerificationSkipped.of({ target: TargetIdentifier.of(k.target), reason: SkipReason.of(k.reason) }),
+          ),
         ),
+        VerificationMethod.of(method),
+        QuintRuns.of({ ...EMPTY_RUNS, ...runs }),
       ),
-      method,
-      QuintRuns.of({ ...EMPTY_RUNS, ...runs }),
     );
 
   test("a machine timeout skips every machine target with the frozen budget wording", () => {
@@ -732,11 +740,13 @@ describe("quint verdict interpretation", () => {
       eventIds: ObligationIdentifiers.of([ObligationIdentifier.of("OB-2")]),
       scenariosWithInit: [],
     });
-    const unbound = unboundFacts.interpret(
-      machineModel,
-      VerificationSkips.of([]),
-      "simulation",
-      QuintRuns.of(EMPTY_RUNS),
+    const unbound = requireSuccess(
+      unboundFacts.interpret(
+        machineModel,
+        VerificationSkips.of([]),
+        VerificationMethod.of("simulation"),
+        QuintRuns.of(EMPTY_RUNS),
+      ),
     );
     expect(
       unbound.skipped

@@ -4,19 +4,15 @@ import {
   EnumerationMembers,
   type Expression,
   IntermediateRepresentationVersion,
+  ObligationNature,
   RequirementIdentifier,
+  ScenarioExpectation,
   TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
-import { flatMapResult } from "@deep-spec-analysis/kernel-infrastructure";
-
-// 契約1 IR（生 Json）→ Parameters<typeof RequirementsModel.of>[0] の寛容パース。欠損・型不一致の
-// エントリは黙って落とす（旧 parseIr の凍結挙動——ir-valid センサーが別途
-// 厳密検査を担う）。集約として成立しない形はResultのエラーで返す。
-// 旧 aidlc-sensor-deep-spec-verify-smt.ts の parseIr からの逐語移植。
-
 import {
   combineResults,
   err,
+  flatMapResult,
   isObject,
   type Json,
   ok,
@@ -24,6 +20,11 @@ import {
   strArr,
   traverseResult,
 } from "@deep-spec-analysis/kernel-infrastructure";
+
+// 契約1 IR（生 Json）→ Parameters<typeof RequirementsModel.of>[0] の寛容パース。欠損・型不一致の
+// エントリは黙って落とす（旧 parseIr の凍結挙動——ir-valid センサーが別途
+// 厳密検査を担う）。集約として成立しない形はResultのエラーで返す。
+// 旧 aidlc-sensor-deep-spec-verify-smt.ts の parseIr からの逐語移植。
 
 import {
   AttributeBound,
@@ -34,7 +35,6 @@ import {
   FunctionalRequirementReferences,
   Obligation,
   ObligationIdentifier,
-  ObligationNature,
   Obligations,
   RequirementAttributeDeclaration,
   RequirementAttributeDeclarations,
@@ -117,6 +117,7 @@ export function parseFormalModel(
     if (kind === null || !isObject(sc.bindings)) continue;
     const parsed = combineResults({
       id: ScenarioIdentifier.parse(sc.id),
+      expectation: ScenarioExpectation.parse(kind),
       bindings: decodeScenarioBindings(sc.bindings),
       frRefs: flatMapResult(
         traverseResult(strArr(sc.frRefs), RequirementIdentifier.parse),
@@ -130,7 +131,7 @@ export function parseFormalModel(
     if (!parsed.ok) return err(JSON.stringify(parsed.error));
     const constructed = Scenario.parse({
       id: parsed.value.id,
-      kind,
+      expectation: parsed.value.expectation,
       functionalRequirementReferences: parsed.value.frRefs,
       bindings: parsed.value.bindings,
       event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger },

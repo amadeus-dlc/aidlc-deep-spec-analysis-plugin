@@ -1,6 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { DesignBackgroundDeclaration } from "./design-background-declaration.ts";
 
-export class DesignBackgroundDeclarations {
+export class DesignBackgroundDeclarations
+  implements FirstClassCollection, IterableFirstClassCollection<DesignBackgroundDeclaration>
+{
   readonly #values: readonly DesignBackgroundDeclaration[];
 
   private constructor(values: readonly DesignBackgroundDeclaration[]) {
@@ -21,5 +24,9 @@ export class DesignBackgroundDeclarations {
 
   toArray(): readonly DesignBackgroundDeclaration[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

@@ -1,8 +1,20 @@
-import { SkipReason, type TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
-
+import {
+  FindingKind,
+  FindingTargets,
+  SkipReason,
+  TargetIdentifiers,
+  type VerificationMethod,
+} from "@deep-spec-analysis/kernel-domain";
+import { err, ok, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import type { ObligationIdentifiers } from "./obligation-identifiers.ts";
+import type { QuintMachineComponents } from "./quint-machine-components.ts";
+import type { RequirementsModel } from "./requirements-model.ts";
 import { TraceState } from "./trace-state.ts";
 import type { TraceStates } from "./trace-states.ts";
+import { VerificationFinding } from "./verification-finding.ts";
+import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkipped } from "./verification-skipped.ts";
+import { VerificationSkips } from "./verification-skips.ts";
 import { VerificationWitness } from "./verification-witness.ts";
 
 // 機械フェーズ（イベント機械下の到達可能な不変量違反・デッドロック探索）
@@ -12,18 +24,22 @@ import { VerificationWitness } from "./verification-witness.ts";
 // method 別の失敗文言は golden 凍結）と witness 材料面を判定自身が所有する。
 // CLI 出力・ITF という形式はアダプタが decode 済みで渡す。
 export class QuintMachineRunVerdict {
-  readonly #kind: "timeout" | "deadlock" | "violation" | "run-failed" | "clean";
+  readonly #kind: "missing" | "timeout" | "deadlock" | "violation" | "run-failed" | "clean";
   readonly #trace: TraceStates | null;
   readonly #outputTail: string;
 
   private constructor(props: {
-    kind: "timeout" | "deadlock" | "violation" | "run-failed" | "clean";
+    kind: "missing" | "timeout" | "deadlock" | "violation" | "run-failed" | "clean";
     trace: TraceStates | null;
     outputTail: string;
   }) {
     this.#kind = props.kind;
     this.#trace = props.trace;
     this.#outputTail = props.outputTail;
+  }
+
+  static missing(): QuintMachineRunVerdict {
+    return new QuintMachineRunVerdict({ kind: "missing", trace: null, outputTail: "" });
   }
 
   // 予算超過——機械対象を一括 skip する。
@@ -63,6 +79,14 @@ export class QuintMachineRunVerdict {
   // clean は何も skip しない。
   skipsFor(targets: TargetIdentifiers, bounded: boolean): VerificationSkipped[] {
     const kind = this.#kind;
+    if (kind === "missing")
+      return [...targets].map((target) =>
+        VerificationSkipped.of({
+          target,
+          reason: SkipReason.unavailable(),
+          detail: "quint returned no machine run: the event machine was not decided",
+        }),
+      );
     if (kind === "timeout") {
       return [...targets].map((target) =>
         VerificationSkipped.of({
@@ -83,6 +107,60 @@ export class QuintMachineRunVerdict {
       );
     }
     return [];
+  }
+
+  interpret(
+    model: RequirementsModel,
+    components: QuintMachineComponents,
+    events: ObligationIdentifiers,
+    method: VerificationMethod,
+  ): Result<{ findings: VerificationFindings; skipped: VerificationSkips }, ParseError> {
+    const findings: VerificationFinding[] = [];
+    const machineTargets = TargetIdentifiers.of([
+      ...components.ids().toTargetIds(),
+      ...events.toTargetIds(),
+    ]).sortedUniqueCanonically();
+    const eventTargets = events.toTargetIds();
+    if (this.isDeadlock()) {
+      const [head, ...tail] = events.isEmpty() ? machineTargets : eventTargets.sortedCanonically();
+      if (head === undefined) return err({ kind: "missing-finding-targets" });
+      const parsedTargets = FindingTargets.parse(head, tail);
+      if (!parsedTargets.ok) return parsedTargets;
+      findings.push(
+        VerificationFinding.of({
+          kind: FindingKind.completenessGap(),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(eventTargets),
+          targets: parsedTargets.value,
+          witness: this.witness(),
+          detail:
+            "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified.",
+        }),
+      );
+    } else if (this.isViolation()) {
+      const violatedComponents = components.violatedBy(this.finalState());
+      const targets = violatedComponents.isEmpty()
+        ? eventTargets.sortedCanonically()
+        : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
+      const [head, ...tail] = targets;
+      if (head === undefined) return err({ kind: "missing-finding-targets" });
+      const parsedTargets = FindingTargets.parse(head, tail);
+      if (!parsedTargets.ok) return parsedTargets;
+      findings.push(
+        VerificationFinding.of({
+          kind: FindingKind.conflict(),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(
+            TargetIdentifiers.of([...targets, ...eventTargets]).sortedUniqueCanonically(),
+          ),
+          targets: parsedTargets.value,
+          witness: this.witness(),
+          detail: `The event machine can reach a state that violates ${targets.joined(", ")} (step trace attached): the event rules do not preserve the obligation.`,
+        }),
+      );
+    }
+    return ok({
+      findings: VerificationFindings.of(findings),
+      skipped: VerificationSkips.of(this.skipsFor(machineTargets, method.isBounded())),
+    });
   }
 
   isDeadlock(): boolean {

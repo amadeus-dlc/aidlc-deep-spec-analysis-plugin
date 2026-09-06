@@ -1,4 +1,45 @@
-import { InitialState } from "@deep-spec-analysis/design-domain";
+import {
+  DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation,
+  DesignModelRepositoryImplementation,
+  parseBusinessRuleReferenceIndex,
+} from "@deep-spec-analysis/design-adapter";
+import {
+  BusinessRuleReference,
+  type BusinessRuleReferenceIndex,
+  BusinessRuleReferences,
+  DesignAttributeDeclaration,
+  DesignAttributeDeclarations,
+  DesignAttributeName,
+  DesignBackgroundDeclaration,
+  DesignBackgroundDeclarations,
+  DesignBackgroundIdentifier,
+  DesignEntityDeclaration,
+  DesignEntityDeclarations,
+  DesignEntityName,
+  DesignIgnoreDeclaration,
+  DesignIgnoreDeclarations,
+  DesignIntermediateRepresentationValidationMaterialsIdentifier,
+  DesignMachineDeclaration,
+  DesignMachineDeclarations,
+  DesignMachineIdentifier,
+  DesignModelIdentifier,
+  DesignObligationDeclaration,
+  DesignObligationDeclarations,
+  DesignObligationIdentifier,
+  DesignObligationOrigin,
+  DesignScenarioDeclaration,
+  DesignScenarioDeclarations,
+  DesignScenarioIdentifier,
+  DesignTransitionDeclaration,
+  DesignTransitionDeclarations,
+  DesignTransitionIdentifier,
+  DesignUnitDeclaration,
+  DesignUnitDeclarations,
+  DesignUnitIdentifier,
+  InitialState,
+  InitialStates,
+  UnformalizedTargets,
+} from "@deep-spec-analysis/design-domain";
 import {
   ArtifactPath,
   AttributeBound,
@@ -38,46 +79,6 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation,
-  DesignModelRepositoryImplementation,
-} from "@deep-spec-analysis/design-adapter";
-import {
-  BusinessRuleReference,
-  BusinessRuleReferenceIndex,
-  BusinessRuleReferences,
-  DesignAttributeDeclaration,
-  DesignAttributeDeclarations,
-  DesignAttributeName,
-  DesignBackgroundDeclaration,
-  DesignBackgroundDeclarations,
-  DesignBackgroundIdentifier,
-  DesignEntityDeclaration,
-  DesignEntityDeclarations,
-  DesignEntityName,
-  DesignIgnoreDeclaration,
-  DesignIgnoreDeclarations,
-  DesignIntermediateRepresentationValidationMaterialsIdentifier,
-  DesignMachineDeclaration,
-  DesignMachineDeclarations,
-  DesignMachineIdentifier,
-  DesignModelIdentifier,
-  DesignObligationDeclaration,
-  DesignObligationDeclarations,
-  DesignObligationIdentifier,
-  DesignObligationOrigin,
-  DesignScenarioDeclaration,
-  DesignScenarioDeclarations,
-  DesignScenarioIdentifier,
-  DesignTransitionDeclaration,
-  DesignTransitionDeclarations,
-  DesignTransitionIdentifier,
-  DesignUnitDeclaration,
-  DesignUnitDeclarations,
-  DesignUnitIdentifier,
-  InitialStates,
-  UnformalizedTargets,
-} from "@deep-spec-analysis/design-domain";
 import {
   type ValidateDesignIntermediateRepresentationOutcome,
   ValidateDesignIntermediateRepresentationUseCase,
@@ -520,9 +521,7 @@ describe("SourceAnchor", () => {
 
 describe("BusinessRuleReferenceIndex", () => {
   test("extracts BR ids from rules markdown", () => {
-    const index = BusinessRuleReferenceIndex.fromRules(
-      "- BR2.1 なにか\n- BR1.10 別の規則\n- BR1.10 再掲\n- BRX.1 は id ではない\n",
-    );
+    const index = ruleIndex("- BR2.1 なにか\n- BR1.10 別の規則\n- BR1.10 再掲\n- BRX.1 は id ではない\n");
     expect(index.sortedIds()).toEqual(["BR1.10", "BR2.1"]);
     expect(index.has(BusinessRuleReference.of("BR2.1"))).toBe(true);
     expect(index.has(BusinessRuleReference.of("BR9.9"))).toBe(false);
@@ -609,7 +608,10 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
       irView({
         entities: [{ name: "order", attributes: [{ name: "qty", kind: "int", min: 0, max: 5 }] }],
         obligations: [{ id: "OB-1", assert: { op: "ref", path: "order.qty" } }],
-      }).wellFormednessErrors(),
+      })
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual([]);
   });
 
@@ -626,7 +628,10 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
           },
           { name: "order", attributes: [] },
         ],
-      }).wellFormednessErrors(),
+      })
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual([
       "schema: order.qty: min > max",
       'schema: duplicate attribute "order.qty"',
@@ -641,20 +646,29 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
           { name: "a", attributes: [{ name: "b_c", kind: "bool" }] },
           { name: "a_b", attributes: [{ name: "c", kind: "bool" }] },
         ],
-      }).wellFormednessErrors(),
+      })
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual([
       'schema: attribute paths "a.b_c" and "a_b.c" collide under the solver variable encoding (dots become underscores)',
     ]);
     expect(
       irView({
         entities: [{ name: "o", attributes: [{ name: "n", kind: "int", min: 0, max: 1e21 }] }],
-      }).wellFormednessErrors(),
+      })
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual(["schema: o.n: bounds must be safe integers"]);
     expect(
       irView({
         entities: [{ name: "o", attributes: [{ name: "n", kind: "int", min: 0, max: 9 }] }],
         scenarios: [{ id: "SC-1", bindings: [["o.n", 1e21]], hasEvent: false }],
-      }).wellFormednessErrors(),
+      })
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual(['scenario SC-1: binding value 1e+21 does not fit int attribute "o.n"']);
   });
 
@@ -675,7 +689,10 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
             },
           },
         ],
-      }).wellFormednessErrors(),
+      })
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual([
       'obligation OB-1: unresolvable reference "order.total"',
       'obligation OB-1: primed reference "order.status" is only legal in event effects and event-scenario expectations',
@@ -699,7 +716,10 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
             },
           },
         ],
-      }).wellFormednessErrors(),
+      })
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual(['obligation OB-1: unresolvable reference "order.ghost"']);
   });
 
@@ -712,7 +732,10 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
           { id: "SC-1", bindings: [], hasEvent: false },
         ],
         background: [{ id: "BG-1" }, { id: "BG-1" }],
-      }).wellFormednessErrors(),
+      })
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual([
       'obligation OB-1: duplicate id "OB-1"',
       'scenario SC-1: duplicate id "SC-1"',
@@ -746,7 +769,10 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
             expect: { op: "ref", path: "order.qty", prime: true },
           },
         ],
-      }).wellFormednessErrors(),
+      })
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual([
       'scenario SC-1: binding value 1.5 does not fit int attribute "order.qty"',
       'scenario SC-1: binding value "closed" does not fit enum attribute "order.status"',
@@ -755,9 +781,12 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
   });
 
   test("background assertions are walked", () => {
-    expect(irView({ background: [{ id: "BG-1", assert: { op: "ref", path: "a.b" } }] }).wellFormednessErrors()).toEqual(
-      ['background BG-1: unresolvable reference "a.b"'],
-    );
+    expect(
+      irView({ background: [{ id: "BG-1", assert: { op: "ref", path: "a.b" } }] })
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
+    ).toEqual(['background BG-1: unresolvable reference "a.b"']);
   });
 });
 
@@ -886,12 +915,17 @@ describe("DesignUnitDeclarations.wellFormednessErrors (contract 3 domain branche
         Array.from(overrides.unformalizedTargets ?? [], (raw) => TargetIdentifier.of(raw)),
       ),
       directoryExists: overrides.directoryExists ?? true,
-      rulesMarkdown: overrides.rulesMarkdown ?? null,
+      rules: overrides.rulesMarkdown == null ? null : ruleIndex(overrides.rulesMarkdown),
     });
   }
 
   test("duplicate unit names are reported once per repeat", () => {
-    expect(DesignUnitDeclarations.of([unit({}), unit({})]).wellFormednessErrors()).toEqual(['duplicate unit "u1"']);
+    expect(
+      DesignUnitDeclarations.of([unit({}), unit({})])
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
+    ).toEqual(['duplicate unit "u1"']);
   });
 
   test("design-side colliding encodings and unsafe bounds are rejected (thaw #34)", () => {
@@ -903,14 +937,20 @@ describe("DesignUnitDeclarations.wellFormednessErrors (contract 3 domain branche
             { name: "a_b", attributes: [{ name: "c", kind: "bool" }] },
           ],
         }),
-      ]).wellFormednessErrors(),
+      ])
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual([
       'unit u1: attribute paths "a.b_c" and "a_b.c" collide under the solver variable encoding (dots become underscores)',
     ]);
     expect(
       DesignUnitDeclarations.of([
         unit({ entities: [{ name: "t", attributes: [{ name: "n", kind: "int", min: 0, max: 1e21 }] }] }),
-      ]).wellFormednessErrors(),
+      ])
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual(["unit u1: t.n: bounds must be safe integers"]);
   });
 
@@ -928,7 +968,10 @@ describe("DesignUnitDeclarations.wellFormednessErrors (contract 3 domain branche
             },
           ],
         }),
-      ]).wellFormednessErrors(),
+      ])
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual([
       "unit u1: t.age: int attributes require min and max — the Quint backend needs bounded domains",
       'unit u1: duplicate attribute "t.age"',
@@ -975,7 +1018,10 @@ describe("DesignUnitDeclarations.wellFormednessErrors (contract 3 domain branche
             { id: "DOB-3", assert: { op: "enum", value: "nope" } },
           ],
         }),
-      ]).wellFormednessErrors(),
+      ])
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual([
       'unit u1: obligation DOB-1: enum literal "email" is not a value of "ticket.status"',
       'unit u1: obligation DOB-2: enum literal "email" is compared against non-enum attribute "ticket.age"',
@@ -999,7 +1045,10 @@ describe("DesignUnitDeclarations.wellFormednessErrors (contract 3 domain branche
             },
           ],
         }),
-      ]).wellFormednessErrors(),
+      ])
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual([
       'unit u1: obligation DOB-1: unresolvable reference "t.ghost"',
       'unit u1: obligation DOB-1: unresolvable reference "t.other"',
@@ -1008,7 +1057,10 @@ describe("DesignUnitDeclarations.wellFormednessErrors (contract 3 domain branche
 
   test('origin "rules" requires brRefs', () => {
     expect(
-      DesignUnitDeclarations.of([unit({ obligations: [{ id: "DOB-1", origin: "rules" }] })]).wellFormednessErrors(),
+      DesignUnitDeclarations.of([unit({ obligations: [{ id: "DOB-1", origin: "rules" }] })])
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual(['unit u1: obligation DOB-1: origin "rules" requires brRefs']);
   });
 
@@ -1016,7 +1068,10 @@ describe("DesignUnitDeclarations.wellFormednessErrors (contract 3 domain branche
     expect(
       DesignUnitDeclarations.of([
         unit({ stateMachines: [{ id: "SM-1", attrPath: "t.state", initial: [], transitions: [], ignores: [] }] }),
-      ]).wellFormednessErrors(),
+      ])
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual(['unit u1: machine SM-1: lifecycle attribute "t.state" is not declared']);
     expect(
       DesignUnitDeclarations.of([
@@ -1024,7 +1079,10 @@ describe("DesignUnitDeclarations.wellFormednessErrors (contract 3 domain branche
           entities: [{ name: "t", attributes: [{ name: "state", kind: "bool" }] }],
           stateMachines: [{ id: "SM-1", attrPath: "t.state", initial: [], transitions: [], ignores: [] }],
         }),
-      ]).wellFormednessErrors(),
+      ])
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual(['unit u1: machine SM-1: lifecycle attribute "t.state" is not an enum — its values are the state set']);
   });
 
@@ -1054,7 +1112,10 @@ describe("DesignUnitDeclarations.wellFormednessErrors (contract 3 domain branche
           },
         ],
       }),
-    ]).wellFormednessErrors();
+    ])
+      .diagnostics()
+      .toArray()
+      .map((message) => message.asString());
     expect(errors).toEqual([
       'unit u1: machine SM-1: initial state "ghost" is not a value of t.state',
       'unit u1: transition TR-1: to state "gone" is not a value of t.state',
@@ -1082,7 +1143,10 @@ describe("DesignUnitDeclarations.wellFormednessErrors (contract 3 domain branche
           ],
           background: [{ id: "DBG-1", assert: { op: "ref", path: "t.ghost" } }],
         }),
-      ]).wellFormednessErrors(),
+      ])
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual([
       'unit u1: scenario DSC-1: binding value 1 does not fit bool attribute "t.flag"',
       'unit u1: scenario DSC-1: binding for unknown attribute "t.ghost"',
@@ -1092,14 +1156,22 @@ describe("DesignUnitDeclarations.wellFormednessErrors (contract 3 domain branche
   });
 
   test("a missing construction directory is an error even with zero brRefs", () => {
-    expect(DesignUnitDeclarations.of([unit({ directoryExists: false })]).wellFormednessErrors()).toEqual([
+    expect(
+      DesignUnitDeclarations.of([unit({ directoryExists: false })])
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
+    ).toEqual([
       "unit u1: no construction/u1/ directory exists under this record — the unit name matches no unit-of-work, so BR coverage cannot be verified",
     ]);
   });
 
   test("brRefs without rules.md cannot be reverse-verified", () => {
     expect(
-      DesignUnitDeclarations.of([unit({ obligations: [{ id: "DOB-1", brRefs: ["BR1.1"] }] })]).wellFormednessErrors(),
+      DesignUnitDeclarations.of([unit({ obligations: [{ id: "DOB-1", brRefs: ["BR1.1"] }] })])
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual([
       "unit u1: brRefs are used but construction/u1/functional-design/rules.md was not found — they cannot be reverse-verified",
     ]);
@@ -1113,7 +1185,10 @@ describe("DesignUnitDeclarations.wellFormednessErrors (contract 3 domain branche
           unformalizedTargets: ["BR1.2"],
           rulesMarkdown: "- BR1.1\n- BR1.2\n",
         }),
-      ]).wellFormednessErrors(),
+      ])
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual([
       'unit u1: brRef "BR9.9" does not exist in rules.md',
       "unit u1: BR coverage: rule BR1.1 in rules.md is neither referenced by any obligation/transition/scenario nor listed in unformalized[] — silence is a contract violation",
@@ -1137,7 +1212,10 @@ describe("DesignUnitDeclarations.wellFormednessErrors (contract 3 domain branche
           scenarios: [{ id: "DSC-1", bindings: [], hasEvent: false, brRefs: ["BR1.2"] }],
           rulesMarkdown: "- BR1.1\n- BR1.2\n",
         }),
-      ]).wellFormednessErrors(),
+      ])
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
     ).toEqual([]);
   });
 });
@@ -1240,7 +1318,7 @@ describe("design decl collections (first-class operations)", () => {
       background: bgs,
       unformalizedTargets: unformalized,
       directoryExists: true,
-      rulesMarkdown: null,
+      rules: null,
     });
     const uds = DesignUnitDeclarations.of([]).add(ud);
     expect([...uds]).toEqual([ud]);
@@ -1583,3 +1661,9 @@ describe("unreadable-artifact degradation pins (thaw #38 item 3 — resolved by 
     }
   });
 });
+
+function ruleIndex(markdown: string): BusinessRuleReferenceIndex {
+  const parsed = parseBusinessRuleReferenceIndex(markdown);
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.error));
+  return parsed.value;
+}

@@ -6,8 +6,9 @@
 
 import {
   FindingKind,
+  FindingTargets,
   type FunctionalRequirementReferences,
-  TargetIdentifiers,
+  type TargetIdentifier,
   type UnitName,
 } from "@deep-spec-analysis/kernel-domain";
 import type { DesignWitness } from "./design-witness.ts";
@@ -16,7 +17,7 @@ import type { DesignWitness } from "./design-witness.ts";
 type DesignFindingParam = {
   kind: FindingKind;
   functionalRequirementReferences: FunctionalRequirementReferences;
-  targets: TargetIdentifiers;
+  targets: FindingTargets;
   witness: DesignWitness;
   unit: UnitName;
   detail: string;
@@ -25,7 +26,7 @@ type DesignFindingParam = {
 export class DesignFinding {
   readonly #kind: FindingKind;
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
-  readonly #targets: TargetIdentifiers;
+  readonly #targets: FindingTargets;
   readonly #witness: DesignWitness;
   readonly #unit: UnitName;
   readonly #detail: string;
@@ -53,7 +54,7 @@ export class DesignFinding {
     return this.#functionalRequirementReferences;
   }
 
-  targets(): TargetIdentifiers {
+  targets(): FindingTargets {
     return this.#targets;
   }
 
@@ -69,6 +70,12 @@ export class DesignFinding {
     return this.#detail;
   }
 
+  violatesScenario(unit: UnitName, target: TargetIdentifier): boolean {
+    return (
+      this.#kind.equals(FindingKind.scenarioViolation()) && this.#unit.equals(unit) && this.#targets.includes(target)
+    );
+  }
+
   isConflict(): boolean {
     return this.#kind.isConflict();
   }
@@ -80,11 +87,12 @@ export class DesignFinding {
   asRefinementViolation(reqIds: ReadonlySet<string>, unit: UnitName): DesignFinding | null {
     if (!this.#kind.isConflict()) return null;
     const reqHits = this.#targets.toArray().filter((t) => reqIds.has(t.asString()));
-    if (reqHits.length === 0) return null;
+    const [head, ...tail] = reqHits;
+    if (head === undefined) return null;
     return new DesignFinding({
       kind: FindingKind.refinementViolation(),
       functionalRequirementReferences: this.#functionalRequirementReferences,
-      targets: TargetIdentifiers.of(reqHits),
+      targets: FindingTargets.of(head, tail),
       witness: this.#witness,
       unit,
       detail: `The design machine of unit ${unit.asString()} reaches a state that violates requirements obligation ${reqHits.map((t) => t.asString()).join(", ")} under the refinement map (step trace attached): the design can execute its way out of the verified requirements.`,

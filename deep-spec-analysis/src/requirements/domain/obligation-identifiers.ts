@@ -1,3 +1,4 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import type { ObligationIdentifier } from "./obligation-identifier.ts";
 
@@ -5,7 +6,7 @@ import type { ObligationIdentifier } from "./obligation-identifier.ts";
 // 義務 id のファーストクラスコレクション(plan のイベント義務面など、
 // 部分集合の id 列を運ぶ)。宣言順を保持し、toStrings() は境界(照会 API・
 // TargetIdentifiers/functionalRequirementReferencesOf の生 id 材料)専用の脱出口。
-export class ObligationIdentifiers {
+export class ObligationIdentifiers implements FirstClassCollection, IterableFirstClassCollection<ObligationIdentifier> {
   readonly #values: readonly ObligationIdentifier[];
 
   private constructor(values: readonly ObligationIdentifier[]) {

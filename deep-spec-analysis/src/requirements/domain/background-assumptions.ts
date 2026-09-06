@@ -1,7 +1,8 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { BackgroundAssumption } from "./background-assumption.ts";
 
 // 背景仮定のファーストクラスコレクション。
-export class BackgroundAssumptions {
+export class BackgroundAssumptions implements FirstClassCollection, IterableFirstClassCollection<BackgroundAssumption> {
   readonly #values: readonly BackgroundAssumption[];
 
   private constructor(values: readonly BackgroundAssumption[]) {
@@ -22,5 +23,9 @@ export class BackgroundAssumptions {
 
   toArray(): readonly BackgroundAssumption[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

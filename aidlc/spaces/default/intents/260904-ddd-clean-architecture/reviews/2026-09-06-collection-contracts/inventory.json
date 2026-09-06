@@ -1,0 +1,4271 @@
+{
+  "scope": {
+    "root": "/private/tmp/deep-spec-verification-identity-fix-20260906/deep-spec-analysis",
+    "typescriptFiles": 363,
+    "classCount": 353,
+    "iterableClasses": 102,
+    "method": "TypeScript 7 ASTによる全クラス/field/公開メソッド抽出後、配列・Map・KeySet・KeyedIndex・ドメイン集合fieldと複数field責務を読んで分類",
+    "snapshotNote": "他workerの並行変更前後が混在しうるため、契約を追加する実装開始前に再取得すること",
+    "observedGitHeadAfterScan": "7724c3da3cbb4d498854114199e7886252c368fc",
+    "completedAt": "2026-09-06T09:53:05.021241+00:00"
+  },
+  "counts": {
+    "firstClassCollections": 111,
+    "iterableFirstClassCollections": 96,
+    "nonIterableFirstClassCollections": 15,
+    "withIsEmpty": 14,
+    "withoutIsEmpty": 97,
+    "excludedIterableClasses": 6,
+    "needsDesignDecision": 3,
+    "allCollectionCandidatesIncludingUncertain": 114
+  },
+  "entries": [
+    {
+      "name": "AttributeMappings",
+      "path": "src/design/domain/attribute-mappings.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly AttributeMapping[];"
+      ],
+      "methods": [
+        "static of(values: readonly AttributeMapping[]): AttributeMappings",
+        "add(value: AttributeMapping): AttributeMappings",
+        "*[Symbol.iterator](): Iterator<AttributeMapping>",
+        "coverageOf(required: AttributePaths, unmapped: UnmappedDeclarations): AttributeCoverage",
+        "diagnostics(\n    unit: DesignUnit,\n    requirements: RefinementRequirements,\n    map: RefinementUnitMap,\n    artifact: ArtifactPath,\n  ): DesignFindings",
+        "#byRequirementPath(reqPath: string): AttributeMapping | undefined",
+        "covers(reqPath: string): boolean",
+        "substitute(e: Expression, post: boolean): Result<Expression, RefinementMapDefect>",
+        "#substitute(e: Expression, post: boolean): Result<Expression, RefinementMapDefect>",
+        "equalityFor(reqPath: string): Result<Expression | null, RefinementMapDefect>",
+        "toArray(): readonly AttributeMapping[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: AttributeMapping): AttributeMappings",
+        "*[Symbol.iterator](): Iterator<AttributeMapping>",
+        "coverageOf(required: AttributePaths, unmapped: UnmappedDeclarations): AttributeCoverage",
+        "diagnostics(\n    unit: DesignUnit,\n    requirements: RefinementRequirements,\n    map: RefinementUnitMap,\n    artifact: ArtifactPath,\n  ): DesignFindings",
+        "covers(reqPath: string): boolean",
+        "substitute(e: Expression, post: boolean): Result<Expression, RefinementMapDefect>",
+        "equalityFor(reqPath: string): Result<Expression | null, RefinementMapDefect>",
+        "toArray(): readonly AttributeMapping[]"
+      ],
+      "factories": [
+        "static of(values: readonly AttributeMapping[]): AttributeMappings"
+      ]
+    },
+    {
+      "name": "AttributePaths",
+      "path": "src/design/domain/attribute-paths.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: KeySet<AttributePath>;"
+      ],
+      "methods": [
+        "static of(values: readonly AttributePath[]): AttributePaths",
+        "add(value: AttributePath): AttributePaths",
+        "*[Symbol.iterator](): Iterator<AttributePath>",
+        "has(value: AttributePath): boolean",
+        "toArray(): readonly AttributePath[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: AttributePath): AttributePaths",
+        "*[Symbol.iterator](): Iterator<AttributePath>",
+        "has(value: AttributePath): boolean",
+        "toArray(): readonly AttributePath[]"
+      ],
+      "factories": [
+        "static of(values: readonly AttributePath[]): AttributePaths"
+      ]
+    },
+    {
+      "name": "BusinessRuleReferenceIndex",
+      "path": "src/design/domain/business-rule-reference-index.ts",
+      "context": "design",
+      "fields": [
+        "readonly #ids: KeySet<BusinessRuleReference>;"
+      ],
+      "methods": [
+        "static of(ids: BusinessRuleReferences): BusinessRuleReferenceIndex",
+        "diagnostics(used: KeySet<BusinessRuleReference>, unformalized: UnformalizedTargets): ErrorMessages",
+        "has(br: BusinessRuleReference): boolean",
+        "sortedIds(): string[]"
+      ],
+      "iterable": false,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "diagnostics(used: KeySet<BusinessRuleReference>, unformalized: UnformalizedTargets): ErrorMessages",
+        "has(br: BusinessRuleReference): boolean",
+        "sortedIds(): string[]"
+      ],
+      "factories": [
+        "static of(ids: BusinessRuleReferences): BusinessRuleReferenceIndex"
+      ]
+    },
+    {
+      "name": "BusinessRuleReferences",
+      "path": "src/design/domain/business-rule-references.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly BusinessRuleReference[];"
+      ],
+      "methods": [
+        "static of(values: readonly BusinessRuleReference[]): BusinessRuleReferences",
+        "static parse(values: readonly BusinessRuleReference[]): Result<BusinessRuleReferences, ParseError>",
+        "add(value: BusinessRuleReference): BusinessRuleReferences",
+        "*[Symbol.iterator](): Iterator<BusinessRuleReference>",
+        "toArray(): readonly BusinessRuleReference[]",
+        "toStrings(): readonly string[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: BusinessRuleReference): BusinessRuleReferences",
+        "*[Symbol.iterator](): Iterator<BusinessRuleReference>",
+        "toArray(): readonly BusinessRuleReference[]",
+        "toStrings(): readonly string[]"
+      ],
+      "factories": [
+        "static of(values: readonly BusinessRuleReference[]): BusinessRuleReferences",
+        "static parse(values: readonly BusinessRuleReference[]): Result<BusinessRuleReferences, ParseError>"
+      ]
+    },
+    {
+      "name": "CheckedUnits",
+      "path": "src/design/domain/checked-units.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly UnitName[];"
+      ],
+      "methods": [
+        "static of(values: readonly UnitName[]): CheckedUnits",
+        "add(value: UnitName): CheckedUnits",
+        "*[Symbol.iterator](): Iterator<UnitName>",
+        "sortedUniqueCanonically(): CheckedUnits",
+        "isEmpty(): boolean",
+        "toArray(): readonly UnitName[]",
+        "toStrings(): readonly string[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": true,
+      "publicInstanceMethods": [
+        "add(value: UnitName): CheckedUnits",
+        "*[Symbol.iterator](): Iterator<UnitName>",
+        "sortedUniqueCanonically(): CheckedUnits",
+        "isEmpty(): boolean",
+        "toArray(): readonly UnitName[]",
+        "toStrings(): readonly string[]"
+      ],
+      "factories": [
+        "static of(values: readonly UnitName[]): CheckedUnits"
+      ]
+    },
+    {
+      "name": "DesignAssignments",
+      "path": "src/design/domain/design-assignments.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: KeyedIndex<AttributePath, Expression>;"
+      ],
+      "methods": [
+        "static parse(values: KeyedIndex<AttributePath, Expression>): Result<DesignAssignments, ParseError>",
+        "static of(values: KeyedIndex<AttributePath, Expression>): DesignAssignments",
+        "rhsOf(path: AttributePath): Expression | undefined"
+      ],
+      "iterable": false,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "rhsOf(path: AttributePath): Expression | undefined"
+      ],
+      "factories": [
+        "static parse(values: KeyedIndex<AttributePath, Expression>): Result<DesignAssignments, ParseError>",
+        "static of(values: KeyedIndex<AttributePath, Expression>): DesignAssignments"
+      ],
+      "contractNote": "内部値Expressionは構造型。FirstClassCollection{isEmpty}を付けても要素VO化は保証しない。Assignment要素クラスの横展開候補。"
+    },
+    {
+      "name": "DesignAttributeCatalog",
+      "path": "src/design/domain/design-attribute-catalog.ts",
+      "context": "design",
+      "fields": [
+        "readonly #declarations: DesignEntityDeclarations;",
+        "readonly #byPath: KeyedIndex<AttributePath, DesignAttributeDeclaration>;"
+      ],
+      "methods": [
+        "#attributeAt(path: string): DesignAttributeDeclaration | undefined",
+        "static of(declarations: DesignEntityDeclarations): DesignAttributeCatalog",
+        "static parse(declarations: DesignEntityDeclarations): Result<DesignAttributeCatalog, ParseError>",
+        "declarations(): DesignEntityDeclarations",
+        "paths(): AttributePaths",
+        "enumValuesAt(path: string): EnumerationMembers | null",
+        "declares(path: string): boolean",
+        "encodingDiagnostics(): ErrorMessages",
+        "expressionDiagnostics(e: Expression, ctx: string, primesAllowed: boolean): ErrorMessages",
+        "bindingDiagnostics(bindings: DeclaredBindings, context: string): ErrorMessages"
+      ],
+      "iterable": false,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "declarations(): DesignEntityDeclarations",
+        "paths(): AttributePaths",
+        "enumValuesAt(path: string): EnumerationMembers | null",
+        "declares(path: string): boolean",
+        "encodingDiagnostics(): ErrorMessages",
+        "expressionDiagnostics(e: Expression, ctx: string, primesAllowed: boolean): ErrorMessages",
+        "bindingDiagnostics(bindings: DeclaredBindings, context: string): ErrorMessages"
+      ],
+      "factories": [
+        "static of(declarations: DesignEntityDeclarations): DesignAttributeCatalog",
+        "static parse(declarations: DesignEntityDeclarations): Result<DesignAttributeCatalog, ParseError>"
+      ],
+      "contractNote": "isEmptyは属性pathが0件。属性のないentity宣言の存在とは分ける。#declarationsは属性索引の原資料で複数field自体はcollection除外理由にしない。"
+    },
+    {
+      "name": "DesignAttributeDeclarations",
+      "path": "src/design/domain/design-attribute-declarations.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignAttributeDeclaration[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignAttributeDeclaration[]): DesignAttributeDeclarations",
+        "add(value: DesignAttributeDeclaration): DesignAttributeDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignAttributeDeclaration>",
+        "toArray(): readonly DesignAttributeDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignAttributeDeclaration): DesignAttributeDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignAttributeDeclaration>",
+        "toArray(): readonly DesignAttributeDeclaration[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignAttributeDeclaration[]): DesignAttributeDeclarations"
+      ]
+    },
+    {
+      "name": "DesignBackgroundAssumptions",
+      "path": "src/design/domain/design-background-assumptions.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignBackgroundAssumption[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignBackgroundAssumption[]): DesignBackgroundAssumptions",
+        "add(value: DesignBackgroundAssumption): DesignBackgroundAssumptions",
+        "sortedCanonically(): DesignBackgroundAssumptions",
+        "*[Symbol.iterator](): Iterator<DesignBackgroundAssumption>",
+        "toArray(): readonly DesignBackgroundAssumption[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignBackgroundAssumption): DesignBackgroundAssumptions",
+        "sortedCanonically(): DesignBackgroundAssumptions",
+        "*[Symbol.iterator](): Iterator<DesignBackgroundAssumption>",
+        "toArray(): readonly DesignBackgroundAssumption[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignBackgroundAssumption[]): DesignBackgroundAssumptions"
+      ]
+    },
+    {
+      "name": "DesignBackgroundDeclarations",
+      "path": "src/design/domain/design-background-declarations.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignBackgroundDeclaration[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignBackgroundDeclaration[]): DesignBackgroundDeclarations",
+        "add(value: DesignBackgroundDeclaration): DesignBackgroundDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignBackgroundDeclaration>",
+        "toArray(): readonly DesignBackgroundDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignBackgroundDeclaration): DesignBackgroundDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignBackgroundDeclaration>",
+        "toArray(): readonly DesignBackgroundDeclaration[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignBackgroundDeclaration[]): DesignBackgroundDeclarations"
+      ]
+    },
+    {
+      "name": "DesignCrossCheckedEntries",
+      "path": "src/design/domain/design-cross-checked-entries.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignCrossCheckedEntry[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignCrossCheckedEntry[]): DesignCrossCheckedEntries",
+        "add(value: DesignCrossCheckedEntry): DesignCrossCheckedEntries",
+        "*[Symbol.iterator](): Iterator<DesignCrossCheckedEntry>",
+        "toArray(): readonly DesignCrossCheckedEntry[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignCrossCheckedEntry): DesignCrossCheckedEntries",
+        "*[Symbol.iterator](): Iterator<DesignCrossCheckedEntry>",
+        "toArray(): readonly DesignCrossCheckedEntry[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignCrossCheckedEntry[]): DesignCrossCheckedEntries"
+      ]
+    },
+    {
+      "name": "DesignEntityDeclarations",
+      "path": "src/design/domain/design-entity-declarations.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignEntityDeclaration[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignEntityDeclaration[]): DesignEntityDeclarations",
+        "add(value: DesignEntityDeclaration): DesignEntityDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignEntityDeclaration>",
+        "#inspect(\n    entityFound: (entity: DesignEntityDeclaration, duplicate: boolean) => void,\n    attributeFound: (coordinate: string, attribute: DesignAttributeDeclaration, duplicate: boolean) => void,\n  ): void",
+        "hasAmbiguousAttributes(): boolean",
+        "diagnostics(): ErrorMessages",
+        "toArray(): readonly DesignEntityDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignEntityDeclaration): DesignEntityDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignEntityDeclaration>",
+        "hasAmbiguousAttributes(): boolean",
+        "diagnostics(): ErrorMessages",
+        "toArray(): readonly DesignEntityDeclaration[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignEntityDeclaration[]): DesignEntityDeclarations"
+      ]
+    },
+    {
+      "name": "DesignEventRuleCatalog",
+      "path": "src/design/domain/design-event-rule-catalog.ts",
+      "context": "design",
+      "fields": [
+        "readonly #events: KeyedIndex<TargetIdentifier, DesignEventRule>;"
+      ],
+      "methods": [
+        "static of(unit: DesignUnit): DesignEventRuleCatalog",
+        "static parse(unit: DesignUnit): Result<DesignEventRuleCatalog, ParseError>",
+        "eventOf(id: TargetIdentifier): DesignEventRule | null",
+        "*[Symbol.iterator](): Iterator<DesignEventRule>",
+        "subsumptionProbes(): readonly RuleSubsumptionProbe[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "eventOf(id: TargetIdentifier): DesignEventRule | null",
+        "*[Symbol.iterator](): Iterator<DesignEventRule>",
+        "subsumptionProbes(): readonly RuleSubsumptionProbe[]"
+      ],
+      "factories": [
+        "static of(unit: DesignUnit): DesignEventRuleCatalog",
+        "static parse(unit: DesignUnit): Result<DesignEventRuleCatalog, ParseError>"
+      ]
+    },
+    {
+      "name": "DesignFindings",
+      "path": "src/design/domain/design-findings.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignFinding[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignFinding[]): DesignFindings",
+        "add(value: DesignFinding): DesignFindings",
+        "*[Symbol.iterator](): Iterator<DesignFinding>",
+        "sortedCanonically(): DesignFindings",
+        "count(): number",
+        "isEmpty(): boolean",
+        "toArray(): readonly DesignFinding[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": true,
+      "publicInstanceMethods": [
+        "add(value: DesignFinding): DesignFindings",
+        "*[Symbol.iterator](): Iterator<DesignFinding>",
+        "sortedCanonically(): DesignFindings",
+        "count(): number",
+        "isEmpty(): boolean",
+        "toArray(): readonly DesignFinding[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignFinding[]): DesignFindings"
+      ]
+    },
+    {
+      "name": "DesignIgnoreDeclarations",
+      "path": "src/design/domain/design-ignore-declarations.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignIgnoreDeclaration[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignIgnoreDeclaration[]): DesignIgnoreDeclarations",
+        "add(value: DesignIgnoreDeclaration): DesignIgnoreDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignIgnoreDeclaration>",
+        "toArray(): readonly DesignIgnoreDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignIgnoreDeclaration): DesignIgnoreDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignIgnoreDeclaration>",
+        "toArray(): readonly DesignIgnoreDeclaration[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignIgnoreDeclaration[]): DesignIgnoreDeclarations"
+      ]
+    },
+    {
+      "name": "DesignIgnores",
+      "path": "src/design/domain/design-ignores.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignIgnore[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignIgnore[]): DesignIgnores",
+        "add(value: DesignIgnore): DesignIgnores",
+        "*[Symbol.iterator](): Iterator<DesignIgnore>",
+        "sortedByStateTrigger(): DesignIgnores",
+        "toArray(): readonly DesignIgnore[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignIgnore): DesignIgnores",
+        "*[Symbol.iterator](): Iterator<DesignIgnore>",
+        "sortedByStateTrigger(): DesignIgnores",
+        "toArray(): readonly DesignIgnore[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignIgnore[]): DesignIgnores"
+      ]
+    },
+    {
+      "name": "DesignInputAnchors",
+      "path": "src/design/domain/design-input-anchors.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignInputAnchor[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignInputAnchor[]): DesignInputAnchors",
+        "add(value: DesignInputAnchor): DesignInputAnchors",
+        "*[Symbol.iterator](): Iterator<DesignInputAnchor>",
+        "sortedByArtifact(): DesignInputAnchors",
+        "toArray(): readonly DesignInputAnchor[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignInputAnchor): DesignInputAnchors",
+        "*[Symbol.iterator](): Iterator<DesignInputAnchor>",
+        "sortedByArtifact(): DesignInputAnchors",
+        "toArray(): readonly DesignInputAnchor[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignInputAnchor[]): DesignInputAnchors"
+      ]
+    },
+    {
+      "name": "DesignMachineDeclarations",
+      "path": "src/design/domain/design-machine-declarations.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignMachineDeclaration[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignMachineDeclaration[]): DesignMachineDeclarations",
+        "add(value: DesignMachineDeclaration): DesignMachineDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignMachineDeclaration>",
+        "toArray(): readonly DesignMachineDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignMachineDeclaration): DesignMachineDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignMachineDeclaration>",
+        "toArray(): readonly DesignMachineDeclaration[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignMachineDeclaration[]): DesignMachineDeclarations"
+      ]
+    },
+    {
+      "name": "DesignMachines",
+      "path": "src/design/domain/design-machines.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignMachine[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignMachine[]): DesignMachines",
+        "add(value: DesignMachine): DesignMachines",
+        "*[Symbol.iterator](): Iterator<DesignMachine>",
+        "transitionIds(): readonly string[]",
+        "sortedById(): DesignMachines",
+        "sortedCanonically(): DesignMachines",
+        "static attrPathOf(sm: DesignMachine): string",
+        "toArray(): readonly DesignMachine[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignMachine): DesignMachines",
+        "*[Symbol.iterator](): Iterator<DesignMachine>",
+        "transitionIds(): readonly string[]",
+        "sortedById(): DesignMachines",
+        "sortedCanonically(): DesignMachines",
+        "toArray(): readonly DesignMachine[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignMachine[]): DesignMachines",
+        "static attrPathOf(sm: DesignMachine): string"
+      ]
+    },
+    {
+      "name": "DesignModel",
+      "path": "src/design/domain/design-model.ts",
+      "context": "design",
+      "fields": [
+        "readonly #id: DesignModelIdentifier;",
+        "readonly #irHash: ContentHash;",
+        "readonly #sourceDocument: Uint8Array;",
+        "readonly #irVersion: IntermediateRepresentationVersion;",
+        "readonly #units: DesignUnits;"
+      ],
+      "methods": [
+        "static compose(input: {\n    readonly id: DesignModelIdentifier;\n    // 生 IR の正準 JSON の sha256（アダプタが導出——文書の同一性照合材料）。\n    readonly irHash: ContentHash;\n    // 成果物の原文の生バイト列（原文材料——store の往復則 findById∘store がバイト恒等）。\n    readonly sourceDocument: Uint8Array;\n    readonly irVersion: IntermediateRepresentationVersion;\n    readonly units: DesignUnits;\n  }): DesignModel",
+        "id(): DesignModelIdentifier",
+        "irHash(): ContentHash",
+        "sourceDocument(): Uint8Array",
+        "irVersion(): IntermediateRepresentationVersion",
+        "majorVersion(): number",
+        "supportsMajor(major: number): boolean",
+        "units(): DesignUnits",
+        "*[Symbol.iterator](): Iterator<DesignUnit>",
+        "prepareVerification(id: DesignReportIdentifier, method: VerificationMethod): Result<DesignModel, DesignReport>"
+      ],
+      "iterable": true,
+      "classification": "excluded-composite",
+      "reason": "aggregate: id, hash, version, sourceDocumentを所有しunitsの反復を委譲。",
+      "publicInstanceMethods": [
+        "id(): DesignModelIdentifier",
+        "irHash(): ContentHash",
+        "sourceDocument(): Uint8Array",
+        "irVersion(): IntermediateRepresentationVersion",
+        "majorVersion(): number",
+        "supportsMajor(major: number): boolean",
+        "units(): DesignUnits",
+        "*[Symbol.iterator](): Iterator<DesignUnit>",
+        "prepareVerification(id: DesignReportIdentifier, method: VerificationMethod): Result<DesignModel, DesignReport>"
+      ],
+      "factories": [
+        "static compose(input: {\n    readonly id: DesignModelIdentifier;\n    // 生 IR の正準 JSON の sha256（アダプタが導出——文書の同一性照合材料）。\n    readonly irHash: ContentHash;\n    // 成果物の原文の生バイト列（原文材料——store の往復則 findById∘store がバイト恒等）。\n    readonly sourceDocument: Uint8Array;\n    readonly irVersion: IntermediateRepresentationVersion;\n    readonly units: DesignUnits;\n  }): DesignModel"
+      ]
+    },
+    {
+      "name": "DesignObligationDeclarations",
+      "path": "src/design/domain/design-obligation-declarations.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignObligationDeclaration[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignObligationDeclaration[]): DesignObligationDeclarations",
+        "add(value: DesignObligationDeclaration): DesignObligationDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignObligationDeclaration>",
+        "toArray(): readonly DesignObligationDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignObligationDeclaration): DesignObligationDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignObligationDeclaration>",
+        "toArray(): readonly DesignObligationDeclaration[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignObligationDeclaration[]): DesignObligationDeclarations"
+      ]
+    },
+    {
+      "name": "DesignObligations",
+      "path": "src/design/domain/design-obligations.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignObligation[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignObligation[]): DesignObligations",
+        "add(value: DesignObligation): DesignObligations",
+        "sortedCanonically(): DesignObligations",
+        "*[Symbol.iterator](): Iterator<DesignObligation>",
+        "ids(): readonly string[]",
+        "toArray(): readonly DesignObligation[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignObligation): DesignObligations",
+        "sortedCanonically(): DesignObligations",
+        "*[Symbol.iterator](): Iterator<DesignObligation>",
+        "ids(): readonly string[]",
+        "toArray(): readonly DesignObligation[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignObligation[]): DesignObligations"
+      ]
+    },
+    {
+      "name": "DesignReports",
+      "path": "src/design/domain/design-reports.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignReport[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignReport[]): DesignReports",
+        "*[Symbol.iterator](): Iterator<DesignReport>",
+        "toArray(): readonly DesignReport[]",
+        "crossChecked(id: DesignReportIdentifier, model: DesignModel, irHash: ContentHash): DesignReport"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "*[Symbol.iterator](): Iterator<DesignReport>",
+        "toArray(): readonly DesignReport[]",
+        "crossChecked(id: DesignReportIdentifier, model: DesignModel, irHash: ContentHash): DesignReport"
+      ],
+      "factories": [
+        "static of(values: readonly DesignReport[]): DesignReports"
+      ]
+    },
+    {
+      "name": "DesignScenarioDeclarations",
+      "path": "src/design/domain/design-scenario-declarations.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignScenarioDeclaration[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignScenarioDeclaration[]): DesignScenarioDeclarations",
+        "add(value: DesignScenarioDeclaration): DesignScenarioDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignScenarioDeclaration>",
+        "toArray(): readonly DesignScenarioDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignScenarioDeclaration): DesignScenarioDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignScenarioDeclaration>",
+        "toArray(): readonly DesignScenarioDeclaration[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignScenarioDeclaration[]): DesignScenarioDeclarations"
+      ]
+    },
+    {
+      "name": "DesignScenarios",
+      "path": "src/design/domain/design-scenarios.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignScenario[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignScenario[]): DesignScenarios",
+        "add(value: DesignScenario): DesignScenarios",
+        "sortedCanonically(): DesignScenarios",
+        "*[Symbol.iterator](): Iterator<DesignScenario>",
+        "ids(): readonly string[]",
+        "toArray(): readonly DesignScenario[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignScenario): DesignScenarios",
+        "sortedCanonically(): DesignScenarios",
+        "*[Symbol.iterator](): Iterator<DesignScenario>",
+        "ids(): readonly string[]",
+        "toArray(): readonly DesignScenario[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignScenario[]): DesignScenarios"
+      ]
+    },
+    {
+      "name": "DesignSkips",
+      "path": "src/design/domain/design-skips.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignSkipped[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignSkipped[]): DesignSkips",
+        "add(value: DesignSkipped): DesignSkips",
+        "concat(other: DesignSkips): DesignSkips",
+        "*[Symbol.iterator](): Iterator<DesignSkipped>",
+        "sortedCanonically(): DesignSkips",
+        "count(): number",
+        "toArray(): readonly DesignSkipped[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignSkipped): DesignSkips",
+        "concat(other: DesignSkips): DesignSkips",
+        "*[Symbol.iterator](): Iterator<DesignSkipped>",
+        "sortedCanonically(): DesignSkips",
+        "count(): number",
+        "toArray(): readonly DesignSkipped[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignSkipped[]): DesignSkips"
+      ]
+    },
+    {
+      "name": "DesignTransitionDeclarations",
+      "path": "src/design/domain/design-transition-declarations.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignTransitionDeclaration[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignTransitionDeclaration[]): DesignTransitionDeclarations",
+        "add(value: DesignTransitionDeclaration): DesignTransitionDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignTransitionDeclaration>",
+        "toArray(): readonly DesignTransitionDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignTransitionDeclaration): DesignTransitionDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignTransitionDeclaration>",
+        "toArray(): readonly DesignTransitionDeclaration[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignTransitionDeclaration[]): DesignTransitionDeclarations"
+      ]
+    },
+    {
+      "name": "DesignTransitions",
+      "path": "src/design/domain/design-transitions.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignTransition[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignTransition[]): DesignTransitions",
+        "add(value: DesignTransition): DesignTransitions",
+        "*[Symbol.iterator](): Iterator<DesignTransition>",
+        "ids(): readonly string[]",
+        "sortedCanonically(): DesignTransitions",
+        "toArray(): readonly DesignTransition[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignTransition): DesignTransitions",
+        "*[Symbol.iterator](): Iterator<DesignTransition>",
+        "ids(): readonly string[]",
+        "sortedCanonically(): DesignTransitions",
+        "toArray(): readonly DesignTransition[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignTransition[]): DesignTransitions"
+      ]
+    },
+    {
+      "name": "DesignUnitDeclarations",
+      "path": "src/design/domain/design-unit-declarations.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignUnitDeclaration[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignUnitDeclaration[]): DesignUnitDeclarations",
+        "add(value: DesignUnitDeclaration): DesignUnitDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignUnitDeclaration>",
+        "diagnostics(): ErrorMessages",
+        "toArray(): readonly DesignUnitDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DesignUnitDeclaration): DesignUnitDeclarations",
+        "*[Symbol.iterator](): Iterator<DesignUnitDeclaration>",
+        "diagnostics(): ErrorMessages",
+        "toArray(): readonly DesignUnitDeclaration[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignUnitDeclaration[]): DesignUnitDeclarations"
+      ]
+    },
+    {
+      "name": "DesignUnits",
+      "path": "src/design/domain/design-units.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly DesignUnit[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignUnit[]): DesignUnits",
+        "add(value: DesignUnit): DesignUnits",
+        "*[Symbol.iterator](): Iterator<DesignUnit>",
+        "sortedByName(): DesignUnits",
+        "isEmpty(): boolean",
+        "toArray(): readonly DesignUnit[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": true,
+      "publicInstanceMethods": [
+        "add(value: DesignUnit): DesignUnits",
+        "*[Symbol.iterator](): Iterator<DesignUnit>",
+        "sortedByName(): DesignUnits",
+        "isEmpty(): boolean",
+        "toArray(): readonly DesignUnit[]"
+      ],
+      "factories": [
+        "static of(values: readonly DesignUnit[]): DesignUnits"
+      ]
+    },
+    {
+      "name": "EffectAssignments",
+      "path": "src/design/domain/effect-assignments.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: KeyedIndex<AttributePath, Expression>;"
+      ],
+      "methods": [
+        "static of(effect: Expression): EffectAssignments",
+        "static parse(effect: Expression): Result<EffectAssignments, ParseError>",
+        "covers(path: AttributePath): boolean",
+        "*[Symbol.iterator](): Iterator<readonly [AttributePath, Expression]>"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "covers(path: AttributePath): boolean",
+        "*[Symbol.iterator](): Iterator<readonly [AttributePath, Expression]>"
+      ],
+      "factories": [
+        "static of(effect: Expression): EffectAssignments",
+        "static parse(effect: Expression): Result<EffectAssignments, ParseError>"
+      ],
+      "contractNote": "反復要素はクラスでなくreadonly [AttributePath, Expression]。T extends objectでも通るため、VO/Entity要素限定を別途満たすにはEffectAssignment等の要素クラス設計が必要。"
+    },
+    {
+      "name": "EventMappings",
+      "path": "src/design/domain/event-mappings.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly EventMapping[];"
+      ],
+      "methods": [
+        "static of(values: readonly EventMapping[]): EventMappings",
+        "add(value: EventMapping): EventMappings",
+        "*[Symbol.iterator](): Iterator<EventMapping>",
+        "ofTrigger(reqTrigger: TriggerName): EventMapping | undefined",
+        "toArray(): readonly EventMapping[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: EventMapping): EventMappings",
+        "*[Symbol.iterator](): Iterator<EventMapping>",
+        "ofTrigger(reqTrigger: TriggerName): EventMapping | undefined",
+        "toArray(): readonly EventMapping[]"
+      ],
+      "factories": [
+        "static of(values: readonly EventMapping[]): EventMappings"
+      ]
+    },
+    {
+      "name": "InitialStates",
+      "path": "src/design/domain/initial-states.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly InitialState[];"
+      ],
+      "methods": [
+        "static parse(values: readonly InitialState[]): Result<InitialStates, ParseError>",
+        "static of(values: readonly InitialState[]): InitialStates",
+        "add(value: InitialState): InitialStates",
+        "*[Symbol.iterator](): Iterator<InitialState>",
+        "includes(value: string): boolean",
+        "toArray(): readonly InitialState[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: InitialState): InitialStates",
+        "*[Symbol.iterator](): Iterator<InitialState>",
+        "includes(value: string): boolean",
+        "toArray(): readonly InitialState[]"
+      ],
+      "factories": [
+        "static parse(values: readonly InitialState[]): Result<InitialStates, ParseError>",
+        "static of(values: readonly InitialState[]): InitialStates"
+      ]
+    },
+    {
+      "name": "IssuedLoweredIdentifiers",
+      "path": "src/design/domain/issued-lowered-identifiers.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: KeySet<LoweredIdentifier>;"
+      ],
+      "methods": [
+        "static of(values: readonly LoweredIdentifier[]): IssuedLoweredIdentifiers",
+        "static parse(values: readonly LoweredIdentifier[]): Result<IssuedLoweredIdentifiers, ParseError>",
+        "*availableObligations(): IterableIterator<LoweredIdentifier>"
+      ],
+      "iterable": false,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "*availableObligations(): IterableIterator<LoweredIdentifier>"
+      ],
+      "factories": [
+        "static of(values: readonly LoweredIdentifier[]): IssuedLoweredIdentifiers",
+        "static parse(values: readonly LoweredIdentifier[]): Result<IssuedLoweredIdentifiers, ParseError>"
+      ],
+      "contractNote": "isEmptyは発行済み識別子が0件。availableObligations()が空であることとは逆でも一致でもない。"
+    },
+    {
+      "name": "LoweredBackgrounds",
+      "path": "src/design/domain/lowered-backgrounds.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly LoweredBackground[];"
+      ],
+      "methods": [
+        "static of(values: readonly LoweredBackground[]): LoweredBackgrounds",
+        "add(value: LoweredBackground): LoweredBackgrounds",
+        "*[Symbol.iterator](): Iterator<LoweredBackground>",
+        "count(): number",
+        "toArray(): readonly LoweredBackground[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: LoweredBackground): LoweredBackgrounds",
+        "*[Symbol.iterator](): Iterator<LoweredBackground>",
+        "count(): number",
+        "toArray(): readonly LoweredBackground[]"
+      ],
+      "factories": [
+        "static of(values: readonly LoweredBackground[]): LoweredBackgrounds"
+      ]
+    },
+    {
+      "name": "LoweredObligations",
+      "path": "src/design/domain/lowered-obligations.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly LoweredObligation[];"
+      ],
+      "methods": [
+        "static of(values: readonly LoweredObligation[]): LoweredObligations",
+        "add(value: LoweredObligation): LoweredObligations",
+        "*[Symbol.iterator](): Iterator<LoweredObligation>",
+        "count(): number",
+        "toArray(): readonly LoweredObligation[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: LoweredObligation): LoweredObligations",
+        "*[Symbol.iterator](): Iterator<LoweredObligation>",
+        "count(): number",
+        "toArray(): readonly LoweredObligation[]"
+      ],
+      "factories": [
+        "static of(values: readonly LoweredObligation[]): LoweredObligations"
+      ]
+    },
+    {
+      "name": "LoweredScenarios",
+      "path": "src/design/domain/lowered-scenarios.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly LoweredScenario[];"
+      ],
+      "methods": [
+        "static of(values: readonly LoweredScenario[]): LoweredScenarios",
+        "add(value: LoweredScenario): LoweredScenarios",
+        "*[Symbol.iterator](): Iterator<LoweredScenario>",
+        "count(): number",
+        "toArray(): readonly LoweredScenario[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: LoweredScenario): LoweredScenarios",
+        "*[Symbol.iterator](): Iterator<LoweredScenario>",
+        "count(): number",
+        "toArray(): readonly LoweredScenario[]"
+      ],
+      "factories": [
+        "static of(values: readonly LoweredScenario[]): LoweredScenarios"
+      ]
+    },
+    {
+      "name": "LoweringIndex",
+      "path": "src/design/domain/lowering-index.ts",
+      "context": "design",
+      "fields": [
+        "readonly #origins: KeyedIndex<LoweredIdentifier, LoweredOrigin>;",
+        "readonly #scenarioDesignIds: KeyedIndex<LoweredIdentifier, DesignScenarioIdentifier>;",
+        "readonly #machinesByTransition: KeyedIndex<DesignTransitionIdentifier, DesignMachine>;",
+        "readonly #attrPathsByMachine: KeyedIndex<DesignMachineIdentifier, AttributePath>;",
+        "readonly #issued: IssuedLoweredIdentifiers;"
+      ],
+      "methods": [
+        "static of(\n    obligations: LoweredObligations,\n    scenarios: LoweredScenarios,\n    machines: DesignMachines,\n    background: LoweredBackgrounds,\n  ): LoweringIndex",
+        "static parse(\n    obligations: LoweredObligations,\n    scenarios: LoweredScenarios,\n    machines: DesignMachines,\n    background: LoweredBackgrounds,\n  ): Result<LoweringIndex, ParseError>",
+        "availableObligationIdentifiers(): IterableIterator<LoweredIdentifier>",
+        "originOf(loweredId: string): LoweredOrigin | null",
+        "resolveDesignTarget(\n    id: LoweredIdentifier,\n  ): Result<{ readonly design: LoweredOriginReference; readonly entry: LoweredOrigin | null }, ParseError>",
+        "rewriteLoweredIds(text: string): string",
+        "rewriteLoweredIdTokens(label: string): string",
+        "isTransition(designId: string): boolean",
+        "machineOfTransition(designId: string): DesignMachine | null",
+        "attrPathOfMachine(machineId: string): string | null",
+        "toOriginEntries(): readonly (readonly [string, LoweredOrigin])[]"
+      ],
+      "iterable": false,
+      "classification": "needs-design-decision",
+      "reason": "要判断: issued識別子を中心にorigins/scenarios/machine ownership/attribute pathsの複数索引を一体保持する文脈。単一の索引collectionと見るなら何を1要素と数えるか先に定義する。機械索引はissuedの単なる補助とは限らない。",
+      "publicInstanceMethods": [
+        "availableObligationIdentifiers(): IterableIterator<LoweredIdentifier>",
+        "originOf(loweredId: string): LoweredOrigin | null",
+        "resolveDesignTarget(\n    id: LoweredIdentifier,\n  ): Result<{ readonly design: LoweredOriginReference; readonly entry: LoweredOrigin | null }, ParseError>",
+        "rewriteLoweredIds(text: string): string",
+        "rewriteLoweredIdTokens(label: string): string",
+        "isTransition(designId: string): boolean",
+        "machineOfTransition(designId: string): DesignMachine | null",
+        "attrPathOfMachine(machineId: string): string | null",
+        "toOriginEntries(): readonly (readonly [string, LoweredOrigin])[]"
+      ],
+      "factories": [
+        "static of(\n    obligations: LoweredObligations,\n    scenarios: LoweredScenarios,\n    machines: DesignMachines,\n    background: LoweredBackgrounds,\n  ): LoweringIndex",
+        "static parse(\n    obligations: LoweredObligations,\n    scenarios: LoweredScenarios,\n    machines: DesignMachines,\n    background: LoweredBackgrounds,\n  ): Result<LoweringIndex, ParseError>"
+      ]
+    },
+    {
+      "name": "MachineReachability",
+      "path": "src/design/domain/machine-reachability.ts",
+      "context": "design",
+      "fields": [
+        "readonly #unit: DesignUnit;",
+        "readonly #machine: DesignMachine;",
+        "readonly #probes: readonly ReachabilityProbe[];",
+        "readonly #bounded: boolean;",
+        "readonly #observations: ReadonlyMap<ReachabilityProbe, ReachabilityVerdict>;"
+      ],
+      "methods": [
+        "static of(input: MachineReachabilityParam): MachineReachability",
+        "static parse(input: MachineReachabilityParam): Result<MachineReachability, ParseError>",
+        "probeCount(): number",
+        "*[Symbol.iterator](): Iterator<ReachabilityProbe>",
+        "withVerdict(probe: ReachabilityProbe, verdict: ReachabilityVerdict): MachineReachability",
+        "recordedIn(report: DesignReport, capReached: boolean, cap: number): DesignReport"
+      ],
+      "iterable": true,
+      "classification": "excluded-composite",
+      "reason": "evaluation-state: unit/machineに対するprobesとobservationsを対応付け、判定を蓄積。",
+      "publicInstanceMethods": [
+        "probeCount(): number",
+        "*[Symbol.iterator](): Iterator<ReachabilityProbe>",
+        "withVerdict(probe: ReachabilityProbe, verdict: ReachabilityVerdict): MachineReachability",
+        "recordedIn(report: DesignReport, capReached: boolean, cap: number): DesignReport"
+      ],
+      "factories": [
+        "static of(input: MachineReachabilityParam): MachineReachability",
+        "static parse(input: MachineReachabilityParam): Result<MachineReachability, ParseError>"
+      ]
+    },
+    {
+      "name": "ReachabilityPlan",
+      "path": "src/design/domain/reachability-plan.ts",
+      "context": "design",
+      "fields": [
+        "readonly #machines: readonly MachineReachability[];"
+      ],
+      "methods": [
+        "static of(machines: readonly MachineReachability[]): ReachabilityPlan",
+        "static parse(machines: readonly MachineReachability[]): Result<ReachabilityPlan, ParseError>",
+        "static forUnit(unit: DesignUnit, lowered: LoweredUnit, method: VerificationMethod): ReachabilityPlan",
+        "*[Symbol.iterator](): Iterator<MachineReachability>"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "*[Symbol.iterator](): Iterator<MachineReachability>"
+      ],
+      "factories": [
+        "static of(machines: readonly MachineReachability[]): ReachabilityPlan",
+        "static parse(machines: readonly MachineReachability[]): Result<ReachabilityPlan, ParseError>",
+        "static forUnit(unit: DesignUnit, lowered: LoweredUnit, method: VerificationMethod): ReachabilityPlan"
+      ],
+      "contractNote": "単一のMachineReachability配列だけを所有し反復するためFCCに含めた。Planという名前自体を除外理由にしない。"
+    },
+    {
+      "name": "RefinementAttributes",
+      "path": "src/design/domain/refinement-attributes.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly RefinementAttribute[];"
+      ],
+      "methods": [
+        "static of(values: readonly RefinementAttribute[]): RefinementAttributes",
+        "add(value: RefinementAttribute): RefinementAttributes",
+        "*[Symbol.iterator](): Iterator<RefinementAttribute>",
+        "byPath(path: AttributePath | string): RefinementAttribute | undefined",
+        "covers(path: AttributePath | string): boolean",
+        "sortedByPath(): RefinementAttributes",
+        "toArray(): readonly RefinementAttribute[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: RefinementAttribute): RefinementAttributes",
+        "*[Symbol.iterator](): Iterator<RefinementAttribute>",
+        "byPath(path: AttributePath | string): RefinementAttribute | undefined",
+        "covers(path: AttributePath | string): boolean",
+        "sortedByPath(): RefinementAttributes",
+        "toArray(): readonly RefinementAttribute[]"
+      ],
+      "factories": [
+        "static of(values: readonly RefinementAttribute[]): RefinementAttributes"
+      ]
+    },
+    {
+      "name": "RefinementObligations",
+      "path": "src/design/domain/refinement-obligations.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly RefinementObligation[];"
+      ],
+      "methods": [
+        "static of(values: readonly RefinementObligation[]): RefinementObligations",
+        "add(value: RefinementObligation): RefinementObligations",
+        "*[Symbol.iterator](): Iterator<RefinementObligation>",
+        "byId(id: string): RefinementObligation | undefined",
+        "sortedCanonically(): RefinementObligations",
+        "toArray(): readonly RefinementObligation[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: RefinementObligation): RefinementObligations",
+        "*[Symbol.iterator](): Iterator<RefinementObligation>",
+        "byId(id: string): RefinementObligation | undefined",
+        "sortedCanonically(): RefinementObligations",
+        "toArray(): readonly RefinementObligation[]"
+      ],
+      "factories": [
+        "static of(values: readonly RefinementObligation[]): RefinementObligations"
+      ]
+    },
+    {
+      "name": "RefinementPreparation",
+      "path": "src/design/domain/refinement-preparation.ts",
+      "context": "design",
+      "fields": [
+        "readonly #plans: readonly UnitRefinementPlan[];",
+        "readonly #skipped: DesignSkips;",
+        "readonly #inputs: DesignInputAnchors | null;"
+      ],
+      "methods": [
+        "static of(\n    plans: readonly UnitRefinementPlan[],\n    skipped: DesignSkips,\n    inputs: DesignInputAnchors | null,\n  ): RefinementPreparation",
+        "static parse(\n    plans: readonly UnitRefinementPlan[],\n    skipped: DesignSkips,\n    inputs: DesignInputAnchors | null,\n  ): Result<RefinementPreparation, ParseError>",
+        "*[Symbol.iterator](): Iterator<UnitRefinementPlan>",
+        "recordedIn(report: DesignReport): DesignReport"
+      ],
+      "iterable": true,
+      "classification": "excluded-composite",
+      "reason": "preparation-result: plansの他にskippedとinputsを所有し、結果全体をreportへ記録。",
+      "publicInstanceMethods": [
+        "*[Symbol.iterator](): Iterator<UnitRefinementPlan>",
+        "recordedIn(report: DesignReport): DesignReport"
+      ],
+      "factories": [
+        "static of(\n    plans: readonly UnitRefinementPlan[],\n    skipped: DesignSkips,\n    inputs: DesignInputAnchors | null,\n  ): RefinementPreparation",
+        "static parse(\n    plans: readonly UnitRefinementPlan[],\n    skipped: DesignSkips,\n    inputs: DesignInputAnchors | null,\n  ): Result<RefinementPreparation, ParseError>"
+      ]
+    },
+    {
+      "name": "RefinementQueryVerdict",
+      "path": "src/design/domain/refinement-query-verdict.ts",
+      "context": "design",
+      "fields": [
+        "readonly #status: RefinementQueryStatus;",
+        "readonly #decodedModel: { [path: string]: boolean | number | string } | undefined;",
+        "readonly #decodedPostModel: { [path: string]: boolean | number | string } | undefined;",
+        "readonly #core: readonly QueryLabel[] | undefined;"
+      ],
+      "methods": [
+        "static parse(props: RefinementQueryVerdictParam): Result<RefinementQueryVerdict, ParseError>",
+        "static of(props: RefinementQueryVerdictParam): RefinementQueryVerdict",
+        "isSat(): boolean",
+        "isUnsat(): boolean",
+        "isUndecided(): boolean",
+        "sortedCore(): string[]",
+        "witnessModel(): { [path: string]: boolean | number | string }",
+        "witnessTrace(): [{ [path: string]: boolean | number | string }, { [path: string]: boolean | number | string }]"
+      ],
+      "iterable": false,
+      "classification": "excluded-composite",
+      "reason": "verdict: status/decodedModels/coreの判定値。core配列は付帯情報。",
+      "publicInstanceMethods": [
+        "isSat(): boolean",
+        "isUnsat(): boolean",
+        "isUndecided(): boolean",
+        "sortedCore(): string[]",
+        "witnessModel(): { [path: string]: boolean | number | string }",
+        "witnessTrace(): [{ [path: string]: boolean | number | string }, { [path: string]: boolean | number | string }]"
+      ],
+      "factories": [
+        "static parse(props: RefinementQueryVerdictParam): Result<RefinementQueryVerdict, ParseError>",
+        "static of(props: RefinementQueryVerdictParam): RefinementQueryVerdict"
+      ]
+    },
+    {
+      "name": "RefinementQueryVerdicts",
+      "path": "src/design/domain/refinement-query-verdicts.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: KeyedIndex<QueryLabel, RefinementQueryVerdict>;"
+      ],
+      "methods": [
+        "static of(values: KeyedIndex<QueryLabel, RefinementQueryVerdict>): RefinementQueryVerdicts",
+        "verdictOf(queryId: QueryLabel): RefinementQueryVerdict | undefined"
+      ],
+      "iterable": false,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "verdictOf(queryId: QueryLabel): RefinementQueryVerdict | undefined"
+      ],
+      "factories": [
+        "static of(values: KeyedIndex<QueryLabel, RefinementQueryVerdict>): RefinementQueryVerdicts"
+      ]
+    },
+    {
+      "name": "RefinementQuintInvariants",
+      "path": "src/design/domain/refinement-quint-invariants.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly RefinementQuintInvariant[];"
+      ],
+      "methods": [
+        "static of(values: readonly RefinementQuintInvariant[]): RefinementQuintInvariants",
+        "add(value: RefinementQuintInvariant): RefinementQuintInvariants",
+        "*[Symbol.iterator](): Iterator<RefinementQuintInvariant>",
+        "isEmpty(): boolean",
+        "reqIds(): ReadonlySet<string>",
+        "interpret(\n    findings: DesignFindings,\n    skipped: DesignSkips,\n    unit: string,\n  ): { findings: DesignFindings; skipped: DesignSkips }",
+        "toArray(): readonly RefinementQuintInvariant[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": true,
+      "publicInstanceMethods": [
+        "add(value: RefinementQuintInvariant): RefinementQuintInvariants",
+        "*[Symbol.iterator](): Iterator<RefinementQuintInvariant>",
+        "isEmpty(): boolean",
+        "reqIds(): ReadonlySet<string>",
+        "interpret(\n    findings: DesignFindings,\n    skipped: DesignSkips,\n    unit: string,\n  ): { findings: DesignFindings; skipped: DesignSkips }",
+        "toArray(): readonly RefinementQuintInvariant[]"
+      ],
+      "factories": [
+        "static of(values: readonly RefinementQuintInvariant[]): RefinementQuintInvariants"
+      ]
+    },
+    {
+      "name": "RefinementScenarios",
+      "path": "src/design/domain/refinement-scenarios.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly RefinementScenario[];"
+      ],
+      "methods": [
+        "static of(values: readonly RefinementScenario[]): RefinementScenarios",
+        "add(value: RefinementScenario): RefinementScenarios",
+        "*[Symbol.iterator](): Iterator<RefinementScenario>",
+        "byId(id: string): RefinementScenario | undefined",
+        "sortedCanonically(): RefinementScenarios",
+        "toArray(): readonly RefinementScenario[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: RefinementScenario): RefinementScenarios",
+        "*[Symbol.iterator](): Iterator<RefinementScenario>",
+        "byId(id: string): RefinementScenario | undefined",
+        "sortedCanonically(): RefinementScenarios",
+        "toArray(): readonly RefinementScenario[]"
+      ],
+      "factories": [
+        "static of(values: readonly RefinementScenario[]): RefinementScenarios"
+      ]
+    },
+    {
+      "name": "RefinementSolverPlan",
+      "path": "src/design/domain/refinement-solver-plan.ts",
+      "context": "design",
+      "fields": [
+        "readonly #preparation: UnitRefinementPlan;",
+        "readonly #pending: KeyedIndex<QueryLabel, RefinementProbe>;",
+        "readonly #compileSkips: DesignSkips;"
+      ],
+      "methods": [
+        "static of(props: RefinementSolverPlanParam): RefinementSolverPlan",
+        "static parse(props: RefinementSolverPlanParam): Result<RefinementSolverPlan, ParseError>",
+        "preparation(): UnitRefinementPlan",
+        "compileSkips(): DesignSkips",
+        "*[Symbol.iterator](): Iterator<readonly [QueryLabel, RefinementProbe]>",
+        "interpret(results: RefinementQueryVerdicts): { findings: DesignFindings; skipped: DesignSkips }"
+      ],
+      "iterable": true,
+      "classification": "excluded-composite",
+      "reason": "execution-plan: preparation/pending/compileSkipsを組にしてsolver結果を解釈。",
+      "publicInstanceMethods": [
+        "preparation(): UnitRefinementPlan",
+        "compileSkips(): DesignSkips",
+        "*[Symbol.iterator](): Iterator<readonly [QueryLabel, RefinementProbe]>",
+        "interpret(results: RefinementQueryVerdicts): { findings: DesignFindings; skipped: DesignSkips }"
+      ],
+      "factories": [
+        "static of(props: RefinementSolverPlanParam): RefinementSolverPlan",
+        "static parse(props: RefinementSolverPlanParam): Result<RefinementSolverPlan, ParseError>"
+      ]
+    },
+    {
+      "name": "RefinementUnitMaps",
+      "path": "src/design/domain/refinement-unit-maps.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly RefinementUnitMap[];"
+      ],
+      "methods": [
+        "static of(values: readonly RefinementUnitMap[]): RefinementUnitMaps",
+        "add(value: RefinementUnitMap): RefinementUnitMaps",
+        "*[Symbol.iterator](): Iterator<RefinementUnitMap>",
+        "mapOf(unit: DesignUnitIdentifier): RefinementUnitMap | undefined",
+        "toArray(): readonly RefinementUnitMap[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: RefinementUnitMap): RefinementUnitMaps",
+        "*[Symbol.iterator](): Iterator<RefinementUnitMap>",
+        "mapOf(unit: DesignUnitIdentifier): RefinementUnitMap | undefined",
+        "toArray(): readonly RefinementUnitMap[]"
+      ],
+      "factories": [
+        "static of(values: readonly RefinementUnitMap[]): RefinementUnitMaps"
+      ]
+    },
+    {
+      "name": "RuleSubsumptions",
+      "path": "src/design/domain/rule-subsumptions.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly RuleSubsumption[];"
+      ],
+      "methods": [
+        "static of(values: readonly RuleSubsumption[]): RuleSubsumptions",
+        "static parse(values: readonly RuleSubsumption[]): Result<RuleSubsumptions, ParseError>",
+        "findingsExcept(dead: TargetIdentifiers): DesignFindings"
+      ],
+      "iterable": false,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "findingsExcept(dead: TargetIdentifiers): DesignFindings"
+      ],
+      "factories": [
+        "static of(values: readonly RuleSubsumption[]): RuleSubsumptions",
+        "static parse(values: readonly RuleSubsumption[]): Result<RuleSubsumptions, ParseError>"
+      ],
+      "contractNote": "isEmptyは包含関係が0件。findingsExceptの結果が0件であることとは異なる。"
+    },
+    {
+      "name": "SiblingVerdictFinding",
+      "path": "src/design/domain/sibling-verdict-finding.ts",
+      "context": "design",
+      "fields": [
+        "readonly #kind: FindingKind;",
+        "readonly #functionalRequirementReferences: FunctionalRequirementReferences;",
+        "readonly #targets: readonly LoweredIdentifier[];",
+        "readonly #witness: DesignWitness;",
+        "readonly #detail: string;"
+      ],
+      "methods": [
+        "static of(props: SiblingVerdictFindingParam): SiblingVerdictFinding",
+        "remap(\n    unit: UnitName,\n    index: LoweringIndex,\n  ):\n    | { kind: \"finding\"; finding: DesignFinding }\n    | { kind: \"unreachable\"; finding: DesignFinding; target: TargetIdentifier }\n    | { kind: \"subsumption\"; relation: RuleSubsumption }\n    | { kind: \"waived\"; skipped: DesignSkips }\n    | { kind: \"ignored\" }\n    | { kind: \"invalid\"; error: ParseError }",
+        "kind(): string",
+        "isKind(kind: string): boolean",
+        "functionalRequirementReferences(): FunctionalRequirementReferences",
+        "targets(): readonly LoweredIdentifier[]",
+        "detail(): string",
+        "provesReachabilityOf(attrPath: string, state: string): boolean",
+        "witnessRemappedBy(rewrite: (label: string) => string): DesignWitness"
+      ],
+      "iterable": false,
+      "classification": "excluded-composite",
+      "reason": "finding: kind/refs/targets/witness/detailの診断1件。targets配列は付帯情報。",
+      "publicInstanceMethods": [
+        "remap(\n    unit: UnitName,\n    index: LoweringIndex,\n  ):\n    | { kind: \"finding\"; finding: DesignFinding }\n    | { kind: \"unreachable\"; finding: DesignFinding; target: TargetIdentifier }\n    | { kind: \"subsumption\"; relation: RuleSubsumption }\n    | { kind: \"waived\"; skipped: DesignSkips }\n    | { kind: \"ignored\" }\n    | { kind: \"invalid\"; error: ParseError }",
+        "kind(): string",
+        "isKind(kind: string): boolean",
+        "functionalRequirementReferences(): FunctionalRequirementReferences",
+        "targets(): readonly LoweredIdentifier[]",
+        "detail(): string",
+        "provesReachabilityOf(attrPath: string, state: string): boolean",
+        "witnessRemappedBy(rewrite: (label: string) => string): DesignWitness"
+      ],
+      "factories": [
+        "static of(props: SiblingVerdictFindingParam): SiblingVerdictFinding"
+      ]
+    },
+    {
+      "name": "SiblingVerdictFindings",
+      "path": "src/design/domain/sibling-verdict-findings.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly SiblingVerdictFinding[];"
+      ],
+      "methods": [
+        "static of(values: readonly SiblingVerdictFinding[]): SiblingVerdictFindings",
+        "add(value: SiblingVerdictFinding): SiblingVerdictFindings",
+        "*[Symbol.iterator](): Iterator<SiblingVerdictFinding>",
+        "isEmpty(): boolean",
+        "toArray(): readonly SiblingVerdictFinding[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": true,
+      "publicInstanceMethods": [
+        "add(value: SiblingVerdictFinding): SiblingVerdictFindings",
+        "*[Symbol.iterator](): Iterator<SiblingVerdictFinding>",
+        "isEmpty(): boolean",
+        "toArray(): readonly SiblingVerdictFinding[]"
+      ],
+      "factories": [
+        "static of(values: readonly SiblingVerdictFinding[]): SiblingVerdictFindings"
+      ]
+    },
+    {
+      "name": "SiblingVerdictSkips",
+      "path": "src/design/domain/sibling-verdict-skips.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly SiblingVerdictSkip[];"
+      ],
+      "methods": [
+        "static of(values: readonly SiblingVerdictSkip[]): SiblingVerdictSkips",
+        "add(value: SiblingVerdictSkip): SiblingVerdictSkips",
+        "*[Symbol.iterator](): Iterator<SiblingVerdictSkip>",
+        "isEmpty(): boolean",
+        "toArray(): readonly SiblingVerdictSkip[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": true,
+      "publicInstanceMethods": [
+        "add(value: SiblingVerdictSkip): SiblingVerdictSkips",
+        "*[Symbol.iterator](): Iterator<SiblingVerdictSkip>",
+        "isEmpty(): boolean",
+        "toArray(): readonly SiblingVerdictSkip[]"
+      ],
+      "factories": [
+        "static of(values: readonly SiblingVerdictSkip[]): SiblingVerdictSkips"
+      ]
+    },
+    {
+      "name": "TransitionReferences",
+      "path": "src/design/domain/transition-references.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly TransitionReference[];"
+      ],
+      "methods": [
+        "static of(values: readonly TransitionReference[]): TransitionReferences",
+        "add(value: TransitionReference): TransitionReferences",
+        "*[Symbol.iterator](): Iterator<TransitionReference>",
+        "isEmpty(): boolean",
+        "unknownAmong(declared: ReadonlySet<string>): string[]",
+        "sortedCanonically(): readonly TransitionReference[]",
+        "toArray(): readonly TransitionReference[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": true,
+      "publicInstanceMethods": [
+        "add(value: TransitionReference): TransitionReferences",
+        "*[Symbol.iterator](): Iterator<TransitionReference>",
+        "isEmpty(): boolean",
+        "unknownAmong(declared: ReadonlySet<string>): string[]",
+        "sortedCanonically(): readonly TransitionReference[]",
+        "toArray(): readonly TransitionReference[]"
+      ],
+      "factories": [
+        "static of(values: readonly TransitionReference[]): TransitionReferences"
+      ]
+    },
+    {
+      "name": "UnformalizedTargets",
+      "path": "src/design/domain/unformalized-targets.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: KeySet<TargetIdentifier>;"
+      ],
+      "methods": [
+        "static of(values: readonly TargetIdentifier[]): UnformalizedTargets",
+        "add(value: TargetIdentifier): UnformalizedTargets",
+        "*[Symbol.iterator](): Iterator<TargetIdentifier>",
+        "covers(target: TargetIdentifier): boolean",
+        "toArray(): readonly TargetIdentifier[]",
+        "toStrings(): readonly string[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: TargetIdentifier): UnformalizedTargets",
+        "*[Symbol.iterator](): Iterator<TargetIdentifier>",
+        "covers(target: TargetIdentifier): boolean",
+        "toArray(): readonly TargetIdentifier[]",
+        "toStrings(): readonly string[]"
+      ],
+      "factories": [
+        "static of(values: readonly TargetIdentifier[]): UnformalizedTargets"
+      ]
+    },
+    {
+      "name": "UnitRefinementPlan",
+      "path": "src/design/domain/unit-refinement-plan.ts",
+      "context": "design",
+      "fields": [
+        "readonly #unit: DesignUnit;",
+        "readonly #requirements: RefinementRequirements;",
+        "readonly #mappings: AttributeMappings;",
+        "readonly #obligationStatus: KeyedIndex<ObligationIdentifier, RefinementStatus>;",
+        "readonly #scenarioStatus: KeyedIndex<ScenarioIdentifier, RefinementStatus>;",
+        "readonly #eventTransitions: KeyedIndex<ObligationIdentifier, readonly TransitionReference[]>;",
+        "readonly #gaps: DesignFindings;"
+      ],
+      "methods": [
+        "static of(\n    unit: DesignUnit,\n    map: RefinementUnitMap,\n    requirements: RefinementRequirements,\n    artifact: ArtifactPath,\n  ): UnitRefinementPlan",
+        "static parse(\n    unit: DesignUnit,\n    map: RefinementUnitMap,\n    requirements: RefinementRequirements,\n    artifact: ArtifactPath,\n  ): Result<UnitRefinementPlan, ParseError>",
+        "unit(): DesignUnit",
+        "requirements(): RefinementRequirements",
+        "hasQuintInvariants(): boolean",
+        "loweredForQuint(): Result<LoweredUnit, ParseError>",
+        "quintPreparedIn(report: DesignReport): DesignReport",
+        "quintRecordedIn(report: DesignReport, result: SiblingVerificationResult): DesignReport",
+        "loweringFailedIn(report: DesignReport, problem: ParseError): DesignReport",
+        "quintTimedOut(report: DesignReport): DesignReport",
+        "smtTimedOut(report: DesignReport): DesignReport",
+        "unverifiedIn(report: DesignReport, reason: SkipReason, detail: string): DesignReport",
+        "attributeMappings(): AttributeMappings",
+        "gaps(): DesignFindings",
+        "sortedObligationStatuses(): readonly (readonly [string, RefinementStatus])[]",
+        "sortedScenarioStatuses(): readonly (readonly [string, RefinementStatus])[]",
+        "statusOfObligation(id: string): RefinementStatus | undefined",
+        "statusOfScenario(id: string): RefinementStatus | undefined",
+        "mappedTransitionsOf(reqId: string): readonly TransitionReference[]",
+        "smtStatusSkips(unitName: string): DesignSkips",
+        "quintStatusSkips(req: RefinementRequirements, unitName: string): DesignSkips",
+        "quintInvariants(req: RefinementRequirements): RefinementQuintInvariants"
+      ],
+      "iterable": false,
+      "classification": "excluded-composite",
+      "reason": "execution-plan: 一つのunitとrequirements、mapping、coverage結果の関係を保持。",
+      "publicInstanceMethods": [
+        "unit(): DesignUnit",
+        "requirements(): RefinementRequirements",
+        "hasQuintInvariants(): boolean",
+        "loweredForQuint(): Result<LoweredUnit, ParseError>",
+        "quintPreparedIn(report: DesignReport): DesignReport",
+        "quintRecordedIn(report: DesignReport, result: SiblingVerificationResult): DesignReport",
+        "loweringFailedIn(report: DesignReport, problem: ParseError): DesignReport",
+        "quintTimedOut(report: DesignReport): DesignReport",
+        "smtTimedOut(report: DesignReport): DesignReport",
+        "unverifiedIn(report: DesignReport, reason: SkipReason, detail: string): DesignReport",
+        "attributeMappings(): AttributeMappings",
+        "gaps(): DesignFindings",
+        "sortedObligationStatuses(): readonly (readonly [string, RefinementStatus])[]",
+        "sortedScenarioStatuses(): readonly (readonly [string, RefinementStatus])[]",
+        "statusOfObligation(id: string): RefinementStatus | undefined",
+        "statusOfScenario(id: string): RefinementStatus | undefined",
+        "mappedTransitionsOf(reqId: string): readonly TransitionReference[]",
+        "smtStatusSkips(unitName: string): DesignSkips",
+        "quintStatusSkips(req: RefinementRequirements, unitName: string): DesignSkips",
+        "quintInvariants(req: RefinementRequirements): RefinementQuintInvariants"
+      ],
+      "factories": [
+        "static of(\n    unit: DesignUnit,\n    map: RefinementUnitMap,\n    requirements: RefinementRequirements,\n    artifact: ArtifactPath,\n  ): UnitRefinementPlan",
+        "static parse(\n    unit: DesignUnit,\n    map: RefinementUnitMap,\n    requirements: RefinementRequirements,\n    artifact: ArtifactPath,\n  ): Result<UnitRefinementPlan, ParseError>"
+      ]
+    },
+    {
+      "name": "UnmappedDeclarations",
+      "path": "src/design/domain/unmapped-declarations.ts",
+      "context": "design",
+      "fields": [
+        "readonly #values: readonly UnmappedTarget[];"
+      ],
+      "methods": [
+        "static of(values: readonly UnmappedTarget[]): UnmappedDeclarations",
+        "add(value: UnmappedTarget): UnmappedDeclarations",
+        "*[Symbol.iterator](): Iterator<UnmappedTarget>",
+        "covers(target: AttributePath | ObligationIdentifier | ScenarioIdentifier): boolean",
+        "reasonOf(target: AttributePath | ObligationIdentifier | ScenarioIdentifier): string | undefined",
+        "toArray(): readonly UnmappedTarget[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: UnmappedTarget): UnmappedDeclarations",
+        "*[Symbol.iterator](): Iterator<UnmappedTarget>",
+        "covers(target: AttributePath | ObligationIdentifier | ScenarioIdentifier): boolean",
+        "reasonOf(target: AttributePath | ObligationIdentifier | ScenarioIdentifier): string | undefined",
+        "toArray(): readonly UnmappedTarget[]"
+      ],
+      "factories": [
+        "static of(values: readonly UnmappedTarget[]): UnmappedDeclarations"
+      ]
+    },
+    {
+      "name": "CoverageAssessment",
+      "path": "src/doctor/domain/coverage-assessment.ts",
+      "context": "doctor",
+      "fields": [
+        "readonly #observations: readonly VerificationObservation[];",
+        "readonly #scopes: StageScopes;"
+      ],
+      "methods": [
+        "static of(observations: readonly VerificationObservation[], scopes: StageScopes): CoverageAssessment",
+        "static parse(\n    observations: readonly VerificationObservation[],\n    scopes: StageScopes,\n  ): Result<CoverageAssessment, ParseError>",
+        "isClean(): boolean",
+        "verifiedCount(): number",
+        "eligibleCount(): number",
+        "problems(): readonly VerificationObservation[]",
+        "scopes(): StageScopes"
+      ],
+      "iterable": false,
+      "classification": "needs-design-decision",
+      "reason": "要判断: observationsのcollectionにscopesという対象方針を持たせた型とも、査定結果VOとも読める。既存操作はeligibleCount/verifiedCount/problems/scopes。採用時のisEmptyは対象intentが0件を指し、isCleanとは分ける。",
+      "publicInstanceMethods": [
+        "isClean(): boolean",
+        "verifiedCount(): number",
+        "eligibleCount(): number",
+        "problems(): readonly VerificationObservation[]",
+        "scopes(): StageScopes"
+      ],
+      "factories": [
+        "static of(observations: readonly VerificationObservation[], scopes: StageScopes): CoverageAssessment",
+        "static parse(\n    observations: readonly VerificationObservation[],\n    scopes: StageScopes,\n  ): Result<CoverageAssessment, ParseError>"
+      ]
+    },
+    {
+      "name": "DesignArtifacts",
+      "path": "src/doctor/domain/design-artifacts.ts",
+      "context": "doctor",
+      "fields": [
+        "readonly #values: readonly DesignArtifactReference[];"
+      ],
+      "methods": [
+        "static of(values: readonly DesignArtifactReference[]): DesignArtifacts",
+        "static parse(values: readonly DesignArtifactReference[]): Result<DesignArtifacts, ParseError>",
+        "*[Symbol.iterator](): Iterator<DesignArtifactReference>"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "*[Symbol.iterator](): Iterator<DesignArtifactReference>"
+      ],
+      "factories": [
+        "static of(values: readonly DesignArtifactReference[]): DesignArtifacts",
+        "static parse(values: readonly DesignArtifactReference[]): Result<DesignArtifacts, ParseError>"
+      ]
+    },
+    {
+      "name": "FunctionalObservation",
+      "path": "src/doctor/domain/functional-observation.ts",
+      "context": "doctor",
+      "fields": [
+        "readonly #location: IntentLocation;",
+        "readonly #units: readonly FunctionalUnitObservation[];",
+        "readonly #modelModifiedAt: ArtifactModifiedAt | null;",
+        "readonly #modelUnits: KeySet<UnitName>;",
+        "readonly #completedUnits: KeySet<UnitName>;",
+        "readonly #hasFindings: boolean;",
+        "readonly #requirementsModelModifiedAt: ArtifactModifiedAt | null;"
+      ],
+      "methods": [
+        "static of(props: FunctionalObservationParam): FunctionalObservation",
+        "static parse(props: FunctionalObservationParam): Result<FunctionalObservation, ParseError>",
+        "location(): IntentLocation",
+        "eligibleCount(): number",
+        "problems(): readonly UnitCoverageProblem[]",
+        "refinementIsStale(): boolean"
+      ],
+      "iterable": false,
+      "classification": "excluded-composite",
+      "reason": "observation: 一つのintentの場所と時刻と複数unit集合を持つ観測レコード。",
+      "publicInstanceMethods": [
+        "location(): IntentLocation",
+        "eligibleCount(): number",
+        "problems(): readonly UnitCoverageProblem[]",
+        "refinementIsStale(): boolean"
+      ],
+      "factories": [
+        "static of(props: FunctionalObservationParam): FunctionalObservation",
+        "static parse(props: FunctionalObservationParam): Result<FunctionalObservation, ParseError>"
+      ]
+    },
+    {
+      "name": "HealthVerdict",
+      "path": "src/doctor/domain/health-verdict.ts",
+      "context": "doctor",
+      "fields": [
+        "readonly #values: readonly Check[];"
+      ],
+      "methods": [
+        "static of(values: readonly Check[]): HealthVerdict",
+        "add(value: Check): HealthVerdict",
+        "*[Symbol.iterator](): Iterator<Check>",
+        "document(): { checks: readonly ReturnType<Check[\"toDocument\"]>[] }"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: Check): HealthVerdict",
+        "*[Symbol.iterator](): Iterator<Check>",
+        "document(): { checks: readonly ReturnType<Check[\"toDocument\"]>[] }"
+      ],
+      "factories": [
+        "static of(values: readonly Check[]): HealthVerdict"
+      ]
+    },
+    {
+      "name": "InstallationManifest",
+      "path": "src/doctor/domain/installation-manifest.ts",
+      "context": "doctor",
+      "fields": [
+        "readonly #entries: readonly ManifestEntry[];"
+      ],
+      "methods": [
+        "static standard(): InstallationManifest",
+        "*[Symbol.iterator](): Iterator<ManifestEntry>"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "*[Symbol.iterator](): Iterator<ManifestEntry>"
+      ],
+      "factories": [
+        "static standard(): InstallationManifest"
+      ],
+      "contractNote": "固定standard()しか構築口がないがドメイン固有ManifestEntryの集合。isEmptyは現状常にfalseとなりうる。"
+    },
+    {
+      "name": "StableReleases",
+      "path": "src/doctor/domain/stable-releases.ts",
+      "context": "doctor",
+      "fields": [
+        "readonly #versions: readonly PluginVersion[];"
+      ],
+      "methods": [
+        "static of(versions: readonly PluginVersion[]): StableReleases",
+        "static parse(versions: readonly PluginVersion[]): Result<StableReleases, ParseError>",
+        "advise(installed: InstalledRelease): VersionAdvisory"
+      ],
+      "iterable": false,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "advise(installed: InstalledRelease): VersionAdvisory"
+      ],
+      "factories": [
+        "static of(versions: readonly PluginVersion[]): StableReleases",
+        "static parse(versions: readonly PluginVersion[]): Result<StableReleases, ParseError>"
+      ]
+    },
+    {
+      "name": "StageScopes",
+      "path": "src/doctor/domain/stage-scopes.ts",
+      "context": "doctor",
+      "fields": [
+        "readonly #values: readonly StageScope[];"
+      ],
+      "methods": [
+        "static of(values: readonly StageScope[]): StageScopes",
+        "static parse(values: readonly StageScope[]): Result<StageScopes, ParseError>",
+        "includes(scope: StageScope): boolean",
+        "*[Symbol.iterator](): Iterator<StageScope>"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "includes(scope: StageScope): boolean",
+        "*[Symbol.iterator](): Iterator<StageScope>"
+      ],
+      "factories": [
+        "static of(values: readonly StageScope[]): StageScopes",
+        "static parse(values: readonly StageScope[]): Result<StageScopes, ParseError>"
+      ]
+    },
+    {
+      "name": "StructuralDebt",
+      "path": "src/doctor/domain/structural-debt.ts",
+      "context": "doctor",
+      "fields": [
+        "readonly #observations: readonly StructuralObservation[];"
+      ],
+      "methods": [
+        "static of(observations: readonly StructuralObservation[]): StructuralDebt",
+        "static parse(observations: readonly StructuralObservation[]): Result<StructuralDebt, ParseError>",
+        "hasScans(): boolean",
+        "scannedCount(): number",
+        "totalFindings(): number",
+        "rows(): readonly StructuralObservation[]"
+      ],
+      "iterable": false,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "hasScans(): boolean",
+        "scannedCount(): number",
+        "totalFindings(): number",
+        "rows(): readonly StructuralObservation[]"
+      ],
+      "factories": [
+        "static of(observations: readonly StructuralObservation[]): StructuralDebt",
+        "static parse(observations: readonly StructuralObservation[]): Result<StructuralDebt, ParseError>"
+      ],
+      "contractNote": "isEmptyは観測自体が0件。hasScans()/rows()/totalFindings()==0とは異なる。"
+    },
+    {
+      "name": "UnitCoverage",
+      "path": "src/doctor/domain/unit-coverage.ts",
+      "context": "doctor",
+      "fields": [
+        "readonly #observations: readonly FunctionalObservation[];",
+        "readonly #scopes: StageScopes;"
+      ],
+      "methods": [
+        "static of(observations: readonly FunctionalObservation[], scopes: StageScopes): UnitCoverage",
+        "static parse(observations: readonly FunctionalObservation[], scopes: StageScopes): Result<UnitCoverage, ParseError>",
+        "hasEligible(): boolean",
+        "isClean(): boolean",
+        "verifiedCount(): number",
+        "eligibleCount(): number",
+        "problems(): readonly UnitCoverageProblem[]",
+        "refinementStale(): readonly IntentLocation[]",
+        "scopes(): StageScopes"
+      ],
+      "iterable": false,
+      "classification": "needs-design-decision",
+      "reason": "要判断: 対象intentの観測群とscopeの査定型。観測群が非空でもeligibleUnitは0件になり、isEmptyの対象粒度が未確定。collectionにするならFunctionalObservationsを内包するか、unitの不存在を契約に定義する。",
+      "publicInstanceMethods": [
+        "hasEligible(): boolean",
+        "isClean(): boolean",
+        "verifiedCount(): number",
+        "eligibleCount(): number",
+        "problems(): readonly UnitCoverageProblem[]",
+        "refinementStale(): readonly IntentLocation[]",
+        "scopes(): StageScopes"
+      ],
+      "factories": [
+        "static of(observations: readonly FunctionalObservation[], scopes: StageScopes): UnitCoverage",
+        "static parse(observations: readonly FunctionalObservation[], scopes: StageScopes): Result<UnitCoverage, ParseError>"
+      ]
+    },
+    {
+      "name": "DeclaredBindings",
+      "path": "src/kernel/domain/declared-bindings.ts",
+      "context": "kernel",
+      "fields": [
+        "readonly #values: readonly BindingDeclaration[];"
+      ],
+      "methods": [
+        "static parse(values: readonly BindingDeclaration[]): Result<DeclaredBindings, ParseError>",
+        "static of(values: readonly BindingDeclaration[]): DeclaredBindings",
+        "add(value: BindingDeclaration): DeclaredBindings",
+        "*[Symbol.iterator](): Iterator<BindingDeclaration>",
+        "toArray(): readonly BindingDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: BindingDeclaration): DeclaredBindings",
+        "*[Symbol.iterator](): Iterator<BindingDeclaration>",
+        "toArray(): readonly BindingDeclaration[]"
+      ],
+      "factories": [
+        "static parse(values: readonly BindingDeclaration[]): Result<DeclaredBindings, ParseError>",
+        "static of(values: readonly BindingDeclaration[]): DeclaredBindings"
+      ]
+    },
+    {
+      "name": "EnumerationMembers",
+      "path": "src/kernel/domain/enumeration-members.ts",
+      "context": "kernel",
+      "fields": [
+        "readonly #values: readonly EnumerationMember[];"
+      ],
+      "methods": [
+        "static parse(values: readonly EnumerationMember[]): Result<EnumerationMembers, ParseError>",
+        "static of(values: readonly EnumerationMember[]): EnumerationMembers",
+        "add(value: EnumerationMember): EnumerationMembers",
+        "*[Symbol.iterator](): Iterator<EnumerationMember>",
+        "includes(value: string): boolean",
+        "sortedUniqueCanonically(): EnumerationMembers",
+        "indexOf(value: string): number",
+        "valueAt(index: number): EnumerationMember | undefined",
+        "count(): number",
+        "toArray(): readonly EnumerationMember[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: EnumerationMember): EnumerationMembers",
+        "*[Symbol.iterator](): Iterator<EnumerationMember>",
+        "includes(value: string): boolean",
+        "sortedUniqueCanonically(): EnumerationMembers",
+        "indexOf(value: string): number",
+        "valueAt(index: number): EnumerationMember | undefined",
+        "count(): number",
+        "toArray(): readonly EnumerationMember[]"
+      ],
+      "factories": [
+        "static parse(values: readonly EnumerationMember[]): Result<EnumerationMembers, ParseError>",
+        "static of(values: readonly EnumerationMember[]): EnumerationMembers"
+      ]
+    },
+    {
+      "name": "ErrorMessages",
+      "path": "src/kernel/domain/error-messages.ts",
+      "context": "kernel",
+      "fields": [
+        "readonly #values: readonly ErrorMessage[];"
+      ],
+      "methods": [
+        "static parse(values: readonly ErrorMessage[]): Result<ErrorMessages, ParseError>",
+        "static of(values: readonly ErrorMessage[]): ErrorMessages",
+        "static collect(diagnostics: Iterable<Result<ErrorMessage, ParseError>>): ErrorMessages",
+        "add(value: ErrorMessage): ErrorMessages",
+        "*[Symbol.iterator](): Iterator<ErrorMessage>",
+        "isEmpty(): boolean",
+        "toArray(): readonly ErrorMessage[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": true,
+      "publicInstanceMethods": [
+        "add(value: ErrorMessage): ErrorMessages",
+        "*[Symbol.iterator](): Iterator<ErrorMessage>",
+        "isEmpty(): boolean",
+        "toArray(): readonly ErrorMessage[]"
+      ],
+      "factories": [
+        "static parse(values: readonly ErrorMessage[]): Result<ErrorMessages, ParseError>",
+        "static of(values: readonly ErrorMessage[]): ErrorMessages",
+        "static collect(diagnostics: Iterable<Result<ErrorMessage, ParseError>>): ErrorMessages"
+      ]
+    },
+    {
+      "name": "FunctionalRequirementReferences",
+      "path": "src/kernel/domain/functional-requirement-references.ts",
+      "context": "kernel",
+      "fields": [
+        "readonly #values: readonly RequirementIdentifier[];"
+      ],
+      "methods": [
+        "static parse(values: readonly RequirementIdentifier[]): Result<FunctionalRequirementReferences, ParseError>",
+        "static of(values: readonly RequirementIdentifier[]): FunctionalRequirementReferences",
+        "add(value: RequirementIdentifier): FunctionalRequirementReferences",
+        "*[Symbol.iterator](): Iterator<RequirementIdentifier>",
+        "isEmpty(): boolean",
+        "sortedUnique(): FunctionalRequirementReferences",
+        "toArray(): readonly RequirementIdentifier[]",
+        "toStrings(): readonly string[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": true,
+      "publicInstanceMethods": [
+        "add(value: RequirementIdentifier): FunctionalRequirementReferences",
+        "*[Symbol.iterator](): Iterator<RequirementIdentifier>",
+        "isEmpty(): boolean",
+        "sortedUnique(): FunctionalRequirementReferences",
+        "toArray(): readonly RequirementIdentifier[]",
+        "toStrings(): readonly string[]"
+      ],
+      "factories": [
+        "static parse(values: readonly RequirementIdentifier[]): Result<FunctionalRequirementReferences, ParseError>",
+        "static of(values: readonly RequirementIdentifier[]): FunctionalRequirementReferences"
+      ]
+    },
+    {
+      "name": "KeySet",
+      "path": "src/kernel/domain/key-set.ts",
+      "context": "kernel",
+      "fields": [
+        "readonly #values: ReadonlyMap<string, K>;"
+      ],
+      "methods": [
+        "static empty<K extends { asString(): string }>(): KeySet<K>",
+        "static of<K extends { asString(): string }>(keys: Iterable<K>): KeySet<K>",
+        "with(key: K): KeySet<K>",
+        "has(key: K): boolean",
+        "size(): number",
+        "isEmpty(): boolean",
+        "*[Symbol.iterator](): Iterator<K>",
+        "toArray(): readonly K[]"
+      ],
+      "iterable": true,
+      "classification": "excluded-generic",
+      "reason": "generic-collection: ubiquitousなドメイン概念ではなく内部用集合。",
+      "publicInstanceMethods": [
+        "with(key: K): KeySet<K>",
+        "has(key: K): boolean",
+        "size(): number",
+        "isEmpty(): boolean",
+        "*[Symbol.iterator](): Iterator<K>",
+        "toArray(): readonly K[]"
+      ],
+      "factories": [
+        "static empty<K extends { asString(): string }>(): KeySet<K>",
+        "static of<K extends { asString(): string }>(keys: Iterable<K>): KeySet<K>"
+      ]
+    },
+    {
+      "name": "KeyedIndex",
+      "path": "src/kernel/domain/keyed-index.ts",
+      "context": "kernel",
+      "fields": [
+        "readonly #entries: ReadonlyMap<string, readonly [K, V]>;"
+      ],
+      "methods": [
+        "static empty<K extends { asString(): string }, V>(): KeyedIndex<K, V>",
+        "static of<K extends { asString(): string }, V>(entries: Iterable<readonly [K, V]>): KeyedIndex<K, V>",
+        "with(key: K, value: V): KeyedIndex<K, V>",
+        "get(key: K): V | undefined",
+        "has(key: K): boolean",
+        "size(): number",
+        "isEmpty(): boolean",
+        "*keys(): IterableIterator<K>",
+        "*values(): IterableIterator<V>",
+        "*[Symbol.iterator](): Iterator<readonly [K, V]>"
+      ],
+      "iterable": true,
+      "classification": "excluded-generic",
+      "reason": "generic-collection: ubiquitousなドメイン概念ではなく内部用索引。",
+      "publicInstanceMethods": [
+        "with(key: K, value: V): KeyedIndex<K, V>",
+        "get(key: K): V | undefined",
+        "has(key: K): boolean",
+        "size(): number",
+        "isEmpty(): boolean",
+        "*keys(): IterableIterator<K>",
+        "*values(): IterableIterator<V>",
+        "*[Symbol.iterator](): Iterator<readonly [K, V]>"
+      ],
+      "factories": [
+        "static empty<K extends { asString(): string }, V>(): KeyedIndex<K, V>",
+        "static of<K extends { asString(): string }, V>(entries: Iterable<readonly [K, V]>): KeyedIndex<K, V>"
+      ]
+    },
+    {
+      "name": "RequirementIdentifiers",
+      "path": "src/kernel/domain/requirement-identifiers.ts",
+      "context": "kernel",
+      "fields": [
+        "readonly #values: KeySet<RequirementIdentifier>;"
+      ],
+      "methods": [
+        "static extractFrom(text: string): RequirementIdentifiers",
+        "static of(values: readonly RequirementIdentifier[]): RequirementIdentifiers",
+        "add(value: RequirementIdentifier): RequirementIdentifiers",
+        "*[Symbol.iterator](): Iterator<RequirementIdentifier>",
+        "has(value: RequirementIdentifier): boolean",
+        "toArray(): readonly RequirementIdentifier[]",
+        "toStrings(): readonly string[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: RequirementIdentifier): RequirementIdentifiers",
+        "*[Symbol.iterator](): Iterator<RequirementIdentifier>",
+        "has(value: RequirementIdentifier): boolean",
+        "toArray(): readonly RequirementIdentifier[]",
+        "toStrings(): readonly string[]"
+      ],
+      "factories": [
+        "static extractFrom(text: string): RequirementIdentifiers",
+        "static of(values: readonly RequirementIdentifier[]): RequirementIdentifiers"
+      ]
+    },
+    {
+      "name": "ScenarioBindings",
+      "path": "src/kernel/domain/scenario-bindings.ts",
+      "context": "kernel",
+      "fields": [
+        "readonly #values: readonly ScenarioBinding[];"
+      ],
+      "methods": [
+        "static parse(values: readonly ScenarioBinding[]): Result<ScenarioBindings, ParseError>",
+        "static of(values: readonly ScenarioBinding[]): ScenarioBindings",
+        "add(value: ScenarioBinding): ScenarioBindings",
+        "has(path: AttributePath): boolean",
+        "valueAt(path: AttributePath): BindingValue | null",
+        "covers(paths: readonly AttributePath[]): boolean",
+        "entriesCanonically(): readonly ScenarioBinding[]",
+        "toDocument(): Record<string, boolean | number | string>"
+      ],
+      "iterable": false,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: ScenarioBinding): ScenarioBindings",
+        "has(path: AttributePath): boolean",
+        "valueAt(path: AttributePath): BindingValue | null",
+        "covers(paths: readonly AttributePath[]): boolean",
+        "entriesCanonically(): readonly ScenarioBinding[]",
+        "toDocument(): Record<string, boolean | number | string>"
+      ],
+      "factories": [
+        "static parse(values: readonly ScenarioBinding[]): Result<ScenarioBindings, ParseError>",
+        "static of(values: readonly ScenarioBinding[]): ScenarioBindings"
+      ]
+    },
+    {
+      "name": "ScenarioVerdicts",
+      "path": "src/kernel/domain/scenario-verdicts.ts",
+      "context": "kernel",
+      "fields": [
+        "readonly #values: readonly ScenarioVerdict[];"
+      ],
+      "methods": [
+        "static of(values: readonly ScenarioVerdict[]): ScenarioVerdicts",
+        "static parse(values: readonly ScenarioVerdict[]): Result<ScenarioVerdicts, ParseError>",
+        "*comparisons(): IterableIterator<ScenarioComparison>"
+      ],
+      "iterable": false,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "*comparisons(): IterableIterator<ScenarioComparison>"
+      ],
+      "factories": [
+        "static of(values: readonly ScenarioVerdict[]): ScenarioVerdicts",
+        "static parse(values: readonly ScenarioVerdict[]): Result<ScenarioVerdicts, ParseError>"
+      ],
+      "contractNote": "isEmptyは比較可能判定が0件。comparisons()が空であること（0件または1件）とは異なる。"
+    },
+    {
+      "name": "TargetIdentifiers",
+      "path": "src/kernel/domain/target-identifiers.ts",
+      "context": "kernel",
+      "fields": [
+        "readonly #values: readonly TargetIdentifier[];"
+      ],
+      "methods": [
+        "static of(values: readonly TargetIdentifier[]): TargetIdentifiers",
+        "static safe(prefix: string, raw: string): string",
+        "add(value: TargetIdentifier): TargetIdentifiers",
+        "*[Symbol.iterator](): Iterator<TargetIdentifier>",
+        "count(): number",
+        "includes(value: TargetIdentifier): boolean",
+        "excluding(value: TargetIdentifier): TargetIdentifiers",
+        "sortedCanonically(): TargetIdentifiers",
+        "sortedUniqueCanonically(): TargetIdentifiers",
+        "joined(separator: string): string",
+        "toArray(): readonly TargetIdentifier[]",
+        "toStrings(): string[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: TargetIdentifier): TargetIdentifiers",
+        "*[Symbol.iterator](): Iterator<TargetIdentifier>",
+        "count(): number",
+        "includes(value: TargetIdentifier): boolean",
+        "excluding(value: TargetIdentifier): TargetIdentifiers",
+        "sortedCanonically(): TargetIdentifiers",
+        "sortedUniqueCanonically(): TargetIdentifiers",
+        "joined(separator: string): string",
+        "toArray(): readonly TargetIdentifier[]",
+        "toStrings(): string[]"
+      ],
+      "factories": [
+        "static of(values: readonly TargetIdentifier[]): TargetIdentifiers",
+        "static safe(prefix: string, raw: string): string"
+      ]
+    },
+    {
+      "name": "AllowedValues",
+      "path": "src/refcheck/domain/allowed-values.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly AllowedValue[];"
+      ],
+      "methods": [
+        "static of(values: readonly AllowedValue[]): AllowedValues",
+        "add(value: AllowedValue): AllowedValues",
+        "*[Symbol.iterator](): Iterator<AllowedValue>",
+        "containsValue(raw: string): boolean",
+        "rogueAmong(states: StateNames): string[]",
+        "absentFrom(states: StateNames): string[]",
+        "toArray(): readonly AllowedValue[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: AllowedValue): AllowedValues",
+        "*[Symbol.iterator](): Iterator<AllowedValue>",
+        "containsValue(raw: string): boolean",
+        "rogueAmong(states: StateNames): string[]",
+        "absentFrom(states: StateNames): string[]",
+        "toArray(): readonly AllowedValue[]"
+      ],
+      "factories": [
+        "static of(values: readonly AllowedValue[]): AllowedValues"
+      ]
+    },
+    {
+      "name": "AttributeDeclarations",
+      "path": "src/refcheck/domain/attribute-declarations.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly AttributeDeclaration[];"
+      ],
+      "methods": [
+        "static of(values: readonly AttributeDeclaration[]): AttributeDeclarations",
+        "add(value: AttributeDeclaration): AttributeDeclarations",
+        "*[Symbol.iterator](): Iterator<AttributeDeclaration>",
+        "duplicatesByName(): AttributeDeclaration[]",
+        "lifecycleAttr(): AttributeDeclaration | null",
+        "named(name: AttributeName): AttributeDeclaration | null",
+        "names(): AttributeName[]",
+        "toArray(): readonly AttributeDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: AttributeDeclaration): AttributeDeclarations",
+        "*[Symbol.iterator](): Iterator<AttributeDeclaration>",
+        "duplicatesByName(): AttributeDeclaration[]",
+        "lifecycleAttr(): AttributeDeclaration | null",
+        "named(name: AttributeName): AttributeDeclaration | null",
+        "names(): AttributeName[]",
+        "toArray(): readonly AttributeDeclaration[]"
+      ],
+      "factories": [
+        "static of(values: readonly AttributeDeclaration[]): AttributeDeclarations"
+      ]
+    },
+    {
+      "name": "AttributeNames",
+      "path": "src/refcheck/domain/attribute-names.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly AttributeName[];"
+      ],
+      "methods": [
+        "static of(values: readonly AttributeName[]): AttributeNames",
+        "add(value: AttributeName): AttributeNames",
+        "*[Symbol.iterator](): Iterator<AttributeName>",
+        "count(): number",
+        "coversNormalized(name: AttributeName): boolean",
+        "toArray(): readonly AttributeName[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: AttributeName): AttributeNames",
+        "*[Symbol.iterator](): Iterator<AttributeName>",
+        "count(): number",
+        "coversNormalized(name: AttributeName): boolean",
+        "toArray(): readonly AttributeName[]"
+      ],
+      "factories": [
+        "static of(values: readonly AttributeName[]): AttributeNames"
+      ]
+    },
+    {
+      "name": "CheckFamilies",
+      "path": "src/refcheck/domain/check-families.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly CheckFamily[];"
+      ],
+      "methods": [
+        "static of(values: readonly CheckFamily[]): CheckFamilies",
+        "add(value: CheckFamily): CheckFamilies",
+        "*[Symbol.iterator](): Iterator<CheckFamily>",
+        "checkTargets(): TargetIdentifiers",
+        "toArray(): readonly CheckFamily[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: CheckFamily): CheckFamilies",
+        "*[Symbol.iterator](): Iterator<CheckFamily>",
+        "checkTargets(): TargetIdentifiers",
+        "toArray(): readonly CheckFamily[]"
+      ],
+      "factories": [
+        "static of(values: readonly CheckFamily[]): CheckFamilies"
+      ]
+    },
+    {
+      "name": "ComponentEntities",
+      "path": "src/refcheck/domain/component-entities.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly ComponentEntity[];"
+      ],
+      "methods": [
+        "static of(values: readonly ComponentEntity[]): ComponentEntities",
+        "add(value: ComponentEntity): ComponentEntities",
+        "*[Symbol.iterator](): Iterator<ComponentEntity>",
+        "declaresEntity(name: EntityName): boolean",
+        "toArray(): readonly ComponentEntity[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: ComponentEntity): ComponentEntities",
+        "*[Symbol.iterator](): Iterator<ComponentEntity>",
+        "declaresEntity(name: EntityName): boolean",
+        "toArray(): readonly ComponentEntity[]"
+      ],
+      "factories": [
+        "static of(values: readonly ComponentEntity[]): ComponentEntities"
+      ]
+    },
+    {
+      "name": "ComponentReferences",
+      "path": "src/refcheck/domain/component-references.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly ComponentReference[];"
+      ],
+      "methods": [
+        "static of(values: readonly ComponentReference[]): ComponentReferences",
+        "add(value: ComponentReference): ComponentReferences",
+        "*[Symbol.iterator](): Iterator<ComponentReference>",
+        "listsComponent(name: ComponentName): boolean",
+        "toArray(): readonly ComponentReference[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: ComponentReference): ComponentReferences",
+        "*[Symbol.iterator](): Iterator<ComponentReference>",
+        "listsComponent(name: ComponentName): boolean",
+        "toArray(): readonly ComponentReference[]"
+      ],
+      "factories": [
+        "static of(values: readonly ComponentReference[]): ComponentReferences"
+      ]
+    },
+    {
+      "name": "ComponentShapeErrors",
+      "path": "src/refcheck/domain/component-shape-errors.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly ComponentShapeError[];"
+      ],
+      "methods": [
+        "static of(values: readonly ComponentShapeError[]): ComponentShapeErrors",
+        "add(value: ComponentShapeError): ComponentShapeErrors",
+        "*[Symbol.iterator](): Iterator<ComponentShapeError>",
+        "count(): number",
+        "toArray(): readonly ComponentShapeError[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: ComponentShapeError): ComponentShapeErrors",
+        "*[Symbol.iterator](): Iterator<ComponentShapeError>",
+        "count(): number",
+        "toArray(): readonly ComponentShapeError[]"
+      ],
+      "factories": [
+        "static of(values: readonly ComponentShapeError[]): ComponentShapeErrors"
+      ]
+    },
+    {
+      "name": "Components",
+      "path": "src/refcheck/domain/components.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly Component[];"
+      ],
+      "methods": [
+        "static of(values: readonly Component[]): Components",
+        "add(value: Component): Components",
+        "*[Symbol.iterator](): Iterator<Component>",
+        "count(): number",
+        "declares(name: ComponentName): boolean",
+        "duplicateNamePairs(): { prior: Component; current: Component }[]",
+        "byName(name: ComponentName): Component | null",
+        "ownershipConflicts(): { name: EntityName; owners: { component: Component; entity: ComponentEntity }[] }[]",
+        "dependencyCycles(): string[][]",
+        "toArray(): readonly Component[]",
+        "check(report: ReferenceCheckReport, artifact: ArtifactPath): void",
+        "#checkDuplicateNames(report: ReferenceCheckReport, artifact: ArtifactPath): void",
+        "#checkSymmetry(report: ReferenceCheckReport, artifact: ArtifactPath): void",
+        "#checkOwnership(report: ReferenceCheckReport, artifact: ArtifactPath): void",
+        "#checkCycles(report: ReferenceCheckReport, artifact: ArtifactPath): void"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: Component): Components",
+        "*[Symbol.iterator](): Iterator<Component>",
+        "count(): number",
+        "declares(name: ComponentName): boolean",
+        "duplicateNamePairs(): { prior: Component; current: Component }[]",
+        "byName(name: ComponentName): Component | null",
+        "ownershipConflicts(): { name: EntityName; owners: { component: Component; entity: ComponentEntity }[] }[]",
+        "dependencyCycles(): string[][]",
+        "toArray(): readonly Component[]",
+        "check(report: ReferenceCheckReport, artifact: ArtifactPath): void"
+      ],
+      "factories": [
+        "static of(values: readonly Component[]): Components"
+      ]
+    },
+    {
+      "name": "ContractRows",
+      "path": "src/refcheck/domain/contract-rows.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly ContractRow[];"
+      ],
+      "methods": [
+        "static of(values: readonly ContractRow[]): ContractRows",
+        "add(value: ContractRow): ContractRows",
+        "*[Symbol.iterator](): Iterator<ContractRow>",
+        "coversEdge(from: string, to: string): boolean",
+        "toArray(): readonly ContractRow[]",
+        "checkPartiesDeclared(\n    declared: UnitDeclarations,\n    report: ReferenceCheckReport,\n    artifact: ArtifactPath,\n    depArtifact: ArtifactPath,\n  ): void"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: ContractRow): ContractRows",
+        "*[Symbol.iterator](): Iterator<ContractRow>",
+        "coversEdge(from: string, to: string): boolean",
+        "toArray(): readonly ContractRow[]",
+        "checkPartiesDeclared(\n    declared: UnitDeclarations,\n    report: ReferenceCheckReport,\n    artifact: ArtifactPath,\n    depArtifact: ArtifactPath,\n  ): void"
+      ],
+      "factories": [
+        "static of(values: readonly ContractRow[]): ContractRows"
+      ]
+    },
+    {
+      "name": "DomainEntitySketches",
+      "path": "src/refcheck/domain/domain-entity-sketches.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly DomainEntitySketch[];"
+      ],
+      "methods": [
+        "static of(values: readonly DomainEntitySketch[]): DomainEntitySketches",
+        "add(value: DomainEntitySketch): DomainEntitySketches",
+        "*[Symbol.iterator](): Iterator<DomainEntitySketch>",
+        "sortedDistinctByNormalizedName(): DomainEntitySketch[]",
+        "toArray(): readonly DomainEntitySketch[]",
+        "check(\n    report: ReferenceCheckReport,\n    componentsArtifact: ArtifactPath,\n    unitEntities: SiblingUnitIndex,\n    unit: UnitName | undefined,\n  ): void"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: DomainEntitySketch): DomainEntitySketches",
+        "*[Symbol.iterator](): Iterator<DomainEntitySketch>",
+        "sortedDistinctByNormalizedName(): DomainEntitySketch[]",
+        "toArray(): readonly DomainEntitySketch[]",
+        "check(\n    report: ReferenceCheckReport,\n    componentsArtifact: ArtifactPath,\n    unitEntities: SiblingUnitIndex,\n    unit: UnitName | undefined,\n  ): void"
+      ],
+      "factories": [
+        "static of(values: readonly DomainEntitySketch[]): DomainEntitySketches"
+      ]
+    },
+    {
+      "name": "EntityDeclarations",
+      "path": "src/refcheck/domain/entity-declarations.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly EntityDeclaration[];",
+        "readonly #names: KeySet<EntityName>;"
+      ],
+      "methods": [
+        "static of(values: readonly EntityDeclaration[]): EntityDeclarations",
+        "add(value: EntityDeclaration): EntityDeclarations",
+        "*[Symbol.iterator](): Iterator<EntityDeclaration>",
+        "duplicatesByName(): EntityDeclaration[]",
+        "checkDuplicates(report: ReferenceCheckReport, artifact: ArtifactPath): void",
+        "containsNamed(name: EntityName): boolean",
+        "byNormalizedName(normalized: NormalizedName): EntityDeclaration | undefined",
+        "lifecycleOnly(): EntityDeclaration[]",
+        "resolvesReference(reference: ReferenceTarget): boolean",
+        "resolvesAppliesTo(target: AppliesTo): boolean",
+        "toArray(): readonly EntityDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: EntityDeclaration): EntityDeclarations",
+        "*[Symbol.iterator](): Iterator<EntityDeclaration>",
+        "duplicatesByName(): EntityDeclaration[]",
+        "checkDuplicates(report: ReferenceCheckReport, artifact: ArtifactPath): void",
+        "containsNamed(name: EntityName): boolean",
+        "byNormalizedName(normalized: NormalizedName): EntityDeclaration | undefined",
+        "lifecycleOnly(): EntityDeclaration[]",
+        "resolvesReference(reference: ReferenceTarget): boolean",
+        "resolvesAppliesTo(target: AppliesTo): boolean",
+        "toArray(): readonly EntityDeclaration[]"
+      ],
+      "factories": [
+        "static of(values: readonly EntityDeclaration[]): EntityDeclarations"
+      ]
+    },
+    {
+      "name": "EntityReferences",
+      "path": "src/refcheck/domain/entity-references.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly EntityReference[];"
+      ],
+      "methods": [
+        "static of(values: readonly EntityReference[]): EntityReferences",
+        "add(value: EntityReference): EntityReferences",
+        "*[Symbol.iterator](): Iterator<EntityReference>",
+        "toArray(): readonly EntityReference[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: EntityReference): EntityReferences",
+        "*[Symbol.iterator](): Iterator<EntityReference>",
+        "toArray(): readonly EntityReference[]"
+      ],
+      "factories": [
+        "static of(values: readonly EntityReference[]): EntityReferences"
+      ]
+    },
+    {
+      "name": "Findings",
+      "path": "src/refcheck/domain/findings.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly Finding[];"
+      ],
+      "methods": [
+        "static of(values: readonly Finding[]): Findings",
+        "add(value: Finding): Findings",
+        "*[Symbol.iterator](): Iterator<Finding>",
+        "count(): number",
+        "isEmpty(): boolean",
+        "sortedCanonically(): Findings",
+        "toArray(): readonly Finding[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": true,
+      "publicInstanceMethods": [
+        "add(value: Finding): Findings",
+        "*[Symbol.iterator](): Iterator<Finding>",
+        "count(): number",
+        "isEmpty(): boolean",
+        "sortedCanonically(): Findings",
+        "toArray(): readonly Finding[]"
+      ],
+      "factories": [
+        "static of(values: readonly Finding[]): Findings"
+      ]
+    },
+    {
+      "name": "InputAnchors",
+      "path": "src/refcheck/domain/input-anchors.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly InputAnchor[];"
+      ],
+      "methods": [
+        "static of(values: readonly InputAnchor[]): InputAnchors",
+        "add(value: InputAnchor): InputAnchors",
+        "addAll(values: Iterable<InputAnchor>): InputAnchors",
+        "*[Symbol.iterator](): Iterator<InputAnchor>",
+        "sortedByArtifact(): InputAnchors",
+        "toArray(): readonly InputAnchor[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: InputAnchor): InputAnchors",
+        "addAll(values: Iterable<InputAnchor>): InputAnchors",
+        "*[Symbol.iterator](): Iterator<InputAnchor>",
+        "sortedByArtifact(): InputAnchors",
+        "toArray(): readonly InputAnchor[]"
+      ],
+      "factories": [
+        "static of(values: readonly InputAnchor[]): InputAnchors"
+      ]
+    },
+    {
+      "name": "RelationshipDeclarations",
+      "path": "src/refcheck/domain/relationship-declarations.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly RelationshipDeclaration[];"
+      ],
+      "methods": [
+        "static of(values: readonly RelationshipDeclaration[]): RelationshipDeclarations",
+        "add(value: RelationshipDeclaration): RelationshipDeclarations",
+        "concat(other: RelationshipDeclarations): RelationshipDeclarations",
+        "*[Symbol.iterator](): Iterator<RelationshipDeclaration>",
+        "toArray(): readonly RelationshipDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: RelationshipDeclaration): RelationshipDeclarations",
+        "concat(other: RelationshipDeclarations): RelationshipDeclarations",
+        "*[Symbol.iterator](): Iterator<RelationshipDeclaration>",
+        "toArray(): readonly RelationshipDeclaration[]"
+      ],
+      "factories": [
+        "static of(values: readonly RelationshipDeclaration[]): RelationshipDeclarations"
+      ]
+    },
+    {
+      "name": "RuleDeclaration",
+      "path": "src/refcheck/domain/rule-declaration.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #id: DeclaredRuleIdentifier | null;",
+        "readonly #element: ElementPath;",
+        "readonly #category: RuleCategory | null;",
+        "readonly #appliesTo: AppliesTo | null;",
+        "readonly #sourceIds: SourceIdentifiers;",
+        "readonly #missing: readonly string[];"
+      ],
+      "methods": [
+        "static of(seed: RuleDeclarationParam): RuleDeclaration",
+        "identifierForUniqueness(): DeclaredRuleIdentifier | null",
+        "#findingTarget(fallback: string): string",
+        "checkRequiredKeys(report: ReferenceCheckReport, artifact: ArtifactPath): void",
+        "checkIdentifier(report: ReferenceCheckReport, artifact: ArtifactPath): void",
+        "reportDuplicateIdentifier(report: ReferenceCheckReport, artifact: ArtifactPath): void",
+        "checkSource(known: RequirementIdentifiers, report: ReferenceCheckReport, artifact: ArtifactPath): void",
+        "checkApplicability(entities: EntityDeclarations, report: ReferenceCheckReport, artifact: ArtifactPath): void",
+        "checkCategory(report: ReferenceCheckReport, artifact: ArtifactPath): void"
+      ],
+      "iterable": false,
+      "classification": "excluded-composite",
+      "reason": "declaration: id/category/appliesTo/sourceIds/missingの規則宣言1件。missing配列は付帯情報。",
+      "publicInstanceMethods": [
+        "identifierForUniqueness(): DeclaredRuleIdentifier | null",
+        "checkRequiredKeys(report: ReferenceCheckReport, artifact: ArtifactPath): void",
+        "checkIdentifier(report: ReferenceCheckReport, artifact: ArtifactPath): void",
+        "reportDuplicateIdentifier(report: ReferenceCheckReport, artifact: ArtifactPath): void",
+        "checkSource(known: RequirementIdentifiers, report: ReferenceCheckReport, artifact: ArtifactPath): void",
+        "checkApplicability(entities: EntityDeclarations, report: ReferenceCheckReport, artifact: ArtifactPath): void",
+        "checkCategory(report: ReferenceCheckReport, artifact: ArtifactPath): void"
+      ],
+      "factories": [
+        "static of(seed: RuleDeclarationParam): RuleDeclaration"
+      ]
+    },
+    {
+      "name": "RuleDeclarations",
+      "path": "src/refcheck/domain/rule-declarations.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly RuleDeclaration[];"
+      ],
+      "methods": [
+        "static of(values: readonly RuleDeclaration[]): RuleDeclarations",
+        "add(value: RuleDeclaration): RuleDeclarations",
+        "*[Symbol.iterator](): Iterator<RuleDeclaration>",
+        "toArray(): readonly RuleDeclaration[]",
+        "check(\n    report: ReferenceCheckReport,\n    artifact: ArtifactPath,\n    requirementIdsKnown: RequirementIdentifiers | null,\n    entities: DeclaredEntities | null,\n  ): void"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: RuleDeclaration): RuleDeclarations",
+        "*[Symbol.iterator](): Iterator<RuleDeclaration>",
+        "toArray(): readonly RuleDeclaration[]",
+        "check(\n    report: ReferenceCheckReport,\n    artifact: ArtifactPath,\n    requirementIdsKnown: RequirementIdentifiers | null,\n    entities: DeclaredEntities | null,\n  ): void"
+      ],
+      "factories": [
+        "static of(values: readonly RuleDeclaration[]): RuleDeclarations"
+      ]
+    },
+    {
+      "name": "ShapeErrors",
+      "path": "src/refcheck/domain/shape-errors.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly ShapeError[];"
+      ],
+      "methods": [
+        "static of(values: readonly ShapeError[]): ShapeErrors",
+        "add(value: ShapeError): ShapeErrors",
+        "*[Symbol.iterator](): Iterator<ShapeError>",
+        "toArray(): readonly ShapeError[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: ShapeError): ShapeErrors",
+        "*[Symbol.iterator](): Iterator<ShapeError>",
+        "toArray(): readonly ShapeError[]"
+      ],
+      "factories": [
+        "static of(values: readonly ShapeError[]): ShapeErrors"
+      ]
+    },
+    {
+      "name": "SiblingUnitIndex",
+      "path": "src/refcheck/domain/sibling-unit-index.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #units: KeyedIndex<UnitName, KeyedIndex<NormalizedName, EntityDeclaration>>;"
+      ],
+      "methods": [
+        "static of(units: KeyedIndex<UnitName, EntityDeclarations>): SiblingUnitIndex",
+        "static parse(units: KeyedIndex<UnitName, EntityDeclarations>): Result<SiblingUnitIndex, ParseError>",
+        "definersOf(normalizedName: NormalizedName): UnitNames",
+        "entityDeclaredIn(unit: UnitName, normalizedName: NormalizedName): EntityDeclaration | undefined",
+        "hasAnyUnit(): boolean"
+      ],
+      "iterable": false,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "definersOf(normalizedName: NormalizedName): UnitNames",
+        "entityDeclaredIn(unit: UnitName, normalizedName: NormalizedName): EntityDeclaration | undefined",
+        "hasAnyUnit(): boolean"
+      ],
+      "factories": [
+        "static of(units: KeyedIndex<UnitName, EntityDeclarations>): SiblingUnitIndex",
+        "static parse(units: KeyedIndex<UnitName, EntityDeclarations>): Result<SiblingUnitIndex, ParseError>"
+      ],
+      "contractNote": "isEmptyは登録unitが0件。空のEntityDeclarationsを持つunitが存在すればfalse。"
+    },
+    {
+      "name": "Skips",
+      "path": "src/refcheck/domain/skips.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly Skipped[];"
+      ],
+      "methods": [
+        "static of(values: readonly Skipped[]): Skips",
+        "add(value: Skipped): Skips",
+        "*[Symbol.iterator](): Iterator<Skipped>",
+        "count(): number",
+        "sortedCanonically(): Skips",
+        "toArray(): readonly Skipped[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: Skipped): Skips",
+        "*[Symbol.iterator](): Iterator<Skipped>",
+        "count(): number",
+        "sortedCanonically(): Skips",
+        "toArray(): readonly Skipped[]"
+      ],
+      "factories": [
+        "static of(values: readonly Skipped[]): Skips"
+      ]
+    },
+    {
+      "name": "SourceIdentifiers",
+      "path": "src/refcheck/domain/source-identifiers.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly SourceIdentifier[];"
+      ],
+      "methods": [
+        "static of(values: readonly SourceIdentifier[]): SourceIdentifiers",
+        "add(value: SourceIdentifier): SourceIdentifiers",
+        "*[Symbol.iterator](): Iterator<SourceIdentifier>",
+        "valuesMissingFrom(known: RequirementIdentifiers): string[]",
+        "toArray(): readonly SourceIdentifier[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: SourceIdentifier): SourceIdentifiers",
+        "*[Symbol.iterator](): Iterator<SourceIdentifier>",
+        "valuesMissingFrom(known: RequirementIdentifiers): string[]",
+        "toArray(): readonly SourceIdentifier[]"
+      ],
+      "factories": [
+        "static of(values: readonly SourceIdentifier[]): SourceIdentifiers"
+      ]
+    },
+    {
+      "name": "SpecificationBlockAssessments",
+      "path": "src/refcheck/domain/specification-block-assessments.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly SpecificationBlockAssessment[];"
+      ],
+      "methods": [
+        "static of(values: readonly SpecificationBlockAssessment[]): SpecificationBlockAssessments",
+        "add(value: SpecificationBlockAssessment): SpecificationBlockAssessments",
+        "*[Symbol.iterator](): Iterator<SpecificationBlockAssessment>",
+        "toArray(): readonly SpecificationBlockAssessment[]",
+        "check(report: ReferenceCheckReport, artifact: ArtifactPath): void"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: SpecificationBlockAssessment): SpecificationBlockAssessments",
+        "*[Symbol.iterator](): Iterator<SpecificationBlockAssessment>",
+        "toArray(): readonly SpecificationBlockAssessment[]",
+        "check(report: ReferenceCheckReport, artifact: ArtifactPath): void"
+      ],
+      "factories": [
+        "static of(values: readonly SpecificationBlockAssessment[]): SpecificationBlockAssessments"
+      ]
+    },
+    {
+      "name": "StateMachineSketches",
+      "path": "src/refcheck/domain/state-machine-sketches.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly StateMachineSketch[];"
+      ],
+      "methods": [
+        "static of(values: readonly StateMachineSketch[]): StateMachineSketches",
+        "add(value: StateMachineSketch): StateMachineSketches",
+        "*[Symbol.iterator](): Iterator<StateMachineSketch>",
+        "isEmpty(): boolean",
+        "toArray(): readonly StateMachineSketch[]",
+        "check(\n    report: ReferenceCheckReport,\n    specArtifact: ArtifactPath,\n    entitiesArtifact: ArtifactPath,\n    entities: DeclaredEntities,\n  ): void"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": true,
+      "publicInstanceMethods": [
+        "add(value: StateMachineSketch): StateMachineSketches",
+        "*[Symbol.iterator](): Iterator<StateMachineSketch>",
+        "isEmpty(): boolean",
+        "toArray(): readonly StateMachineSketch[]",
+        "check(\n    report: ReferenceCheckReport,\n    specArtifact: ArtifactPath,\n    entitiesArtifact: ArtifactPath,\n    entities: DeclaredEntities,\n  ): void"
+      ],
+      "factories": [
+        "static of(values: readonly StateMachineSketch[]): StateMachineSketches"
+      ]
+    },
+    {
+      "name": "StateNames",
+      "path": "src/refcheck/domain/state-names.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly StateName[];"
+      ],
+      "methods": [
+        "static of(values: readonly StateName[]): StateNames",
+        "add(value: StateName): StateNames",
+        "*[Symbol.iterator](): Iterator<StateName>",
+        "toArray(): readonly StateName[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: StateName): StateNames",
+        "*[Symbol.iterator](): Iterator<StateName>",
+        "toArray(): readonly StateName[]"
+      ],
+      "factories": [
+        "static of(values: readonly StateName[]): StateNames"
+      ]
+    },
+    {
+      "name": "UnitDeclarations",
+      "path": "src/refcheck/domain/unit-declarations.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly UnitDeclaration[];"
+      ],
+      "methods": [
+        "static of(values: readonly UnitDeclaration[]): UnitDeclarations",
+        "add(value: UnitDeclaration): UnitDeclarations",
+        "*[Symbol.iterator](): Iterator<UnitDeclaration>",
+        "declares(value: string): boolean",
+        "names(): UnitNames",
+        "sortedByName(): UnitDeclarations",
+        "toArray(): readonly UnitDeclaration[]",
+        "checkEdgesCovered(\n    rows: ContractRows,\n    report: ReferenceCheckReport,\n    artifact: ArtifactPath,\n    depArtifact: ArtifactPath,\n  ): void"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: UnitDeclaration): UnitDeclarations",
+        "*[Symbol.iterator](): Iterator<UnitDeclaration>",
+        "declares(value: string): boolean",
+        "names(): UnitNames",
+        "sortedByName(): UnitDeclarations",
+        "toArray(): readonly UnitDeclaration[]",
+        "checkEdgesCovered(\n    rows: ContractRows,\n    report: ReferenceCheckReport,\n    artifact: ArtifactPath,\n    depArtifact: ArtifactPath,\n  ): void"
+      ],
+      "factories": [
+        "static of(values: readonly UnitDeclaration[]): UnitDeclarations"
+      ]
+    },
+    {
+      "name": "UnitNames",
+      "path": "src/refcheck/domain/unit-names.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly UnitName[];"
+      ],
+      "methods": [
+        "static of(values: readonly UnitName[]): UnitNames",
+        "add(value: UnitName): UnitNames",
+        "*[Symbol.iterator](): Iterator<UnitName>",
+        "declares(value: string): boolean",
+        "sortedByValue(): UnitNames",
+        "toArray(): readonly UnitName[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: UnitName): UnitNames",
+        "*[Symbol.iterator](): Iterator<UnitName>",
+        "declares(value: string): boolean",
+        "sortedByValue(): UnitNames",
+        "toArray(): readonly UnitName[]"
+      ],
+      "factories": [
+        "static of(values: readonly UnitName[]): UnitNames"
+      ]
+    },
+    {
+      "name": "WitnessReferences",
+      "path": "src/refcheck/domain/witness-references.ts",
+      "context": "refcheck",
+      "fields": [
+        "readonly #values: readonly WitnessReference[];"
+      ],
+      "methods": [
+        "static of(values: readonly WitnessReference[]): WitnessReferences",
+        "add(value: WitnessReference): WitnessReferences",
+        "*[Symbol.iterator](): Iterator<WitnessReference>",
+        "toArray(): readonly WitnessReference[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: WitnessReference): WitnessReferences",
+        "*[Symbol.iterator](): Iterator<WitnessReference>",
+        "toArray(): readonly WitnessReference[]"
+      ],
+      "factories": [
+        "static of(values: readonly WitnessReference[]): WitnessReferences"
+      ]
+    },
+    {
+      "name": "BackgroundAssumptions",
+      "path": "src/requirements/domain/background-assumptions.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly BackgroundAssumption[];"
+      ],
+      "methods": [
+        "static of(values: readonly BackgroundAssumption[]): BackgroundAssumptions",
+        "add(value: BackgroundAssumption): BackgroundAssumptions",
+        "*[Symbol.iterator](): Iterator<BackgroundAssumption>",
+        "toArray(): readonly BackgroundAssumption[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: BackgroundAssumption): BackgroundAssumptions",
+        "*[Symbol.iterator](): Iterator<BackgroundAssumption>",
+        "toArray(): readonly BackgroundAssumption[]"
+      ],
+      "factories": [
+        "static of(values: readonly BackgroundAssumption[]): BackgroundAssumptions"
+      ]
+    },
+    {
+      "name": "CrossCheckedEntries",
+      "path": "src/requirements/domain/cross-checked-entries.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly CrossCheckedEntry[];"
+      ],
+      "methods": [
+        "static of(values: readonly CrossCheckedEntry[]): CrossCheckedEntries",
+        "add(value: CrossCheckedEntry): CrossCheckedEntries",
+        "*[Symbol.iterator](): Iterator<CrossCheckedEntry>",
+        "toArray(): readonly CrossCheckedEntry[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: CrossCheckedEntry): CrossCheckedEntries",
+        "*[Symbol.iterator](): Iterator<CrossCheckedEntry>",
+        "toArray(): readonly CrossCheckedEntry[]"
+      ],
+      "factories": [
+        "static of(values: readonly CrossCheckedEntry[]): CrossCheckedEntries"
+      ]
+    },
+    {
+      "name": "FunctionalRequirementReferenceClaims",
+      "path": "src/requirements/domain/functional-requirement-reference-claims.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly FunctionalRequirementReferenceClaim[];"
+      ],
+      "methods": [
+        "static of(values: readonly FunctionalRequirementReferenceClaim[]): FunctionalRequirementReferenceClaims",
+        "add(value: FunctionalRequirementReferenceClaim): FunctionalRequirementReferenceClaims",
+        "*[Symbol.iterator](): Iterator<FunctionalRequirementReferenceClaim>",
+        "ownerDescriptions(): string[]",
+        "toArray(): readonly FunctionalRequirementReferenceClaim[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: FunctionalRequirementReferenceClaim): FunctionalRequirementReferenceClaims",
+        "*[Symbol.iterator](): Iterator<FunctionalRequirementReferenceClaim>",
+        "ownerDescriptions(): string[]",
+        "toArray(): readonly FunctionalRequirementReferenceClaim[]"
+      ],
+      "factories": [
+        "static of(values: readonly FunctionalRequirementReferenceClaim[]): FunctionalRequirementReferenceClaims"
+      ]
+    },
+    {
+      "name": "FunctionalRequirementReferenceIndex",
+      "path": "src/requirements/domain/functional-requirement-reference-index.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #ownersByRef: KeyedIndex<RequirementIdentifier, FunctionalRequirementReferenceClaims>;"
+      ],
+      "methods": [
+        "static of(claims: readonly FunctionalRequirementReferenceClaim[]): FunctionalRequirementReferenceIndex",
+        "referencedIds(): string[]",
+        "missingErrors(known: RequirementIdentifiers): string[]"
+      ],
+      "iterable": false,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "referencedIds(): string[]",
+        "missingErrors(known: RequirementIdentifiers): string[]"
+      ],
+      "factories": [
+        "static of(claims: readonly FunctionalRequirementReferenceClaim[]): FunctionalRequirementReferenceIndex"
+      ]
+    },
+    {
+      "name": "IntermediateRepresentationAttributeCatalog",
+      "path": "src/requirements/domain/intermediate-representation-attribute-catalog.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #byPath: KeyedIndex<AttributePath, IntermediateRepresentationAttributeDeclaration>;"
+      ],
+      "methods": [
+        "#attributeAt(path: string): IntermediateRepresentationAttributeDeclaration | undefined",
+        "static of(declarations: IntermediateRepresentationEntityDeclarations): IntermediateRepresentationAttributeCatalog",
+        "static parse(\n    declarations: IntermediateRepresentationEntityDeclarations,\n  ): Result<IntermediateRepresentationAttributeCatalog, ParseError>",
+        "diagnostics(): ErrorMessages",
+        "expressionDiagnostics(expression: Expression, where: string, primesAllowed: boolean): ErrorMessages",
+        "bindingDiagnostics(bindings: DeclaredBindings, context: string): ErrorMessages"
+      ],
+      "iterable": false,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "diagnostics(): ErrorMessages",
+        "expressionDiagnostics(expression: Expression, where: string, primesAllowed: boolean): ErrorMessages",
+        "bindingDiagnostics(bindings: DeclaredBindings, context: string): ErrorMessages"
+      ],
+      "factories": [
+        "static of(declarations: IntermediateRepresentationEntityDeclarations): IntermediateRepresentationAttributeCatalog",
+        "static parse(\n    declarations: IntermediateRepresentationEntityDeclarations,\n  ): Result<IntermediateRepresentationAttributeCatalog, ParseError>"
+      ],
+      "contractNote": "isEmptyは属性pathが0件。属性のないentity宣言の存在とは分ける。"
+    },
+    {
+      "name": "IntermediateRepresentationAttributeDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-attribute-declarations.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly IntermediateRepresentationAttributeDeclaration[];"
+      ],
+      "methods": [
+        "static of(\n    values: readonly IntermediateRepresentationAttributeDeclaration[],\n  ): IntermediateRepresentationAttributeDeclarations",
+        "add(value: IntermediateRepresentationAttributeDeclaration): IntermediateRepresentationAttributeDeclarations",
+        "*[Symbol.iterator](): Iterator<IntermediateRepresentationAttributeDeclaration>",
+        "toArray(): readonly IntermediateRepresentationAttributeDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: IntermediateRepresentationAttributeDeclaration): IntermediateRepresentationAttributeDeclarations",
+        "*[Symbol.iterator](): Iterator<IntermediateRepresentationAttributeDeclaration>",
+        "toArray(): readonly IntermediateRepresentationAttributeDeclaration[]"
+      ],
+      "factories": [
+        "static of(\n    values: readonly IntermediateRepresentationAttributeDeclaration[],\n  ): IntermediateRepresentationAttributeDeclarations"
+      ]
+    },
+    {
+      "name": "IntermediateRepresentationBackgroundDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-background-declarations.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly IntermediateRepresentationBackgroundDeclaration[];"
+      ],
+      "methods": [
+        "static of(\n    values: readonly IntermediateRepresentationBackgroundDeclaration[],\n  ): IntermediateRepresentationBackgroundDeclarations",
+        "add(value: IntermediateRepresentationBackgroundDeclaration): IntermediateRepresentationBackgroundDeclarations",
+        "*[Symbol.iterator](): Iterator<IntermediateRepresentationBackgroundDeclaration>",
+        "toArray(): readonly IntermediateRepresentationBackgroundDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: IntermediateRepresentationBackgroundDeclaration): IntermediateRepresentationBackgroundDeclarations",
+        "*[Symbol.iterator](): Iterator<IntermediateRepresentationBackgroundDeclaration>",
+        "toArray(): readonly IntermediateRepresentationBackgroundDeclaration[]"
+      ],
+      "factories": [
+        "static of(\n    values: readonly IntermediateRepresentationBackgroundDeclaration[],\n  ): IntermediateRepresentationBackgroundDeclarations"
+      ]
+    },
+    {
+      "name": "IntermediateRepresentationEntityDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-entity-declarations.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly IntermediateRepresentationEntityDeclaration[];"
+      ],
+      "methods": [
+        "static of(\n    values: readonly IntermediateRepresentationEntityDeclaration[],\n  ): IntermediateRepresentationEntityDeclarations",
+        "add(value: IntermediateRepresentationEntityDeclaration): IntermediateRepresentationEntityDeclarations",
+        "*[Symbol.iterator](): Iterator<IntermediateRepresentationEntityDeclaration>",
+        "#inspect(\n    entityFound: (entity: IntermediateRepresentationEntityDeclaration, duplicate: boolean) => void,\n    attributeFound: (\n      coordinate: string,\n      attribute: IntermediateRepresentationAttributeDeclaration,\n      duplicate: boolean,\n    ) => void,\n  ): void",
+        "hasAmbiguousAttributes(): boolean",
+        "diagnostics(): ErrorMessages",
+        "toArray(): readonly IntermediateRepresentationEntityDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: IntermediateRepresentationEntityDeclaration): IntermediateRepresentationEntityDeclarations",
+        "*[Symbol.iterator](): Iterator<IntermediateRepresentationEntityDeclaration>",
+        "hasAmbiguousAttributes(): boolean",
+        "diagnostics(): ErrorMessages",
+        "toArray(): readonly IntermediateRepresentationEntityDeclaration[]"
+      ],
+      "factories": [
+        "static of(\n    values: readonly IntermediateRepresentationEntityDeclaration[],\n  ): IntermediateRepresentationEntityDeclarations"
+      ]
+    },
+    {
+      "name": "IntermediateRepresentationObligationDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-obligation-declarations.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly IntermediateRepresentationObligationDeclaration[];"
+      ],
+      "methods": [
+        "static of(\n    values: readonly IntermediateRepresentationObligationDeclaration[],\n  ): IntermediateRepresentationObligationDeclarations",
+        "add(value: IntermediateRepresentationObligationDeclaration): IntermediateRepresentationObligationDeclarations",
+        "*[Symbol.iterator](): Iterator<IntermediateRepresentationObligationDeclaration>",
+        "toArray(): readonly IntermediateRepresentationObligationDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: IntermediateRepresentationObligationDeclaration): IntermediateRepresentationObligationDeclarations",
+        "*[Symbol.iterator](): Iterator<IntermediateRepresentationObligationDeclaration>",
+        "toArray(): readonly IntermediateRepresentationObligationDeclaration[]"
+      ],
+      "factories": [
+        "static of(\n    values: readonly IntermediateRepresentationObligationDeclaration[],\n  ): IntermediateRepresentationObligationDeclarations"
+      ]
+    },
+    {
+      "name": "IntermediateRepresentationScenarioDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-scenario-declarations.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly IntermediateRepresentationScenarioDeclaration[];"
+      ],
+      "methods": [
+        "static of(\n    values: readonly IntermediateRepresentationScenarioDeclaration[],\n  ): IntermediateRepresentationScenarioDeclarations",
+        "add(value: IntermediateRepresentationScenarioDeclaration): IntermediateRepresentationScenarioDeclarations",
+        "*[Symbol.iterator](): Iterator<IntermediateRepresentationScenarioDeclaration>",
+        "toArray(): readonly IntermediateRepresentationScenarioDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: IntermediateRepresentationScenarioDeclaration): IntermediateRepresentationScenarioDeclarations",
+        "*[Symbol.iterator](): Iterator<IntermediateRepresentationScenarioDeclaration>",
+        "toArray(): readonly IntermediateRepresentationScenarioDeclaration[]"
+      ],
+      "factories": [
+        "static of(\n    values: readonly IntermediateRepresentationScenarioDeclaration[],\n  ): IntermediateRepresentationScenarioDeclarations"
+      ]
+    },
+    {
+      "name": "ObligationIdentifiers",
+      "path": "src/requirements/domain/obligation-identifiers.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly ObligationIdentifier[];"
+      ],
+      "methods": [
+        "static of(values: readonly ObligationIdentifier[]): ObligationIdentifiers",
+        "add(value: ObligationIdentifier): ObligationIdentifiers",
+        "*[Symbol.iterator](): Iterator<ObligationIdentifier>",
+        "isEmpty(): boolean",
+        "toStrings(): string[]",
+        "toTargetIds(): TargetIdentifiers"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": true,
+      "publicInstanceMethods": [
+        "add(value: ObligationIdentifier): ObligationIdentifiers",
+        "*[Symbol.iterator](): Iterator<ObligationIdentifier>",
+        "isEmpty(): boolean",
+        "toStrings(): string[]",
+        "toTargetIds(): TargetIdentifiers"
+      ],
+      "factories": [
+        "static of(values: readonly ObligationIdentifier[]): ObligationIdentifiers"
+      ]
+    },
+    {
+      "name": "Obligations",
+      "path": "src/requirements/domain/obligations.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly Obligation[];"
+      ],
+      "methods": [
+        "static of(values: readonly Obligation[]): Obligations",
+        "add(value: Obligation): Obligations",
+        "*[Symbol.iterator](): Iterator<Obligation>",
+        "compiledInvariantTargets(compiled: KeySet<ObligationIdentifier>): TargetIdentifiers",
+        "byId(id: string): Obligation | undefined",
+        "ids(): readonly string[]",
+        "toArray(): readonly Obligation[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: Obligation): Obligations",
+        "*[Symbol.iterator](): Iterator<Obligation>",
+        "compiledInvariantTargets(compiled: KeySet<ObligationIdentifier>): TargetIdentifiers",
+        "byId(id: string): Obligation | undefined",
+        "ids(): readonly string[]",
+        "toArray(): readonly Obligation[]"
+      ],
+      "factories": [
+        "static of(values: readonly Obligation[]): Obligations"
+      ]
+    },
+    {
+      "name": "QuintMachineComponents",
+      "path": "src/requirements/domain/quint-machine-components.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly QuintMachineComponent[];"
+      ],
+      "methods": [
+        "static of(values: readonly QuintMachineComponent[]): QuintMachineComponents",
+        "add(value: QuintMachineComponent): QuintMachineComponents",
+        "*[Symbol.iterator](): Iterator<QuintMachineComponent>",
+        "isEmpty(): boolean",
+        "ids(): ObligationIdentifiers",
+        "violatedBy(state: TraceState): QuintMachineComponents",
+        "toArray(): readonly QuintMachineComponent[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": true,
+      "publicInstanceMethods": [
+        "add(value: QuintMachineComponent): QuintMachineComponents",
+        "*[Symbol.iterator](): Iterator<QuintMachineComponent>",
+        "isEmpty(): boolean",
+        "ids(): ObligationIdentifiers",
+        "violatedBy(state: TraceState): QuintMachineComponents",
+        "toArray(): readonly QuintMachineComponent[]"
+      ],
+      "factories": [
+        "static of(values: readonly QuintMachineComponent[]): QuintMachineComponents"
+      ]
+    },
+    {
+      "name": "QuintMachinePlan",
+      "path": "src/requirements/domain/quint-machine-plan.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #invariantComponents: QuintMachineComponents;",
+        "readonly #eventIds: ObligationIdentifiers;",
+        "readonly #scenariosWithInit: KeySet<ScenarioIdentifier>;"
+      ],
+      "methods": [
+        "static of(seed: {\n    readonly invariantComponents: QuintMachineComponents;\n    readonly eventIds: ObligationIdentifiers;\n    readonly scenariosWithInit: readonly ScenarioIdentifier[];\n  }): QuintMachinePlan",
+        "machineTargets(): TargetIdentifiers",
+        "#hasInitFor(id: ScenarioIdentifier): boolean",
+        "interpret(\n    model: RequirementsModel,\n    compileSkips: VerificationSkips,\n    method: VerificationMethod,\n    runs: QuintRuns,\n  ): { findings: VerificationFindings; skipped: VerificationSkips }"
+      ],
+      "iterable": false,
+      "classification": "excluded-composite",
+      "reason": "execution-plan: invariantComponents/eventIds/scenariosWithInitを束ねる。",
+      "publicInstanceMethods": [
+        "machineTargets(): TargetIdentifiers",
+        "interpret(\n    model: RequirementsModel,\n    compileSkips: VerificationSkips,\n    method: VerificationMethod,\n    runs: QuintRuns,\n  ): { findings: VerificationFindings; skipped: VerificationSkips }"
+      ],
+      "factories": [
+        "static of(seed: {\n    readonly invariantComponents: QuintMachineComponents;\n    readonly eventIds: ObligationIdentifiers;\n    readonly scenariosWithInit: readonly ScenarioIdentifier[];\n  }): QuintMachinePlan"
+      ]
+    },
+    {
+      "name": "QuintRuns",
+      "path": "src/requirements/domain/quint-runs.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #machine: QuintMachineRunVerdict;",
+        "readonly #temporals: KeyedIndex<ObligationIdentifier, QuintTemporalVerdict>;",
+        "readonly #scenarios: KeyedIndex<ScenarioIdentifier, QuintScenarioVerdict>;"
+      ],
+      "methods": [
+        "static of(seed: {\n    readonly machine: QuintMachineRunVerdict | null;\n    readonly temporals: KeyedIndex<ObligationIdentifier, QuintTemporalVerdict>;\n    readonly scenarios: KeyedIndex<ScenarioIdentifier, QuintScenarioVerdict>;\n  }): QuintRuns",
+        "machineRun(): QuintMachineRunVerdict",
+        "temporalOf(obligationId: ObligationIdentifier): QuintTemporalVerdict | undefined",
+        "scenarioOf(scenarioId: ScenarioIdentifier): QuintScenarioVerdict | undefined"
+      ],
+      "iterable": false,
+      "classification": "excluded-composite",
+      "reason": "composite-result: 一つのmachine判定とtemporal/scenario判定群を束ねる。",
+      "publicInstanceMethods": [
+        "machineRun(): QuintMachineRunVerdict",
+        "temporalOf(obligationId: ObligationIdentifier): QuintTemporalVerdict | undefined",
+        "scenarioOf(scenarioId: ScenarioIdentifier): QuintScenarioVerdict | undefined"
+      ],
+      "factories": [
+        "static of(seed: {\n    readonly machine: QuintMachineRunVerdict | null;\n    readonly temporals: KeyedIndex<ObligationIdentifier, QuintTemporalVerdict>;\n    readonly scenarios: KeyedIndex<ScenarioIdentifier, QuintScenarioVerdict>;\n  }): QuintRuns"
+      ]
+    },
+    {
+      "name": "RequirementAttributeDeclarations",
+      "path": "src/requirements/domain/requirement-attribute-declarations.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly RequirementAttributeDeclaration[];",
+        "readonly #byPath: KeyedIndex<AttributePath, RequirementAttributeDeclaration>;"
+      ],
+      "methods": [
+        "static of(values: readonly RequirementAttributeDeclaration[]): RequirementAttributeDeclarations",
+        "add(value: RequirementAttributeDeclaration): RequirementAttributeDeclarations",
+        "*[Symbol.iterator](): Iterator<RequirementAttributeDeclaration>",
+        "byPath(path: AttributePath): RequirementAttributeDeclaration | undefined",
+        "sortedByPath(): RequirementAttributeDeclarations",
+        "toArray(): readonly RequirementAttributeDeclaration[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: RequirementAttributeDeclaration): RequirementAttributeDeclarations",
+        "*[Symbol.iterator](): Iterator<RequirementAttributeDeclaration>",
+        "byPath(path: AttributePath): RequirementAttributeDeclaration | undefined",
+        "sortedByPath(): RequirementAttributeDeclarations",
+        "toArray(): readonly RequirementAttributeDeclaration[]"
+      ],
+      "factories": [
+        "static of(values: readonly RequirementAttributeDeclaration[]): RequirementAttributeDeclarations"
+      ]
+    },
+    {
+      "name": "SatisfiabilityModuloTheoriesEventPairProbes",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-event-pair-probes.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly SatisfiabilityModuloTheoriesEventPairProbe[];"
+      ],
+      "methods": [
+        "static of(\n    values: readonly SatisfiabilityModuloTheoriesEventPairProbe[],\n  ): SatisfiabilityModuloTheoriesEventPairProbes",
+        "add(value: SatisfiabilityModuloTheoriesEventPairProbe): SatisfiabilityModuloTheoriesEventPairProbes",
+        "*[Symbol.iterator](): Iterator<SatisfiabilityModuloTheoriesEventPairProbe>",
+        "toArray(): readonly SatisfiabilityModuloTheoriesEventPairProbe[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: SatisfiabilityModuloTheoriesEventPairProbe): SatisfiabilityModuloTheoriesEventPairProbes",
+        "*[Symbol.iterator](): Iterator<SatisfiabilityModuloTheoriesEventPairProbe>",
+        "toArray(): readonly SatisfiabilityModuloTheoriesEventPairProbe[]"
+      ],
+      "factories": [
+        "static of(\n    values: readonly SatisfiabilityModuloTheoriesEventPairProbe[],\n  ): SatisfiabilityModuloTheoriesEventPairProbes"
+      ]
+    },
+    {
+      "name": "SatisfiabilityModuloTheoriesQueryVerdict",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-query-verdict.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #status: SatisfiabilityModuloTheoriesQueryStatus;",
+        "readonly #decodedModel: { [path: string]: boolean | number | string } | undefined;",
+        "readonly #core: readonly QueryLabel[] | undefined;"
+      ],
+      "methods": [
+        "static parse(\n    props: SatisfiabilityModuloTheoriesQueryVerdictParam,\n  ): Result<SatisfiabilityModuloTheoriesQueryVerdict, ParseError>",
+        "static of(props: SatisfiabilityModuloTheoriesQueryVerdictParam): SatisfiabilityModuloTheoriesQueryVerdict",
+        "static missing(): SatisfiabilityModuloTheoriesQueryVerdict",
+        "isMissing(): boolean",
+        "skipsFor(targets: TargetIdentifiers, what: string): VerificationSkips",
+        "isSat(): boolean",
+        "isUnsat(): boolean",
+        "isUndecided(): boolean",
+        "coreLabels(): readonly QueryLabel[]",
+        "sortedCore(): string[]",
+        "witnessModel(): { [path: string]: boolean | number | string }"
+      ],
+      "iterable": false,
+      "classification": "excluded-composite",
+      "reason": "verdict: status/decodedModel/coreの判定値。core配列は付帯情報。",
+      "publicInstanceMethods": [
+        "isMissing(): boolean",
+        "skipsFor(targets: TargetIdentifiers, what: string): VerificationSkips",
+        "isSat(): boolean",
+        "isUnsat(): boolean",
+        "isUndecided(): boolean",
+        "coreLabels(): readonly QueryLabel[]",
+        "sortedCore(): string[]",
+        "witnessModel(): { [path: string]: boolean | number | string }"
+      ],
+      "factories": [
+        "static parse(\n    props: SatisfiabilityModuloTheoriesQueryVerdictParam,\n  ): Result<SatisfiabilityModuloTheoriesQueryVerdict, ParseError>",
+        "static of(props: SatisfiabilityModuloTheoriesQueryVerdictParam): SatisfiabilityModuloTheoriesQueryVerdict",
+        "static missing(): SatisfiabilityModuloTheoriesQueryVerdict"
+      ]
+    },
+    {
+      "name": "SatisfiabilityModuloTheoriesQueryVerdicts",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-query-verdicts.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: KeyedIndex<QueryLabel, SatisfiabilityModuloTheoriesQueryVerdict>;"
+      ],
+      "methods": [
+        "static of(\n    values: KeyedIndex<QueryLabel, SatisfiabilityModuloTheoriesQueryVerdict>,\n  ): SatisfiabilityModuloTheoriesQueryVerdicts",
+        "verdictOf(queryId: QueryLabel): SatisfiabilityModuloTheoriesQueryVerdict"
+      ],
+      "iterable": false,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "verdictOf(queryId: QueryLabel): SatisfiabilityModuloTheoriesQueryVerdict"
+      ],
+      "factories": [
+        "static of(\n    values: KeyedIndex<QueryLabel, SatisfiabilityModuloTheoriesQueryVerdict>,\n  ): SatisfiabilityModuloTheoriesQueryVerdicts"
+      ]
+    },
+    {
+      "name": "SatisfiabilityModuloTheoriesVerificationPlan",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-verification-plan.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #compiled: KeySet<ObligationIdentifier>;",
+        "readonly #vacuityQueries: KeyedIndex<ObligationIdentifier, QueryLabel>;",
+        "readonly #skipped: VerificationSkips;",
+        "readonly #labelToTarget: KeyedIndex<QueryLabel, TargetIdentifier>;",
+        "readonly #eventPairs: SatisfiabilityModuloTheoriesEventPairProbes;",
+        "readonly #gapTriggers: KeyedIndex<TriggerName, TargetIdentifiers>;",
+        "readonly #scenarioQueries: KeyedIndex<ScenarioIdentifier, QueryLabel>;"
+      ],
+      "methods": [
+        "static of(seed: SatisfiabilityModuloTheoriesVerificationPlanParam): SatisfiabilityModuloTheoriesVerificationPlan",
+        "planSkipped(): VerificationSkips",
+        "interpret(\n    model: RequirementsModel,\n    results: SatisfiabilityModuloTheoriesQueryVerdicts,\n  ): { findings: VerificationFindings; skipped: VerificationSkips }"
+      ],
+      "iterable": false,
+      "classification": "excluded-composite",
+      "reason": "execution-plan: compiled,query maps,skips,eventPairsを束ねる。",
+      "publicInstanceMethods": [
+        "planSkipped(): VerificationSkips",
+        "interpret(\n    model: RequirementsModel,\n    results: SatisfiabilityModuloTheoriesQueryVerdicts,\n  ): { findings: VerificationFindings; skipped: VerificationSkips }"
+      ],
+      "factories": [
+        "static of(seed: SatisfiabilityModuloTheoriesVerificationPlanParam): SatisfiabilityModuloTheoriesVerificationPlan"
+      ]
+    },
+    {
+      "name": "Scenarios",
+      "path": "src/requirements/domain/scenarios.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly Scenario[];"
+      ],
+      "methods": [
+        "static of(values: readonly Scenario[]): Scenarios",
+        "add(value: Scenario): Scenarios",
+        "*[Symbol.iterator](): Iterator<Scenario>",
+        "byId(id: string): Scenario | undefined",
+        "ids(): readonly string[]",
+        "toArray(): readonly Scenario[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: Scenario): Scenarios",
+        "*[Symbol.iterator](): Iterator<Scenario>",
+        "byId(id: string): Scenario | undefined",
+        "ids(): readonly string[]",
+        "toArray(): readonly Scenario[]"
+      ],
+      "factories": [
+        "static of(values: readonly Scenario[]): Scenarios"
+      ]
+    },
+    {
+      "name": "TraceState",
+      "path": "src/requirements/domain/trace-state.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: KeyedIndex<AttributePath, TraceValue>;"
+      ],
+      "methods": [
+        "static empty(): TraceState",
+        "static fromBindings(bindings: ScenarioBindings): TraceState",
+        "static of(entries: Iterable<readonly [AttributePath, TraceValue]>): TraceState",
+        "valueAt(path: AttributePath): TraceValue",
+        "toDocument(): { [path: string]: ReturnType<TraceValue[\"toDocument\"]> }"
+      ],
+      "iterable": false,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "valueAt(path: AttributePath): TraceValue",
+        "toDocument(): { [path: string]: ReturnType<TraceValue[\"toDocument\"]> }"
+      ],
+      "factories": [
+        "static empty(): TraceState",
+        "static fromBindings(bindings: ScenarioBindings): TraceState",
+        "static of(entries: Iterable<readonly [AttributePath, TraceValue]>): TraceState"
+      ],
+      "contractNote": "状態をAttributePath→TraceValueというドメイン固有対応表として扱うためFCCに含めた。traceの1状態であること自体を理由にaggregateとはしない。"
+    },
+    {
+      "name": "TraceStates",
+      "path": "src/requirements/domain/trace-states.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly TraceState[];"
+      ],
+      "methods": [
+        "static of(values: readonly TraceState[]): TraceStates",
+        "add(value: TraceState): TraceStates",
+        "*[Symbol.iterator](): Iterator<TraceState>",
+        "finalState(): TraceState",
+        "toArray(): TraceState[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: TraceState): TraceStates",
+        "*[Symbol.iterator](): Iterator<TraceState>",
+        "finalState(): TraceState",
+        "toArray(): TraceState[]"
+      ],
+      "factories": [
+        "static of(values: readonly TraceState[]): TraceStates"
+      ]
+    },
+    {
+      "name": "VerificationFindings",
+      "path": "src/requirements/domain/verification-findings.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly VerificationFinding[];"
+      ],
+      "methods": [
+        "static of(values: readonly VerificationFinding[]): VerificationFindings",
+        "add(value: VerificationFinding): VerificationFindings",
+        "*[Symbol.iterator](): Iterator<VerificationFinding>",
+        "sortedCanonically(): VerificationFindings",
+        "count(): number",
+        "isEmpty(): boolean",
+        "distinctConflicts(): VerificationFindings",
+        "toArray(): readonly VerificationFinding[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": true,
+      "publicInstanceMethods": [
+        "add(value: VerificationFinding): VerificationFindings",
+        "*[Symbol.iterator](): Iterator<VerificationFinding>",
+        "sortedCanonically(): VerificationFindings",
+        "count(): number",
+        "isEmpty(): boolean",
+        "distinctConflicts(): VerificationFindings",
+        "toArray(): readonly VerificationFinding[]"
+      ],
+      "factories": [
+        "static of(values: readonly VerificationFinding[]): VerificationFindings"
+      ]
+    },
+    {
+      "name": "VerificationReports",
+      "path": "src/requirements/domain/verification-reports.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly VerificationReport[];"
+      ],
+      "methods": [
+        "static of(values: readonly VerificationReport[]): VerificationReports",
+        "add(value: VerificationReport): VerificationReports",
+        "*[Symbol.iterator](): Iterator<VerificationReport>",
+        "toArray(): readonly VerificationReport[]",
+        "crossChecked(id: VerificationReportIdentifier, model: RequirementsModel, irHash: ContentHash): VerificationReport"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: VerificationReport): VerificationReports",
+        "*[Symbol.iterator](): Iterator<VerificationReport>",
+        "toArray(): readonly VerificationReport[]",
+        "crossChecked(id: VerificationReportIdentifier, model: RequirementsModel, irHash: ContentHash): VerificationReport"
+      ],
+      "factories": [
+        "static of(values: readonly VerificationReport[]): VerificationReports"
+      ]
+    },
+    {
+      "name": "VerificationSkips",
+      "path": "src/requirements/domain/verification-skips.ts",
+      "context": "requirements",
+      "fields": [
+        "readonly #values: readonly VerificationSkipped[];"
+      ],
+      "methods": [
+        "static of(values: readonly VerificationSkipped[]): VerificationSkips",
+        "add(value: VerificationSkipped): VerificationSkips",
+        "concat(other: VerificationSkips): VerificationSkips",
+        "*[Symbol.iterator](): Iterator<VerificationSkipped>",
+        "sortedCanonically(): VerificationSkips",
+        "count(): number",
+        "toArray(): readonly VerificationSkipped[]"
+      ],
+      "iterable": true,
+      "classification": "first-class-collection",
+      "reason": "ドメイン固有要素の集合/対応表を所有し、集合全体への操作を提供。",
+      "hasIsEmpty": false,
+      "publicInstanceMethods": [
+        "add(value: VerificationSkipped): VerificationSkips",
+        "concat(other: VerificationSkips): VerificationSkips",
+        "*[Symbol.iterator](): Iterator<VerificationSkipped>",
+        "sortedCanonically(): VerificationSkips",
+        "count(): number",
+        "toArray(): readonly VerificationSkipped[]"
+      ],
+      "factories": [
+        "static of(values: readonly VerificationSkipped[]): VerificationSkips"
+      ]
+    }
+  ],
+  "remainingClassNames": [
+    "AttributeCoverage",
+    "AttributeMapping",
+    "BusinessRuleReference",
+    "DesignAttributeDeclaration",
+    "DesignAttributeName",
+    "DesignBackgroundAssumption",
+    "DesignBackgroundDeclaration",
+    "DesignBackgroundIdentifier",
+    "DesignCrossCheckedEntry",
+    "DesignEntityDeclaration",
+    "DesignEntityName",
+    "DesignEventRule",
+    "DesignFinding",
+    "DesignIgnoreDeclaration",
+    "DesignIgnore",
+    "DesignInputAnchor",
+    "DesignIntermediateRepresentationValidationMaterialsIdentifier",
+    "DesignIntermediateRepresentationValidationMaterials",
+    "DesignMachineDeclaration",
+    "DesignMachineIdentifier",
+    "DesignMachine",
+    "DesignModelIdentifier",
+    "DesignObligationDeclaration",
+    "DesignObligationIdentifier",
+    "DesignObligationOrigin",
+    "DesignObligation",
+    "DesignReportIdentifier",
+    "DesignReport",
+    "DesignScenarioDeclaration",
+    "DesignScenarioIdentifier",
+    "DesignScenario",
+    "DesignSkipped",
+    "DesignTransitionDeclaration",
+    "DesignTransitionIdentifier",
+    "DesignTransition",
+    "DesignUnitDeclaration",
+    "DesignUnitIdentifier",
+    "DesignUnit",
+    "DesignVerifyDirectory",
+    "DesignWitness",
+    "EventMapping",
+    "InitialState",
+    "LoweredBackground",
+    "LoweredIdentifier",
+    "LoweredObligation",
+    "LoweredOriginReference",
+    "LoweredOrigin",
+    "LoweredScenario",
+    "LoweredUnit",
+    "ReachabilityProbe",
+    "ReachabilityVerdict",
+    "RefinementAttribute",
+    "RefinementCheck",
+    "RefinementMapAcquisition",
+    "RefinementMapDefect",
+    "RefinementMapIdentifier",
+    "RefinementMap",
+    "RefinementMaterialsIdentifier",
+    "RefinementMaterials",
+    "RefinementObligation",
+    "RefinementProbe",
+    "RefinementQuintInvariant",
+    "RefinementRequirements",
+    "RefinementScenario",
+    "RefinementStatus",
+    "RefinementUnitMap",
+    "RuleSubsumptionProbe",
+    "RuleSubsumptionVerdict",
+    "RuleSubsumption",
+    "SiblingVerdictDocument",
+    "SiblingVerdictSkip",
+    "SiblingVerificationResult",
+    "TransitionReference",
+    "UnmappedTargetReference",
+    "UnmappedTarget",
+    "ArtifactModifiedAt",
+    "CheckSeverity",
+    "Check",
+    "CoverageState",
+    "DesignArtifactReference",
+    "DigestAnchor",
+    "FindingCount",
+    "FunctionalUnitObservation",
+    "InstallationProvenance",
+    "InstallationSource",
+    "InstalledRelease",
+    "InstalledStatus",
+    "IntentLocation",
+    "ManifestEntry",
+    "PluginVersion",
+    "ReleaseCatalog",
+    "SolverAvailability",
+    "StageScope",
+    "StructuralObservation",
+    "UnitCoverageProblem",
+    "VerificationObservation",
+    "VerificationStaleness",
+    "VersionAdvisory",
+    "ArtifactPath",
+    "AttributeBound",
+    "AttributeKind",
+    "AttributePath",
+    "BackendName",
+    "BindingDeclaration",
+    "BindingValue",
+    "ContentHash",
+    "Declaration",
+    "DeclaredBindingValue",
+    "DeclaredBound",
+    "DeclaredDigest",
+    "EnumerationMember",
+    "ErrorMessage",
+    "ExpressionTree",
+    "FindingKind",
+    "FindingsSchema",
+    "IntermediateRepresentationVersion",
+    "NormalizedName",
+    "ObligationNature",
+    "QueryLabel",
+    "RequirementIdentifier",
+    "ScenarioBinding",
+    "ScenarioComparison",
+    "ScenarioExpectation",
+    "ScenarioVerdict",
+    "SkipReason",
+    "TargetIdentifier",
+    "TriggerName",
+    "UnitName",
+    "ValidationAssessment",
+    "VerificationMethod",
+    "AllowedValue",
+    "AppliesTo",
+    "AttributeDeclaration",
+    "AttributeDefault",
+    "AttributeName",
+    "BlockIndex",
+    "BusinessRuleIdentifier",
+    "CardinalityNotation",
+    "CheckFamily",
+    "ComponentCatalogOutcome",
+    "ComponentEntity",
+    "ComponentName",
+    "ComponentReference",
+    "ComponentShapeError",
+    "Component",
+    "ContractIdentifier",
+    "ContractParty",
+    "ContractRow",
+    "ContractsTableOutcome",
+    "DeclaredEntities",
+    "DeclaredRuleIdentifier",
+    "DeclaredUnitsOutcome",
+    "DesignRecordIdentifier",
+    "DesignRecord",
+    "DomainEntitiesOutcome",
+    "DomainEntitySketch",
+    "ElementPath",
+    "EntitiesOutcome",
+    "EntityDeclaration",
+    "EntityName",
+    "EntityReference",
+    "FenceCount",
+    "Finding",
+    "FunctionalSpecificationOutcome",
+    "InputAnchor",
+    "LineNumber",
+    "MachineSpecification",
+    "NumericBound",
+    "ReferenceCheckReportIdentifier",
+    "ReferenceCheckReport",
+    "ReferenceTarget",
+    "RelationshipDeclaration",
+    "RuleCategory",
+    "RulesOutcome",
+    "ShapeError",
+    "Skipped",
+    "SourceIdentifier",
+    "SpecificationBlockAssessment",
+    "StateMachineSketch",
+    "StateName",
+    "TypeName",
+    "UnitDeclaration",
+    "WitnessReference",
+    "BackgroundAssumptionIdentifier",
+    "BackgroundAssumption",
+    "CrossCheckedEntry",
+    "FormalModelIdentifier",
+    "FunctionalRequirementReferenceClaim",
+    "IntermediateRepresentationAttributeDeclaration",
+    "IntermediateRepresentationAttributeName",
+    "IntermediateRepresentationBackgroundDeclaration",
+    "IntermediateRepresentationEntityDeclaration",
+    "IntermediateRepresentationEntityName",
+    "IntermediateRepresentationModelDeclaration",
+    "IntermediateRepresentationObligationDeclaration",
+    "IntermediateRepresentationScenarioDeclaration",
+    "IntermediateRepresentationTemporalDeclaration",
+    "IntermediateRepresentationValidationMaterialsIdentifier",
+    "IntermediateRepresentationValidationMaterials",
+    "ObligationIdentifier",
+    "Obligation",
+    "QuintCheckResult",
+    "QuintMachineComponent",
+    "QuintMachineRunVerdict",
+    "QuintScenarioVerdict",
+    "QuintTemporalVerdict",
+    "RequirementAttributeDeclaration",
+    "RequirementsModel",
+    "RequirementsSourceIdentifier",
+    "RequirementsSourceValidation",
+    "RequirementsSource",
+    "SatisfiabilityModuloTheoriesCheck",
+    "SatisfiabilityModuloTheoriesEventPairProbe",
+    "SatisfiabilityModuloTheoriesProbe",
+    "ScenarioIdentifier",
+    "Scenario",
+    "SourceAnchor",
+    "TraceValue",
+    "VerificationDirectory",
+    "VerificationFinding",
+    "VerificationReportIdentifier",
+    "VerificationReport",
+    "VerificationSkipped",
+    "VerificationWitness"
+  ],
+  "recommendedContract": {
+    "base": "interface FirstClassCollection { isEmpty(): boolean; }",
+    "iterable": "interface IterableFirstClassCollection<T extends object> extends FirstClassCollection, Iterable<T> {}",
+    "factories": "static of/parseはimplementsで検証できない。構築paramも個数/型が異なるのでinstance interfaceに押し込まない。必要ならFactory<Args extends readonly unknown[], C>の別契約をsatisfies/type testで検証する（コンストラクタは具体型のまま）。",
+    "limits": [
+      "T extends objectはVO/Entity性、不変条件、不変性を保証しない。tuple/plain object/arrayも受理する。",
+      "isEmptyは保有する集合要素の不存在で統一し、ドメイン計算の結果が空/問題なしとは分離。",
+      "Iterator追加・汎用map/filter/toArray/addの一律追加はしない。既存ドメイン操作で閉じている集合はbaseのみ。",
+      "メソッド集合だけのinterfaceは空白の契約の一部。サイズ/重複/immutability/of-panic/parse-ParseErrorをテストとconstructorで検証する。"
+    ]
+  },
+  "ownershipSuggestion": {
+    "kernel": [
+      "src/kernel/domain/declared-bindings.ts",
+      "src/kernel/domain/enumeration-members.ts",
+      "src/kernel/domain/error-messages.ts",
+      "src/kernel/domain/functional-requirement-references.ts",
+      "src/kernel/domain/requirement-identifiers.ts",
+      "src/kernel/domain/scenario-bindings.ts",
+      "src/kernel/domain/scenario-verdicts.ts",
+      "src/kernel/domain/target-identifiers.ts"
+    ],
+    "requirements": [
+      "src/requirements/domain/background-assumptions.ts",
+      "src/requirements/domain/cross-checked-entries.ts",
+      "src/requirements/domain/functional-requirement-reference-claims.ts",
+      "src/requirements/domain/functional-requirement-reference-index.ts",
+      "src/requirements/domain/intermediate-representation-attribute-catalog.ts",
+      "src/requirements/domain/intermediate-representation-attribute-declarations.ts",
+      "src/requirements/domain/intermediate-representation-background-declarations.ts",
+      "src/requirements/domain/intermediate-representation-entity-declarations.ts",
+      "src/requirements/domain/intermediate-representation-obligation-declarations.ts",
+      "src/requirements/domain/intermediate-representation-scenario-declarations.ts",
+      "src/requirements/domain/obligation-identifiers.ts",
+      "src/requirements/domain/obligations.ts",
+      "src/requirements/domain/quint-machine-components.ts",
+      "src/requirements/domain/requirement-attribute-declarations.ts",
+      "src/requirements/domain/satisfiability-modulo-theories-event-pair-probes.ts",
+      "src/requirements/domain/satisfiability-modulo-theories-query-verdicts.ts",
+      "src/requirements/domain/scenarios.ts",
+      "src/requirements/domain/trace-state.ts",
+      "src/requirements/domain/trace-states.ts",
+      "src/requirements/domain/verification-findings.ts",
+      "src/requirements/domain/verification-reports.ts",
+      "src/requirements/domain/verification-skips.ts"
+    ],
+    "design": [
+      "src/design/domain/attribute-mappings.ts",
+      "src/design/domain/attribute-paths.ts",
+      "src/design/domain/business-rule-reference-index.ts",
+      "src/design/domain/business-rule-references.ts",
+      "src/design/domain/checked-units.ts",
+      "src/design/domain/design-assignments.ts",
+      "src/design/domain/design-attribute-catalog.ts",
+      "src/design/domain/design-attribute-declarations.ts",
+      "src/design/domain/design-background-assumptions.ts",
+      "src/design/domain/design-background-declarations.ts",
+      "src/design/domain/design-cross-checked-entries.ts",
+      "src/design/domain/design-entity-declarations.ts",
+      "src/design/domain/design-event-rule-catalog.ts",
+      "src/design/domain/design-findings.ts",
+      "src/design/domain/design-ignore-declarations.ts",
+      "src/design/domain/design-ignores.ts",
+      "src/design/domain/design-input-anchors.ts",
+      "src/design/domain/design-machine-declarations.ts",
+      "src/design/domain/design-machines.ts",
+      "src/design/domain/design-obligation-declarations.ts",
+      "src/design/domain/design-obligations.ts",
+      "src/design/domain/design-reports.ts",
+      "src/design/domain/design-scenario-declarations.ts",
+      "src/design/domain/design-scenarios.ts",
+      "src/design/domain/design-skips.ts",
+      "src/design/domain/design-transition-declarations.ts",
+      "src/design/domain/design-transitions.ts",
+      "src/design/domain/design-unit-declarations.ts",
+      "src/design/domain/design-units.ts",
+      "src/design/domain/effect-assignments.ts",
+      "src/design/domain/event-mappings.ts",
+      "src/design/domain/initial-states.ts",
+      "src/design/domain/issued-lowered-identifiers.ts",
+      "src/design/domain/lowered-backgrounds.ts",
+      "src/design/domain/lowered-obligations.ts",
+      "src/design/domain/lowered-scenarios.ts",
+      "src/design/domain/reachability-plan.ts",
+      "src/design/domain/refinement-attributes.ts",
+      "src/design/domain/refinement-obligations.ts",
+      "src/design/domain/refinement-query-verdicts.ts",
+      "src/design/domain/refinement-quint-invariants.ts",
+      "src/design/domain/refinement-scenarios.ts",
+      "src/design/domain/refinement-unit-maps.ts",
+      "src/design/domain/rule-subsumptions.ts",
+      "src/design/domain/sibling-verdict-findings.ts",
+      "src/design/domain/sibling-verdict-skips.ts",
+      "src/design/domain/transition-references.ts",
+      "src/design/domain/unformalized-targets.ts",
+      "src/design/domain/unmapped-declarations.ts"
+    ],
+    "refcheck": [
+      "src/refcheck/domain/allowed-values.ts",
+      "src/refcheck/domain/attribute-declarations.ts",
+      "src/refcheck/domain/attribute-names.ts",
+      "src/refcheck/domain/check-families.ts",
+      "src/refcheck/domain/component-entities.ts",
+      "src/refcheck/domain/component-references.ts",
+      "src/refcheck/domain/component-shape-errors.ts",
+      "src/refcheck/domain/components.ts",
+      "src/refcheck/domain/contract-rows.ts",
+      "src/refcheck/domain/domain-entity-sketches.ts",
+      "src/refcheck/domain/entity-declarations.ts",
+      "src/refcheck/domain/entity-references.ts",
+      "src/refcheck/domain/findings.ts",
+      "src/refcheck/domain/input-anchors.ts",
+      "src/refcheck/domain/relationship-declarations.ts",
+      "src/refcheck/domain/rule-declarations.ts",
+      "src/refcheck/domain/shape-errors.ts",
+      "src/refcheck/domain/sibling-unit-index.ts",
+      "src/refcheck/domain/skips.ts",
+      "src/refcheck/domain/source-identifiers.ts",
+      "src/refcheck/domain/specification-block-assessments.ts",
+      "src/refcheck/domain/state-machine-sketches.ts",
+      "src/refcheck/domain/state-names.ts",
+      "src/refcheck/domain/unit-declarations.ts",
+      "src/refcheck/domain/unit-names.ts",
+      "src/refcheck/domain/witness-references.ts"
+    ],
+    "doctor": [
+      "src/doctor/domain/design-artifacts.ts",
+      "src/doctor/domain/health-verdict.ts",
+      "src/doctor/domain/installation-manifest.ts",
+      "src/doctor/domain/stable-releases.ts",
+      "src/doctor/domain/stage-scopes.ts",
+      "src/doctor/domain/structural-debt.ts"
+    ]
+  }
+}

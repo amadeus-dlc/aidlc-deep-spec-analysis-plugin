@@ -1,4 +1,4 @@
-import { type ArtifactPath, FindingKind } from "@deep-spec-analysis/kernel-domain";
+import { type ArtifactPath, FindingKind, FindingTargets, TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
 import type { BlockIndex } from "./block-index.ts";
 import { CD_2 } from "./contract-check-families.ts";
 import type { LineNumber } from "./line-number.ts";
@@ -75,7 +75,7 @@ export class SpecificationBlockAssessment {
         report.finding(
           CD_2,
           FindingKind.structureInvalid(),
-          [blockId],
+          FindingTargets.of(TargetIdentifier.of(blockId), []),
           [WitnessReference.at(art, el)],
           `spec block does not parse in the supported YAML subset: ${error}`,
         );
@@ -84,7 +84,7 @@ export class SpecificationBlockAssessment {
         report.finding(
           CD_2,
           FindingKind.structureInvalid(),
-          [blockId],
+          FindingTargets.of(TargetIdentifier.of(blockId), []),
           [WitnessReference.at(art, el)],
           "spec block is not a YAML mapping",
         );
@@ -93,7 +93,7 @@ export class SpecificationBlockAssessment {
         report.finding(
           CD_2,
           FindingKind.structureInvalid(),
-          [blockId],
+          FindingTargets.of(TargetIdentifier.of(blockId), []),
           [WitnessReference.at(art, el, "openapi")],
           "OpenAPI spec block carries `openapi:` but no `paths:`",
         );

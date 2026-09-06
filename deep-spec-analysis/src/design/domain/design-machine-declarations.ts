@@ -1,6 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { DesignMachineDeclaration } from "./design-machine-declaration.ts";
 
-export class DesignMachineDeclarations {
+export class DesignMachineDeclarations
+  implements FirstClassCollection, IterableFirstClassCollection<DesignMachineDeclaration>
+{
   readonly #values: readonly DesignMachineDeclaration[];
 
   private constructor(values: readonly DesignMachineDeclaration[]) {
@@ -21,5 +24,9 @@ export class DesignMachineDeclarations {
 
   toArray(): readonly DesignMachineDeclaration[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

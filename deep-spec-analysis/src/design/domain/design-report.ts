@@ -2,7 +2,9 @@ import {
   ContentHash,
   type FindingsSchema,
   IntermediateRepresentationVersion,
+  ScenarioVerdict,
   SkipReason,
+  type TargetIdentifier,
   UnitName,
   VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
@@ -15,7 +17,7 @@ import {
 // （findings/skipped/inputs/checked/crossChecked を空にして unavailable 理由
 // だけ残す——旧 writeDesignDoc の自己検証降格と同じ姿）。
 
-import type { Json } from "@deep-spec-analysis/kernel-infrastructure";
+import type { Json, ParseError } from "@deep-spec-analysis/kernel-infrastructure";
 import { CheckedUnits } from "./checked-units.ts";
 import type { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
 import { DesignFindings } from "./design-findings.ts";
@@ -109,6 +111,10 @@ export class DesignReport {
 
   withInputs(inputs: DesignInputAnchors): DesignReport {
     return this.#revised({ inputs: inputs.sortedByArtifact() });
+  }
+
+  loweringFailed(unit: DesignUnit, error: ParseError): DesignReport {
+    return this.unitUnverified(unit, SkipReason.compileError(), `design lowering failed: ${error.kind}`);
   }
 
   unitTimedOut(unit: DesignUnit): DesignReport {
@@ -284,6 +290,17 @@ export class DesignReport {
     });
   }
 
+  scenarioVerdictFor(unit: UnitName, target: TargetIdentifier, irHash: ContentHash): ScenarioVerdict {
+    const backend = this.#id.backendName();
+    if (!this.#irHash.equals(irHash) || this.isUnavailable())
+      return ScenarioVerdict.unavailable(backend, this.#irHash, target, unit);
+    for (const skip of this.#skipped)
+      if (skip.appliesTo(unit, target)) return ScenarioVerdict.skipped(backend, this.#irHash, target, unit);
+    for (const finding of this.#findings)
+      if (finding.violatesScenario(unit, target)) return ScenarioVerdict.violated(backend, this.#irHash, target, unit);
+    return ScenarioVerdict.clean(backend, this.#irHash, target, unit);
+  }
+
   id(): DesignReportIdentifier {
     return this.#id;
   }
@@ -383,12 +400,12 @@ export class DesignReport {
       return out as Json;
     });
     const crossChecked = this.#crossChecked;
-    // crossChecked エントリの凍結キー順は (backend, targets)。
-    if (crossChecked !== null) {
-      ordered.crossChecked = crossChecked
-        .toArray()
-        .map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }) as unknown as Json);
-    }
+    if (crossChecked !== null)
+      ordered.crossChecked = [...crossChecked].map((entry) => ({
+        backend: entry.backend().asString(),
+        unit: entry.unit().asString(),
+        targets: [...entry.targets().toStrings()],
+      }));
     return ordered;
   }
 

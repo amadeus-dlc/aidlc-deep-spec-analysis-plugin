@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import * as Design from "@deep-spec-analysis/design-domain";
 import * as Kernel from "@deep-spec-analysis/kernel-domain";
+import { ObligationNature, ScenarioExpectation } from "@deep-spec-analysis/kernel-domain";
+
 import { IllegalArgumentException, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import * as ReferenceCheck from "@deep-spec-analysis/refcheck-domain";
 import * as Requirements from "@deep-spec-analysis/requirements-domain";
@@ -41,7 +43,7 @@ rejects(Requirements.Obligation, {
 });
 rejects(Requirements.Scenario, {
   id: scenario,
-  kind: "accept",
+  expectation: ScenarioExpectation.of("accept"),
   functionalRequirementReferences: references,
   bindings,
   expect: badExpression,
@@ -66,7 +68,7 @@ rejects(Design.RefinementObligation, {
 });
 rejects(Design.DesignObligation, {
   id: designObligation,
-  nature: Design.DesignObligationNature.of("invariant"),
+  nature: ObligationNature.of("invariant"),
   origin: Design.DesignObligationOrigin.of(""),
   businessRuleReferences: rules,
   functionalRequirementReferences: references,
@@ -74,7 +76,7 @@ rejects(Design.DesignObligation, {
 });
 rejects(Design.DesignScenario, {
   id: designScenario,
-  kind: "accept",
+  expectation: ScenarioExpectation.of("accept"),
   businessRuleReferences: rules,
   functionalRequirementReferences: references,
   bindings,
@@ -98,39 +100,60 @@ rejects(Design.DesignScenarioDeclaration, {
 });
 rejects(Design.DesignBackgroundDeclaration, { id: designBackground, assert: badExpression });
 rejects(Design.LoweredObligation, {
+  origin: Design.LoweredOrigin.of({ kind: "passthrough", design: Design.LoweredOriginReference.of("DOB-1") }),
   id: Design.LoweredIdentifier.of("OB-1"),
-  nature: "invariant",
+  nature: ObligationNature.of("invariant"),
   functionalRequirementReferences: references,
   assert: badExpression,
 });
 rejects(Design.LoweredScenario, {
+  origin: Design.DesignScenarioIdentifier.of("DSC-1"),
   id: Design.LoweredIdentifier.of("SC-1"),
-  kind: "accept",
+  expectation: ScenarioExpectation.of("accept"),
   functionalRequirementReferences: references,
   bindings,
   expect: badExpression,
 });
 rejects(Design.LoweredBackground, { id: Design.LoweredIdentifier.of("BG-1"), assert: badExpression });
-rejects(Design.DesignAssignments, Kernel.KeyedIndex.of([[Kernel.AttributePath.of("ticket.state"), badExpression]]));
+rejects(
+  Design.DesignAssignments,
+  Array.from({ length: 10_001 }, () =>
+    Design.DesignAssignment.of(
+      Kernel.AttributePath.of("ticket.state"),
+      Kernel.ExpressionTree.of({ op: "bool", value: true }),
+    ),
+  ),
+);
 rejects(ReferenceCheck.InputAnchor, { artifact: "", sha256: Kernel.ContentHash.ofText("fixture") });
 rejects(Design.DesignInputAnchor, { artifact: "", sha256: Kernel.ContentHash.ofText("fixture") });
 rejects(ReferenceCheck.WitnessReference, { artifact: "", element: "field" });
-rejects(Design.DesignUnit, {
-  unit: "",
-  entities: Design.DesignEntityDeclarations.of([]),
-  obligations: Design.DesignObligations.of([]),
-  machines: Design.DesignMachines.of([]),
-  scenarios: Design.DesignScenarios.of([]),
-  background: Design.DesignBackgroundAssumptions.of([]),
-});
-rejects(Design.EffectAssignments, { op: "or", args: [] });
 
-const assignments = Design.DesignAssignments.of(Kernel.KeyedIndex.empty<Kernel.AttributePath, Kernel.Expression>());
+test("代入要素の構築契約はofでpanic、parseで非例外エラーになる", () => {
+  const target = Kernel.AttributePath.of("ticket.state");
+  const equation = Kernel.ExpressionTree.of({ op: "or", args: [] });
+  expect(() => Design.EffectAssignment.of(target, equation)).toThrow(IllegalArgumentException);
+  const parsed = Design.EffectAssignment.parse(target, equation);
+  expect(parsed.ok).toBe(false);
+  if (!parsed.ok) expect(parsed.error).not.toBeInstanceOf(Error);
+});
+
 rejects(
   {
-    name: "DesignEvent",
-    of: (value: Kernel.Expression) => Design.DesignEvent.of(value, assignments),
-    parse: (value: Kernel.Expression) => Design.DesignEvent.parse(value, assignments),
+    name: "DesignEventRule",
+    of: (value: Kernel.Expression) =>
+      Design.DesignEventRule.of({
+        reference: Design.DesignObligationIdentifier.of("DOB-1"),
+        trigger: Kernel.TriggerName.of("save"),
+        guard: value,
+        effect: { op: "bool", value: true },
+      }),
+    parse: (value: Kernel.Expression) =>
+      Design.DesignEventRule.parse({
+        reference: Design.DesignObligationIdentifier.of("DOB-1"),
+        trigger: Kernel.TriggerName.of("save"),
+        guard: value,
+        effect: { op: "bool", value: true },
+      }),
   },
   badExpression,
 );

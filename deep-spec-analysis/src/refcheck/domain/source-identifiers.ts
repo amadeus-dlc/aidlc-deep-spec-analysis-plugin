@@ -1,7 +1,12 @@
-import { RequirementIdentifier, type RequirementIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import {
+  type FirstClassCollection,
+  type IterableFirstClassCollection,
+  RequirementIdentifier,
+  type RequirementIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
 import type { SourceIdentifier } from "./source-identifier.ts";
 
-export class SourceIdentifiers {
+export class SourceIdentifiers implements FirstClassCollection, IterableFirstClassCollection<SourceIdentifier> {
   readonly #values: readonly SourceIdentifier[];
 
   private constructor(values: readonly SourceIdentifier[]) {
@@ -33,5 +38,9 @@ export class SourceIdentifiers {
 
   toArray(): readonly SourceIdentifier[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

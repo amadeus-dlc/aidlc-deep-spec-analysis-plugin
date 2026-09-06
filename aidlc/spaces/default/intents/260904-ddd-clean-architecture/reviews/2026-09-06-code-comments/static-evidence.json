@@ -1,0 +1,258 @@
+{
+  "head": "ac4309c94c409b20479752f658878afbe650dcd0",
+  "sourceDomainThrows": 163,
+  "sourceDomainIllegalArgumentThrows": 155,
+  "domainFilesWithThrows": 98,
+  "canonicalConsumers": [
+    {
+      "path": "src/design/domain/design-background-identifier.ts",
+      "imports": [
+        {
+          "line": 2,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/design/domain/design-obligation-identifier.ts",
+      "imports": [
+        {
+          "line": 2,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/design/domain/design-scenario-identifier.ts",
+      "imports": [
+        {
+          "line": 2,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/design/domain/design-transition-identifier.ts",
+      "imports": [
+        {
+          "line": 2,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/design/domain/transition-reference.ts",
+      "imports": [
+        {
+          "line": 2,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/kernel/domain/attribute-path.ts",
+      "imports": [
+        {
+          "line": 2,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/kernel/domain/enumeration-member.ts",
+      "imports": [
+        {
+          "line": 2,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/kernel/domain/requirement-identifier.ts",
+      "imports": [
+        {
+          "line": 2,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/kernel/domain/target-identifier.ts",
+      "imports": [
+        {
+          "line": 2,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/kernel/domain/target-identifiers.ts",
+      "imports": [
+        {
+          "line": 7,
+          "text": "import { sortedUniqueCanonically } from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/refcheck/domain/component-name.ts",
+      "imports": [
+        {
+          "line": 2,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/requirements/domain/obligation-identifier.ts",
+      "imports": [
+        {
+          "line": 3,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    }
+  ],
+  "canonicalForeignConsumers": [
+    {
+      "path": "src/design/domain/design-background-identifier.ts",
+      "imports": [
+        {
+          "line": 2,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/design/domain/design-obligation-identifier.ts",
+      "imports": [
+        {
+          "line": 2,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/design/domain/design-scenario-identifier.ts",
+      "imports": [
+        {
+          "line": 2,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/design/domain/design-transition-identifier.ts",
+      "imports": [
+        {
+          "line": 2,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/design/domain/transition-reference.ts",
+      "imports": [
+        {
+          "line": 2,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/refcheck/domain/component-name.ts",
+      "imports": [
+        {
+          "line": 2,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    },
+    {
+      "path": "src/requirements/domain/obligation-identifier.ts",
+      "imports": [
+        {
+          "line": 3,
+          "text": "import {\n  compareCanonically,\n  IllegalArgumentException,\n  parseConstruction,\n  type Result,\n} from \"@deep-spec-analysis/kernel-infrastructure\";"
+        }
+      ]
+    }
+  ],
+  "attributeDeclarationJsonIdentifiers": 0,
+  "attributeDeclarationPrivateFields": 11,
+  "layerManifests": [
+    "deep-spec-analysis/src/design/adapter/package.json",
+    "deep-spec-analysis/src/design/domain/package.json",
+    "deep-spec-analysis/src/design/usecase/package.json",
+    "deep-spec-analysis/src/doctor/adapter/package.json",
+    "deep-spec-analysis/src/doctor/domain/package.json",
+    "deep-spec-analysis/src/doctor/usecase/package.json",
+    "deep-spec-analysis/src/kernel/adapter/package.json",
+    "deep-spec-analysis/src/kernel/domain/package.json",
+    "deep-spec-analysis/src/kernel/infrastructure/package.json",
+    "deep-spec-analysis/src/kernel/usecase/package.json",
+    "deep-spec-analysis/src/refcheck/adapter/package.json",
+    "deep-spec-analysis/src/refcheck/domain/package.json",
+    "deep-spec-analysis/src/refcheck/usecase/package.json",
+    "deep-spec-analysis/src/requirements/adapter/package.json",
+    "deep-spec-analysis/src/requirements/domain/package.json",
+    "deep-spec-analysis/src/requirements/usecase/package.json"
+  ],
+  "designAdapterFiles": [
+    "src/design/adapter/design-entities-parser.ts",
+    "src/design/adapter/design-intermediate-representation-validation-materials-configuration.ts",
+    "src/design/adapter/design-intermediate-representation-validation-materials-repository-implementation.ts",
+    "src/design/adapter/design-model-parser.ts",
+    "src/design/adapter/design-model-repository-implementation.ts",
+    "src/design/adapter/design-report-serializer.ts",
+    "src/design/adapter/design-verify-directory-repository-implementation.ts",
+    "src/design/adapter/index.ts",
+    "src/design/adapter/lowered-document-serializer.ts",
+    "src/design/adapter/reachability-variant.ts",
+    "src/design/adapter/refinement-attribute-param.ts",
+    "src/design/adapter/refinement-child-query.ts",
+    "src/design/adapter/refinement-map-parse.ts",
+    "src/design/adapter/refinement-map-repository-implementation.ts",
+    "src/design/adapter/refinement-materials-repository-implementation.ts",
+    "src/design/adapter/refinement-query-plan.ts",
+    "src/design/adapter/refinement-satisfiability-modulo-theories-context.ts",
+    "src/design/adapter/refinement-solver-client-configuration.ts",
+    "src/design/adapter/refinement-solver-client-implementation.ts",
+    "src/design/adapter/sibling-backend-client-configuration.ts",
+    "src/design/adapter/sibling-backend-client-implementation.ts",
+    "src/design/adapter/sibling-document-parser.ts"
+  ],
+  "emptySourceFiles": [
+    "src/refcheck/domain/functional-design.ts"
+  ],
+  "parserTypeFile": [
+    {
+      "path": "src/design/adapter/refinement-map-parse.ts",
+      "sha256": "7cfade11af30af2d36334fde748f7ed1d4a312f99624e4b5bfbf347740c017c5",
+      "lines": 7,
+      "commentCount": 2,
+      "commentLines": 2,
+      "statements": 2,
+      "functions": 0,
+      "throws": 0,
+      "illegalArgumentThrows": 0,
+      "imports": [
+        {
+          "line": 1,
+          "text": "import type { RefinementMap } from \"@deep-spec-analysis/design-domain\";"
+        }
+      ]
+    }
+  ],
+  "orphanStaticImports": [],
+  "noiseCandidates": {
+    "legacy-wording": {
+      "commentTokens": 229,
+      "files": 125
+    },
+    "history-markers": {
+      "commentTokens": 236,
+      "files": 173
+    }
+  }
+}

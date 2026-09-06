@@ -73,6 +73,22 @@ function makeRecord(): { record: string; modelPath: string; verifyDir: string } 
 }
 
 describe("deep-spec-design-ir-valid", () => {
+  test("rejects repeated entity declarations instead of resolving an ambiguous attribute", () => {
+    const { modelPath } = makeRecord();
+    const markdown = readFileSync(modelPath, "utf-8");
+    const fence = /```json\s*\n([\s\S]*?)```/.exec(markdown);
+    if (!fence) throw new Error("fixture JSON fence missing");
+    const document = JSON.parse(fence[1] ?? "");
+    const entities = document.units[0].schema.entities;
+    entities.push(structuredClone(entities[0]));
+    writeFileSync(modelPath, markdown.replace(fence[1] ?? "", `${JSON.stringify(document, null, 2)}\n`));
+    const run = fire("aidlc-sensor-deep-spec-design-ir-valid.ts", modelPath);
+    expect(JSON.parse(run.stdout)).toMatchObject({
+      pass: false,
+      errors: expect.arrayContaining(['unit u1-tickets: duplicate entity "ticket"']),
+    });
+  });
+
   test("passes the canonical fixture", () => {
     const { modelPath } = makeRecord();
     const run = fire("aidlc-sensor-deep-spec-design-ir-valid.ts", modelPath);

@@ -889,7 +889,7 @@ describe("the real src/ tree", () => {
       const source = readFileSync(join(srcDir, rel), "utf-8");
       expect(new RegExp(`^export (?:class|interface|type) ${entry.name}\\b`, "m").test(source)).toBe(true);
     }
-    // domain の公開 interface は表の項目だけ（データモデルの再流入は規則が止める）。
+    // 公開データ形状と操作契約を区別する。操作契約は公開言語の免除表へ追加しない。
     const interfaces = files
       .filter((rel) => {
         const loc = locationOf(rel);
@@ -900,7 +900,16 @@ describe("the real src/ tree", () => {
           (m) => `${rel}:${m[1]}`,
         ),
       );
-    expect(interfaces).toEqual(["kernel/domain/expression.ts:Expression"]);
+    expect(interfaces.sort()).toEqual(
+      [
+        "kernel/domain/expression.ts:Expression",
+        "kernel/domain/fallible-first-class-collection-factory.ts:FallibleFirstClassCollectionFactory",
+        "kernel/domain/first-class-collection-factory.ts:FirstClassCollectionFactory",
+        "kernel/domain/first-class-collection.ts:FirstClassCollection",
+        "kernel/domain/iterable-first-class-collection.ts:IterableFirstClassCollection",
+        "kernel/domain/non-empty-first-class-collection-factory.ts:NonEmptyFirstClassCollectionFactory",
+      ].sort(),
+    );
   });
 
   test("every file is either layered, an entry, or data — nothing unclassified", () => {

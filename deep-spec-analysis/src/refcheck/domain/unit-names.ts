@@ -1,7 +1,7 @@
-import type { UnitName } from "@deep-spec-analysis/kernel-domain";
+import type { FirstClassCollection, IterableFirstClassCollection, UnitName } from "@deep-spec-analysis/kernel-domain";
 
 // unit 名のファーストクラスコレクション（depends_on の並びなど宣言順を保持）。
-export class UnitNames {
+export class UnitNames implements FirstClassCollection, IterableFirstClassCollection<UnitName> {
   readonly #values: readonly UnitName[];
 
   private constructor(values: readonly UnitName[]) {
@@ -31,5 +31,9 @@ export class UnitNames {
 
   toArray(): readonly UnitName[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

@@ -1,29 +1,10 @@
-import { InitialState } from "@deep-spec-analysis/design-domain";
-import {
-  AttributeKind,
-  EnumerationMember,
-  EnumerationMembers,
-  type Expression,
-  FindingKind,
-  FunctionalRequirementReferences,
-  RequirementIdentifier,
-  SkipReason,
-  TargetIdentifier,
-  TargetIdentifiers,
-  TriggerName,
-  UnitName,
-  VerificationMethod,
-} from "@deep-spec-analysis/kernel-domain";
-import { scenarioBindings } from "./binding-fixtures.ts";
-
-// design/domain の単体テスト（TDA 波3 — 90% カバレッジ床の維持）。
-
-import { describe, expect, test } from "bun:test";
-
+import { parseBusinessRuleReferenceIndex } from "@deep-spec-analysis/design-adapter";
 import {
   BusinessRuleReference,
+  type BusinessRuleReferenceIndex,
   BusinessRuleReferences,
   CheckedUnits,
+  DesignAttributeCatalog,
   DesignAttributeDeclaration,
   DesignAttributeDeclarations,
   DesignAttributeName,
@@ -35,6 +16,7 @@ import {
   DesignEntityDeclaration,
   DesignEntityDeclarations,
   DesignEntityName,
+  DesignEventRule,
   DesignFinding,
   DesignIgnore,
   DesignIgnoreDeclaration,
@@ -47,7 +29,6 @@ import {
   DesignObligation,
   DesignObligationDeclarations,
   DesignObligationIdentifier,
-  DesignObligationNature,
   DesignObligationOrigin,
   DesignScenario,
   DesignScenarioDeclarations,
@@ -62,6 +43,7 @@ import {
   DesignUnitDeclaration,
   DesignUnitIdentifier,
   DesignWitness,
+  InitialState,
   InitialStates,
   LoweredBackground,
   LoweredIdentifier,
@@ -69,12 +51,36 @@ import {
   LoweredOrigin,
   LoweredOriginReference,
   LoweredScenario,
+  RuleSubsumptionProbe,
   SiblingVerdictDocument,
   SiblingVerdictFinding,
   SiblingVerdictFindings,
   SiblingVerdictSkips,
   UnformalizedTargets,
 } from "@deep-spec-analysis/design-domain";
+import {
+  AttributeKind,
+  EnumerationMember,
+  EnumerationMembers,
+  type Expression,
+  FindingKind,
+  FindingTargets,
+  FunctionalRequirementReferences,
+  ObligationNature,
+  RequirementIdentifier,
+  ScenarioExpectation,
+  SkipReason,
+  TargetIdentifier,
+  TriggerName,
+  UnitName,
+  VerificationMethod,
+} from "@deep-spec-analysis/kernel-domain";
+
+import { scenarioBindings } from "./binding-fixtures.ts";
+
+// design/domain の単体テスト（TDA 波3 — 90% カバレッジ床の維持）。
+
+import { describe, expect, test } from "bun:test";
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
 
@@ -82,7 +88,7 @@ describe("design obligation", () => {
   test("inspectExpressions visits every held expression, primes allowed only on the effect", () => {
     const obligation = DesignObligation.of({
       id: DesignObligationIdentifier.of("DOB-1"),
-      nature: DesignObligationNature.of("event"),
+      nature: ObligationNature.of("event"),
       origin: DesignObligationOrigin.of("rules"),
       businessRuleReferences: BusinessRuleReferences.of(Array.from(["BR1.1"], (raw) => BusinessRuleReference.of(raw))),
       functionalRequirementReferences: FunctionalRequirementReferences.of(
@@ -109,7 +115,7 @@ describe("design obligation", () => {
   test("eventDefinition requires a non-empty trigger on top of a complete guarded effect", () => {
     const complete = DesignObligation.of({
       id: DesignObligationIdentifier.of("DOB-2"),
-      nature: DesignObligationNature.of("event"),
+      nature: ObligationNature.of("event"),
       origin: DesignObligationOrigin.of("rules"),
       businessRuleReferences: BusinessRuleReferences.of([]),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
@@ -121,7 +127,7 @@ describe("design obligation", () => {
     expect(
       DesignObligation.of({
         id: DesignObligationIdentifier.of("DOB-3"),
-        nature: DesignObligationNature.of("event"),
+        nature: ObligationNature.of("event"),
         origin: DesignObligationOrigin.of("rules"),
         businessRuleReferences: BusinessRuleReferences.of([]),
         functionalRequirementReferences: FunctionalRequirementReferences.of([]),
@@ -134,7 +140,7 @@ describe("design obligation", () => {
   test("of round-trips every field through the accessors, and temporal() hands out a copy", () => {
     const obligation = DesignObligation.of({
       id: DesignObligationIdentifier.of("DOB-4"),
-      nature: DesignObligationNature.of("invariant"),
+      nature: ObligationNature.of("invariant"),
       origin: DesignObligationOrigin.of("rules"),
       businessRuleReferences: BusinessRuleReferences.of(Array.from(["BR2.1"], (raw) => BusinessRuleReference.of(raw))),
       functionalRequirementReferences: FunctionalRequirementReferences.of(
@@ -164,7 +170,7 @@ describe("design scenario", () => {
   const scenario = (kind: "accept" | "reject") =>
     DesignScenario.of({
       id: DesignScenarioIdentifier.of("DSC-1"),
-      kind,
+      expectation: ScenarioExpectation.of(kind),
       businessRuleReferences: BusinessRuleReferences.of(Array.from(["BR1.1"], (raw) => BusinessRuleReference.of(raw))),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       bindings: scenarioBindings({}),
@@ -180,7 +186,7 @@ describe("design scenario", () => {
   test("of round-trips every field through the accessors and bindings() hands out a copy", () => {
     const withEvent = DesignScenario.of({
       id: DesignScenarioIdentifier.of("DSC-2"),
-      kind: "reject",
+      expectation: ScenarioExpectation.of("reject"),
       businessRuleReferences: BusinessRuleReferences.of(Array.from(["BR7.1"], (raw) => BusinessRuleReference.of(raw))),
       functionalRequirementReferences: FunctionalRequirementReferences.of(
         Array.from(["FR-4"], (raw) => RequirementIdentifier.of(raw)),
@@ -194,11 +200,11 @@ describe("design scenario", () => {
     expect(withEvent.businessRuleReferences().toStrings()).toEqual(["BR7.1"]);
     expect(withEvent.functionalRequirementReferences().toStrings()).toEqual(["FR-4"]);
     expect(withEvent.eventTrigger()?.asString()).toBe("close");
-    expect(withEvent.expectation()).toEqual(lit(true));
+    expect(withEvent.expectedExpression()).toEqual(lit(true));
     expect(withEvent.isAccept()).toBe(false);
     expect(withEvent.isReject()).toBe(true);
-    expect(withEvent.hasEvent()).toBe(true);
-    expect(scenario("accept").hasEvent()).toBe(false);
+    expect(withEvent.hasEventRule()).toBe(true);
+    expect(scenario("accept").hasEventRule()).toBe(false);
     expect(
       withEvent
         .bindings()
@@ -281,22 +287,20 @@ describe("design transition decl", () => {
 });
 
 describe("design background decl", () => {
-  test("inspectExpressions visits the assertion with primes forbidden, and silence when absent", () => {
-    const withAssert = DesignBackgroundDeclaration.of({
+  test("背景仮定が参照先を検査し、式がない場合は診断を出さない", () => {
+    const catalog = DesignAttributeCatalog.of(DesignEntityDeclarations.of([]));
+    const declared = DesignBackgroundDeclaration.of({
       id: DesignBackgroundIdentifier.of("DBG-1"),
       assert: { op: "ref", path: "t.x" },
     });
-    const seen: [string, boolean][] = [];
-    withAssert.inspectExpressions((expression, primesAllowed) => seen.push([expression.op, primesAllowed]));
-    expect(seen).toEqual([["ref", false]]);
-    expect(withAssert.id().asString()).toBe("DBG-1");
-    expect(withAssert.assertion()).toEqual({ op: "ref", path: "t.x" });
-
+    expect(
+      declared
+        .diagnostics(catalog)
+        .toArray()
+        .map((message) => message.asString()),
+    ).toEqual(['background DBG-1: unresolvable reference "t.x"']);
     const bare = DesignBackgroundDeclaration.of({ id: DesignBackgroundIdentifier.of("DBG-2") });
-    const none: unknown[] = [];
-    bare.inspectExpressions((expression, primesAllowed) => none.push([expression.op, primesAllowed]));
-    expect(none).toEqual([]);
-    expect(bare.assertion()).toBeUndefined();
+    expect(bare.diagnostics(catalog).isEmpty()).toBe(true);
   });
 });
 
@@ -369,7 +373,6 @@ describe("design transition and ignore (compile-down owners)", () => {
         { op: "enum", value: "closed" },
       ],
     });
-    expect(bare.stateAssignment("T.s")).toEqual(["T.s", { op: "enum", value: "closed" }]);
   });
 
   test("ignore lowers to an explicit no-op event and round-trips its fields", () => {
@@ -394,13 +397,16 @@ describe("design transition and ignore (compile-down owners)", () => {
 });
 
 describe("design finding (conflict reinterpretation owner)", () => {
-  const finding = (kind: string, targets: string[]) =>
+  const finding = (kind: string, [head, ...tail]: readonly [string, ...string[]]) =>
     DesignFinding.of({
       kind: FindingKind.of(kind),
       functionalRequirementReferences: FunctionalRequirementReferences.of(
         Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw)),
       ),
-      targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))),
+      targets: FindingTargets.of(
+        TargetIdentifier.of(head),
+        tail.map((raw) => TargetIdentifier.of(raw)),
+      ),
       witness: DesignWitness.trace([{ "T.s": "a" }]),
       unit: UnitName.of("u1"),
       detail: "overlap",
@@ -558,7 +564,7 @@ describe("design decls (well-formedness materials own their judgements)", () => 
         background: DesignBackgroundDeclarations.of([]),
         unformalizedTargets: UnformalizedTargets.of(Array.from(["BR1.1"], (raw) => TargetIdentifier.of(raw))),
         directoryExists,
-        rulesMarkdown: "# rules",
+        rules: ruleIndex("# rules"),
       });
     expect(build(false).lacksConstructionDirectory()).toBe(true);
     const present = build(true);
@@ -570,7 +576,6 @@ describe("design decls (well-formedness materials own their judgements)", () => 
     expect(present.scenarios().toArray()).toEqual([]);
     expect(present.background().toArray()).toEqual([]);
     expect(present.unformalizedTargets().toStrings()).toEqual(["BR1.1"]);
-    expect(present.rulesMarkdown()).toBe("# rules");
   });
 });
 
@@ -612,18 +617,20 @@ describe("design skipped (a skip record owns its identity and canonical order)",
 describe("lowered records (the v1 payload the sibling backends receive)", () => {
   test("obligation knows whether it is an event and carries its optional parts", () => {
     const invariant = LoweredObligation.of({
+      origin: LoweredOrigin.of({ kind: "passthrough", design: LoweredOriginReference.of("DOB-1") }),
       id: LoweredIdentifier.of("OB-1"),
-      nature: "invariant",
+      nature: ObligationNature.of("invariant"),
       functionalRequirementReferences: FunctionalRequirementReferences.of(
         Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw)),
       ),
       assert: { op: "bool", value: true },
     });
     const event = LoweredObligation.of({
+      origin: LoweredOrigin.of({ kind: "passthrough", design: LoweredOriginReference.of("DOB-1") }),
       id: LoweredIdentifier.of("OB-2"),
-      nature: "event",
+      nature: ObligationNature.of("event"),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      trigger: "close",
+      trigger: TriggerName.of("close"),
       guard: { op: "bool", value: true },
       effect: { op: "bool", value: true },
       temporal: { pattern: "always", assert: { op: "bool", value: false } },
@@ -643,16 +650,18 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
 
   test("scenario knows accept from reject and carries its bindings, event, and expectation", () => {
     const accept = LoweredScenario.of({
+      origin: DesignScenarioIdentifier.of("DSC-1"),
       id: LoweredIdentifier.of("SC-1"),
-      kind: "accept",
+      expectation: ScenarioExpectation.of("accept"),
       functionalRequirementReferences: FunctionalRequirementReferences.of(
         Array.from(["FR-2"], (raw) => RequirementIdentifier.of(raw)),
       ),
       bindings: scenarioBindings({ "T.x": 1 }),
     });
     const reject = LoweredScenario.of({
+      origin: DesignScenarioIdentifier.of("DSC-1"),
       id: LoweredIdentifier.of("SC-2"),
-      kind: "reject",
+      expectation: ScenarioExpectation.of("reject"),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       bindings: scenarioBindings({}),
       event: { trigger: TriggerName.of("go") },
@@ -666,18 +675,30 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
     expect(accept.bindings().toDocument()).toEqual({ "T.x": 1 });
     expect(accept.event()).toBeUndefined();
     expect(reject.event()).toEqual({ trigger: "go" });
-    expect(reject.expectation()).toEqual({ op: "bool", value: true });
+    expect(reject.expectedExpression()).toEqual({ op: "bool", value: true });
     const bg = LoweredBackground.of({ id: LoweredIdentifier.of("BG-1"), assert: { op: "bool", value: true } });
     expect(bg.id().asString()).toBe("BG-1");
     expect(bg.assertion()).toEqual({ op: "bool", value: true });
   });
 
-  test("origin tells probes from attributions and pairs a shadow probe (a lone origin pairs with itself)", () => {
+  test("origins require a subsumption probe only for shadow attribution", () => {
     const dead = LoweredOrigin.of({ design: LoweredOriginReference.of("TR-1"), kind: "vac-dead" });
     const shadow = LoweredOrigin.of({
-      design: LoweredOriginReference.of("TR-1|TR-2"),
       kind: "vac-shadow",
-      pair: [LoweredOriginReference.of("TR-1"), LoweredOriginReference.of("TR-2")],
+      probe: RuleSubsumptionProbe.of({
+        subsumer: DesignEventRule.of({
+          reference: DesignTransitionIdentifier.of("TR-1"),
+          trigger: TriggerName.of("save"),
+          guard: { op: "bool", value: true },
+          effect: { op: "bool", value: true },
+        }),
+        subsumed: DesignEventRule.of({
+          reference: DesignTransitionIdentifier.of("TR-2"),
+          trigger: TriggerName.of("save"),
+          guard: { op: "bool", value: true },
+          effect: { op: "bool", value: true },
+        }),
+      }),
     });
     const plain = LoweredOrigin.of({ design: LoweredOriginReference.of("DOB-1"), kind: "passthrough" });
     expect(dead.isSyntheticProbe()).toBe(true);
@@ -685,8 +706,14 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
     expect(plain.isSyntheticProbe()).toBe(false);
     expect(plain.isKind("passthrough")).toBe(true);
     expect(plain.isKind("passthrough")).toBe(true);
-    expect(shadow.pairRefs().map((r) => r.asString())).toEqual(["TR-1", "TR-2"]);
-    expect(plain.pairRefs().map((r) => r.asString())).toEqual(["DOB-1", "DOB-1"]);
+    expect(
+      shadow
+        .subsumptionProbe()
+        ?.references()
+        .map((r) => r.asString()),
+    ).toEqual(["TR-1", "TR-2"]);
+    expect(plain.subsumptionProbe()).toBeNull();
+    expect(LoweredOrigin.parse({ design: LoweredOriginReference.of("DOB-1"), kind: "passthrough" }).ok).toBe(true);
     expect(dead.design().asString()).toBe("TR-1");
   });
 });
@@ -810,3 +837,9 @@ describe("the design-side primitives of ruling 3-1 (BusinessRuleReference, Busin
     expect(targets.add(TargetIdentifier.of("BR1.1")).toStrings()).toEqual(["BR1.1"]);
   });
 });
+
+function ruleIndex(markdown: string): BusinessRuleReferenceIndex {
+  const parsed = parseBusinessRuleReferenceIndex(markdown);
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.error));
+  return parsed.value;
+}

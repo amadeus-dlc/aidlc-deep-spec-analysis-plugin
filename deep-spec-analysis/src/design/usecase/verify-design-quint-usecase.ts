@@ -64,30 +64,45 @@ export class VerifyDesignQuintUseCase {
         report = report.unitTimedOut(unit);
         continue;
       }
-      const lowered = unit.lowered({ synthetics: false });
-      const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
-      if (remaining < 3_000) {
-        report = report.unitTimedOut(unit);
-        continue;
-      }
-      const run = this.#siblingBackendClient.runLowered("quint", unit, lowered, remaining);
-      report = run.recordedIn(report, model, unit, lowered);
-      if (run.isBackendUnavailable()) {
-        return matchResult(this.#finalizer.finalize(input.verifyDirectory, report, model), {
-          err: (error): VerifyDesignOutcome => ({ kind: "save-failed", error }),
-          ok: (): VerifyDesignOutcome => ({ kind: "backend-unavailable" }),
-        });
-      }
-      if (!run.canInspectReachability()) continue;
-      for (let machine of report.planReachability(unit, lowered)) {
-        for (const probe of machine) {
-          const probeRemaining = Math.min(UNIT_WALL_TIMEOUT_MS, UNREACH_BUDGET_MS - (this.#clock.now() - started));
-          if (probesUsed >= this.#unreachCap || probeRemaining < 3_000) continue;
-          probesUsed += 1;
-          machine = machine.withVerdict(probe, this.#siblingBackendClient.probeState(probe, probeRemaining));
-        }
-        report = machine.recordedIn(report, probesUsed >= this.#unreachCap, this.#unreachCap);
-      }
+      const terminal = unit.withLowering<VerifyDesignOutcome | null>(
+        { synthetics: false },
+        {
+          failed: (problem) => {
+            report = report.loweringFailed(unit, problem);
+            return null;
+          },
+          ready: (lowered) => {
+            const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
+            if (remaining < 3_000) {
+              report = report.unitTimedOut(unit);
+              return null;
+            }
+            const run = this.#siblingBackendClient.runLowered("quint", unit, lowered, remaining);
+            report = run.recordedIn(report, model, unit, lowered);
+            if (run.isBackendUnavailable()) {
+              return matchResult(this.#finalizer.finalize(input.verifyDirectory, report, model), {
+                err: (error): VerifyDesignOutcome => ({ kind: "save-failed", error }),
+                ok: (): VerifyDesignOutcome => ({ kind: "backend-unavailable" }),
+              });
+            }
+            if (!run.canInspectReachability()) return null;
+            for (let machine of report.planReachability(unit, lowered)) {
+              for (const probe of machine) {
+                const probeRemaining = Math.min(
+                  UNIT_WALL_TIMEOUT_MS,
+                  UNREACH_BUDGET_MS - (this.#clock.now() - started),
+                );
+                if (probesUsed >= this.#unreachCap || probeRemaining < 3_000) continue;
+                probesUsed += 1;
+                machine = machine.withVerdict(probe, this.#siblingBackendClient.probeState(probe, probeRemaining));
+              }
+              report = machine.recordedIn(report, probesUsed >= this.#unreachCap, this.#unreachCap);
+            }
+            return null;
+          },
+        },
+      );
+      if (terminal !== null) return terminal;
     }
 
     const materials = this.#refinementMaterialsRepository.findById(RefinementMaterialsIdentifier.of(input.modelId));

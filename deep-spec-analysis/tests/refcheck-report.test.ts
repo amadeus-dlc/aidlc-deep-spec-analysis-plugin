@@ -3,17 +3,17 @@ import {
   ContentHash,
   FindingKind,
   FindingsSchema,
+  FindingTargets,
   FunctionalRequirementReferences,
   TargetIdentifier,
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
 
-// ReferenceCheckReport 集約・serializer・Repository の契約テスト（PR2b、#15）。
+// ReferenceCheckReport集約・serializer・Repositoryの契約テスト。
 //
-// ドメインは型付き語彙のみ（Json 追放後）。直列化・契約適合・降格文言は
-// adapter の serializer が持ち、文言は golden バイトに載るため逐語で固定する。
-// Repository は save→findById の往復（書かれた真実の再構成→再描画のバイト
-// 同一）と、不在・破損の RepositoryError 変種を契約として検証する。
+// 文書形・キー順・契約適合・降格文言はドメインが所有し、adapterがJSONと改行へ描画する。
+// Repositoryのstore→findByIdの往復で再描画バイトが一致することと、
+// 不在・破損のRepositoryError変種を検証する。
 
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -118,7 +118,7 @@ describe("ReferenceCheckReportIdentifier", () => {
   });
 });
 
-describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
+describe("ReferenceCheckReport domain contract", () => {
   test("open starts with every family checked, in canonical order, and answers the verdict queries", () => {
     const report = ReferenceCheckReport.open(
       ReferenceCheckReportIdentifier.of(ap("/tmp/r"), "components"),
@@ -147,7 +147,13 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
       CheckFamilies.of(Array.from(["A-1", "A-2", "A-3"], (raw) => CheckFamily.of(raw))),
       UnitName.of("u9"),
     );
-    report.finding(CheckFamily.of("A-1"), FindingKind.structureInvalid(), ["check:A-1"], [], "boom");
+    report.finding(
+      CheckFamily.of("A-1"),
+      FindingKind.structureInvalid(),
+      FindingTargets.of(TargetIdentifier.of("check:A-1"), []),
+      [],
+      "boom",
+    );
     report.skip(CheckFamily.of("A-2"), "absent-input", "gone");
     expect(report.findings().toArray()[0]?.detail()).toBe("A-1: boom");
     expect(report.findings().toArray()[0]?.unit()).toBe("u9");
@@ -166,13 +172,28 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
       ReferenceCheckReportIdentifier.of(ap("/tmp/r"), "components"),
       CheckFamilies.of(Array.from(["DD-0", "DD-1", "DD-2"], (raw) => CheckFamily.of(raw))),
     );
-    report.finding(CheckFamily.of("DD-1"), FindingKind.referenceBroken(), ["check:DD-1"], [], "second kind");
-    report.finding(CheckFamily.of("DD-1"), FindingKind.structureInvalid(), ["check:DD-1"], [], "first kind");
-    report.finding(CheckFamily.of("DD-1"), FindingKind.structureInvalid(), ["check:DD-1"], [], "a earlier detail", [
-      "FR-2",
-      "FR-1",
-      "FR-2",
-    ]);
+    report.finding(
+      CheckFamily.of("DD-1"),
+      FindingKind.referenceBroken(),
+      FindingTargets.of(TargetIdentifier.of("check:DD-1"), []),
+      [],
+      "second kind",
+    );
+    report.finding(
+      CheckFamily.of("DD-1"),
+      FindingKind.structureInvalid(),
+      FindingTargets.of(TargetIdentifier.of("check:DD-1"), []),
+      [],
+      "first kind",
+    );
+    report.finding(
+      CheckFamily.of("DD-1"),
+      FindingKind.structureInvalid(),
+      FindingTargets.of(TargetIdentifier.of("check:DD-1"), []),
+      [],
+      "a earlier detail",
+      ["FR-2", "FR-1", "FR-2"],
+    );
     report.skip(CheckFamily.of("DD-2"), "unrecognized-format", "later");
     report.skip(CheckFamily.of("DD-0"), "absent-input", "earlier");
     expect(
@@ -203,7 +224,7 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
   });
 });
 
-describe("serializer (adapter owns the format knowledge)", () => {
+describe("serializer renders the domain report document", () => {
   test("a conforming report renders the canonical document and survives conformance untouched", () => {
     const report = seed("/tmp/r");
     expect(report.conformedTo(findingsSchema)).toBe(report);
@@ -226,7 +247,7 @@ describe("serializer (adapter owns the format knowledge)", () => {
     const badFinding: Finding = Finding.of({
       kind: FindingKind.conflict(),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      targets: TargetIdentifiers.of(Array.from(["check:DD-0"], (raw) => TargetIdentifier.of(raw))),
+      targets: FindingTargets.of(TargetIdentifier.of("check:DD-0"), []),
       witness: { refs: WitnessReferences.of([]) },
       detail: "DD-0: x",
     });

@@ -103,7 +103,7 @@ output (fixed seeds, canonical sorting, no timestamps).
 
 ```bash
 bun install --frozen-lockfile
-bun run check        # Biome + usecase getter checks (read-only)
+bun run check        # Biome + usecase getter + document-language checks (read-only)
 bun run typecheck    # TypeScript
 bun test --coverage
 ```

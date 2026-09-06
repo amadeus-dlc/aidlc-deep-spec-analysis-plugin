@@ -1,10 +1,15 @@
 import {
+  AttributePath,
   type Expression,
   ExpressionTree,
   FunctionalRequirementReferences,
+  ObligationNature,
   type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
+
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import { DesignEventRule } from "./design-event-rule.ts";
+import type { DesignMachine } from "./design-machine.ts";
 // 状態機械の遷移（契約3）。id はドメインプリミティブで運ぶ。
 // compile-down の暗黙部（ガード = state==from ∧ 明示ガード、効果 = state'=to
 // ∧ 明示効果、代入表の state 遷移代入）は遷移自身が所有する——lowering と
@@ -102,24 +107,37 @@ export class DesignTransition {
   }
 
   // compile-down された event 義務そのもの（暗黙ガード・効果つき）。
-  loweredAs(id: LoweredIdentifier, attrPath: string): LoweredObligation {
-    return LoweredObligation.of({
+  loweredAs(id: LoweredIdentifier, attrPath: string, machine: DesignMachine): Result<LoweredObligation, ParseError> {
+    return LoweredObligation.parse({
       id,
-      nature: "event",
+      origin: this.loweredOrigin(machine, AttributePath.of(attrPath)),
+      nature: ObligationNature.of("event"),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      trigger: this.#trigger.asString(),
+      trigger: this.#trigger,
       guard: this.loweredGuard(attrPath),
       effect: this.loweredEffect(attrPath),
     });
   }
 
   // 降ろし方の帰属：遷移。
-  loweredOrigin(): LoweredOrigin {
-    return LoweredOrigin.of({ design: LoweredOriginReference.of(this.#id.asString()), kind: "transition" });
+  loweredOrigin(machine: DesignMachine, attribute: AttributePath): LoweredOrigin {
+    return LoweredOrigin.of({
+      design: LoweredOriginReference.of(this.#id.asString()),
+      kind: "transition",
+      machine,
+      attribute,
+    });
   }
 
-  // 代入表（DesignEventCatalog）用の state 遷移代入: attrPath ← enum(to)。
-  stateAssignment(attrPath: string): readonly [string, Expression] {
-    return [attrPath, { op: "enum", value: this.#to }];
+  asEventRule(attrPath: string): DesignEventRule {
+    return DesignEventRule.of({
+      reference: this.#id,
+      trigger: this.#trigger,
+      guard: this.loweredGuard(attrPath),
+      implicitEffect: this.#stateEquality(attrPath, this.#to, true),
+      ...(this.#effect !== undefined ? { effect: this.#effect } : {}),
+    });
   }
+
+  // 代入表（DesignEventRuleCatalog）用の state 遷移代入: attrPath ← enum(to)。
 }

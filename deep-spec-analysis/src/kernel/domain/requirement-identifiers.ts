@@ -1,3 +1,5 @@
+import type { FirstClassCollection } from "./first-class-collection.ts";
+import type { IterableFirstClassCollection } from "./iterable-first-class-collection.ts";
 // RequirementIdentifiers — requirements.md が宣言する要件 id の集合（ファーストクラス
 // コレクション）。要素は RequirementIdentifier、内側は KeySet（裁定 3-1、2026-09-03）。
 // 抽出（`extractFrom`）は原文からの門、`has` は逆引き検証の問い。
@@ -5,7 +7,9 @@
 import { KeySet } from "./key-set.ts";
 import { RequirementIdentifier } from "./requirement-identifier.ts";
 
-export class RequirementIdentifiers {
+export class RequirementIdentifiers
+  implements FirstClassCollection, IterableFirstClassCollection<RequirementIdentifier>
+{
   readonly #values: KeySet<RequirementIdentifier>;
 
   private constructor(values: KeySet<RequirementIdentifier>) {
@@ -43,5 +47,9 @@ export class RequirementIdentifiers {
   // 境界: 描画・アダプタ専用。
   toStrings(): readonly string[] {
     return this.#values.toArray().map((v) => v.asString());
+  }
+
+  isEmpty(): boolean {
+    return this.#values.isEmpty();
   }
 }

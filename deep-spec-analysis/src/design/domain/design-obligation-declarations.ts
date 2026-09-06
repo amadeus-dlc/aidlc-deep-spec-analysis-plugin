@@ -1,6 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { DesignObligationDeclaration } from "./design-obligation-declaration.ts";
 
-export class DesignObligationDeclarations {
+export class DesignObligationDeclarations
+  implements FirstClassCollection, IterableFirstClassCollection<DesignObligationDeclaration>
+{
   readonly #values: readonly DesignObligationDeclaration[];
 
   private constructor(values: readonly DesignObligationDeclaration[]) {
@@ -21,5 +24,9 @@ export class DesignObligationDeclarations {
 
   toArray(): readonly DesignObligationDeclaration[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

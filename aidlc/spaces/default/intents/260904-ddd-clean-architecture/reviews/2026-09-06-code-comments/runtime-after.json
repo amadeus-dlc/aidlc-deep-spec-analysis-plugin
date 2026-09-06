@@ -1,0 +1,94 @@
+{
+  "head": "3c588ff1e010cbdcbf6ed648877fffbcbb1c767e",
+  "evidence": [
+    {
+      "id": "C01",
+      "of": "IllegalArgumentException",
+      "parse": {
+        "ok": false,
+        "error": {
+          "kind": "not-a-sha256-hex",
+          "raw": "invalid"
+        }
+      }
+    },
+    {
+      "id": "C02",
+      "runtimeExports": [
+        "compareCanonically",
+        "sortedUniqueCanonically"
+      ],
+      "comparison": -8
+    },
+    {
+      "id": "C03",
+      "originalPass": true,
+      "conformedPass": false,
+      "domainReason": "findings schema unreadable: audit-probe",
+      "documentKeys": [
+        "backend",
+        "irVersion",
+        "irHash",
+        "method",
+        "unavailable",
+        "inputs",
+        "checked",
+        "findings",
+        "skipped"
+      ]
+    },
+    {
+      "id": "C04",
+      "sensor": "domain",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "deep-spec-refcheck: failed to write <temporary>/domain/inception/domain-design/deep-spec-refcheck/components.json: io-failed (EEXIST: file already exists, mkdir '<temporary>/domain/inception/domain-design/deep-spec-refcheck')"
+    },
+    {
+      "id": "C04",
+      "sensor": "contract",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "deep-spec-refcheck: failed to write <temporary>/contract/inception/contract-design/deep-spec-refcheck/contract-summary.json: io-failed (EEXIST: file already exists, mkdir '<temporary>/contract/inception/contract-design/deep-spec-refcheck')"
+    },
+    {
+      "id": "C04",
+      "sensor": "functional",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "deep-spec-refcheck: failed to write <temporary>/functional/construction/u1-orders/functional-design/deep-spec-refcheck/functional-design.json: io-failed (EEXIST: file already exists, mkdir '<temporary>/functional/construction/u1-orders/functional-design/deep-spec-refcheck')"
+    },
+    {
+      "id": "C05",
+      "samePresence": {
+        "hasModel": true,
+        "hasFindings": true
+      },
+      "states": {
+        "matching": "verified",
+        "changed": "stale",
+        "absent-anchor": "stale"
+      }
+    },
+    {
+      "id": "C06",
+      "typeFileRuntimeExports": [],
+      "actualParser": "design/adapter/refinement-materials-repository-implementation.ts:parseRefinementMapDocument",
+      "result": {
+        "kind": "malformed",
+        "error": "refinement map does not contain exactly one ```json fence"
+      }
+    },
+    {
+      "id": "C10",
+      "present": false
+    },
+    {
+      "id": "KEEP",
+      "singleReadSnapshot": {
+        "reads": 1,
+        "value": "checked"
+      }
+    }
+  ]
+}

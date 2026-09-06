@@ -1,5 +1,5 @@
-import type { ContentHash } from "@deep-spec-analysis/kernel-domain";
-import { FunctionalRequirementReferences, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import { type ContentHash, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+
 // refinement が見る要件形式モデル（契約1）のビュー。requirements コンテキスト
 // とは別の寛容プロファイル（background / temporal / ears を運ばない・不在や
 // 不読は null）で、refinement 検査に必要な面だけを型で持つ。hash は生 IR の
@@ -79,13 +79,5 @@ export class RefinementRequirements {
       ...this.#obligations.toArray().map((o) => o.id().asTargetId()),
       ...this.#scenarios.toArray().map((s) => s.id().asTargetId()),
     ]);
-  }
-
-  functionalRequirementReferencesOf(id: string): FunctionalRequirementReferences {
-    return (
-      this.#obligations.byId(id)?.functionalRequirementReferences() ??
-      this.#scenarios.byId(id)?.functionalRequirementReferences() ??
-      FunctionalRequirementReferences.of([])
-    );
   }
 }

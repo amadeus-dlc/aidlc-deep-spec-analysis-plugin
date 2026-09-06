@@ -1,7 +1,12 @@
+import { FindingTargets } from "@deep-spec-analysis/kernel-domain";
+
+const comparisonHash = ContentHash.ofText("fixture-model");
+
 import {
   BusinessRuleReference,
   BusinessRuleReferences,
   CheckedUnits,
+  DesignAttributeCatalog,
   DesignAttributeDeclaration,
   DesignAttributeDeclarations,
   DesignAttributeName,
@@ -24,7 +29,6 @@ import {
   DesignModelIdentifier,
   DesignObligation,
   DesignObligationIdentifier,
-  DesignObligationNature,
   DesignObligationOrigin,
   DesignObligations,
   DesignReport,
@@ -46,7 +50,8 @@ import {
   LoweredBackground,
   LoweredIdentifier,
   LoweredObligation,
-  type LoweredOrigin,
+  LoweredOrigin,
+  LoweredOriginReference,
   LoweredScenario,
   type LoweredUnit,
   ReachabilityVerdict,
@@ -59,6 +64,7 @@ import {
 import {
   ArtifactPath,
   AttributeKind,
+  BackendName,
   ContentHash,
   type Expression,
   ExpressionTree,
@@ -66,15 +72,19 @@ import {
   FindingsSchema,
   FunctionalRequirementReferences,
   IntermediateRepresentationVersion,
+  ObligationNature,
   RequirementIdentifier,
+  ScenarioComparison,
+  ScenarioExpectation,
+  ScenarioVerdict,
   SkipReason,
   TargetIdentifier,
-  TargetIdentifiers,
   TriggerName,
   UnitName,
   VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
 import { scenarioBindings } from "./binding-fixtures.ts";
+import { requireSuccess } from "./result-fixtures.ts";
 
 // レイヤード design パイプラインの in-process 検証（PR5、#18）。
 //
@@ -177,7 +187,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
           VerificationMethod.of(backend === "smt" ? "exhaustive" : "simulation"),
         );
         for (const unit of model) {
-          const lowered = unit.lowered({ synthetics: backend === "smt" });
+          const lowered = requireSuccess(unit.lowered({ synthetics: backend === "smt" }));
           const run = sibling.runLowered(backend, unit, lowered, 55_000);
           expect(run.isBackendUnavailable()).toBe(false);
           expect(run.canInspectReachability()).toBe(true);
@@ -236,13 +246,8 @@ type RawDesignMachine = Omit<
 };
 type RawDesignScenario = Omit<
   Parameters<typeof DesignScenario.of>[0],
-  "id" | "businessRuleReferences" | "functionalRequirementReferences" | "event"
-> & {
-  id: string;
-  brRefs: string[];
-  frRefs: string[];
-  event?: { trigger: string };
-};
+  "id" | "businessRuleReferences" | "functionalRequirementReferences" | "event" | "expectation"
+> & { kind: "accept" | "reject"; id: string; brRefs: string[]; frRefs: string[]; event?: { trigger: string } };
 
 // テスト用: 生の entities JSON と属性座標から型付き実体宣言を組む（裁定 2 で
 // DesignUnit は生 JSON を持たなくなった）。座標だけ与えられた属性は kind "" の
@@ -285,14 +290,14 @@ function unit(seed: {
   background?: { id: string; assert: Expression }[];
 }): DesignUnit {
   return DesignUnit.of({
-    unit: seed.unit ?? "u1",
-    entities: entitiesOf(seed.rawEntities ?? [], seed.attrPaths ?? new Set<string>()),
+    unit: UnitName.of(seed.unit ?? "u1"),
+    catalog: DesignAttributeCatalog.of(entitiesOf(seed.rawEntities ?? [], seed.attrPaths ?? new Set<string>())),
     obligations: DesignObligations.of(
       (seed.obligations ?? []).map((o) =>
         DesignObligation.of({
           ...o,
           id: DesignObligationIdentifier.of(o.id),
-          nature: DesignObligationNature.of(o.nature),
+          nature: ObligationNature.of(o.nature),
           origin: DesignObligationOrigin.of(o.origin),
           businessRuleReferences: BusinessRuleReferences.of(
             Array.from(o.brRefs, (raw) => BusinessRuleReference.of(raw)),
@@ -334,6 +339,7 @@ function unit(seed: {
       (seed.scenarios ?? []).map((s) =>
         DesignScenario.of({
           ...s,
+          expectation: ScenarioExpectation.of(s.kind),
           id: DesignScenarioIdentifier.of(s.id),
           businessRuleReferences: BusinessRuleReferences.of(
             Array.from(s.brRefs, (raw) => BusinessRuleReference.of(raw)),
@@ -422,7 +428,7 @@ describe("lowering (typed compile-down)", () => {
   });
 
   test("numbering, maps, and the implicit machine encoding are stable", () => {
-    const low = machineUnit.lowered({ synthetics: false });
+    const low = requireSuccess(machineUnit.lowered({ synthetics: false }));
     // 義務は id の正準順（DOB-1 が DOB-2 の前）→ OB-1=DOB-1(event)、
     // OB-2=DOB-2(invariant)、以後 TR-1/TR-2/ignore。
     expect(
@@ -439,7 +445,9 @@ describe("lowering (typed compile-down)", () => {
       "SM-1",
       "ignore",
     ]);
-    expect(low.index().resolveDesignTarget("SC-1").design).toBe("DSC-1");
+    expect(requireSuccess(low.index().resolveDesignTarget(LoweredIdentifier.of("SC-1"))).design.asString()).toBe(
+      "DSC-1",
+    );
     expect(low.background().toArray()[0]?.id().asString()).toBe("BG-1");
     expect(low.index().attrPathOfMachine("SM-1")).toBe("Ticket.status");
     expect(low.index().machineOfTransition("TR-1")?.id().asString()).toBe("SM-1");
@@ -455,7 +463,7 @@ describe("lowering (typed compile-down)", () => {
   });
 
   test("synthetics add one vac-dead per candidate and shadow pairs for canonically equal effects", () => {
-    const low = machineUnit.lowered({ synthetics: true });
+    const low = requireSuccess(machineUnit.lowered({ synthetics: true }));
     const kinds = low
       .index()
       .toOriginEntries()
@@ -468,7 +476,14 @@ describe("lowering (typed compile-down)", () => {
       .filter((e) => e.isKind("vac-shadow"));
     // 3 候補（DOB-1・TR-1・TR-2）はすべて同トリガ・正準同一効果
     // （eq(prime(status), "closed")）→ 全順序対 6 件。
-    expect(shadows.map((s) => s.pairRefs().map((r) => r.asString()))).toEqual([
+    expect(
+      shadows.map((s) =>
+        s
+          .subsumptionProbe()
+          ?.references()
+          .map((r) => r.asString()),
+      ),
+    ).toEqual([
       ["DOB-1", "TR-1"],
       ["DOB-1", "TR-2"],
       ["TR-1", "DOB-1"],
@@ -504,11 +519,15 @@ describe("lowering (typed compile-down)", () => {
         { id: "DBG-1", assert: { op: "bool", value: false } },
       ],
     });
-    const low = multi.lowered({ synthetics: false });
+    const low = requireSuccess(multi.lowered({ synthetics: false }));
     // ignores は state/trigger 文字列順（x が y の前）、機械は id 順。
     expect(["SM-1", "SM-2"].map((id) => low.index().attrPathOfMachine(id))).toEqual(["T.a", "T.b"]);
-    expect(low.index().resolveDesignTarget("SC-1").design).toBe("DSC-1");
-    expect(low.index().resolveDesignTarget("SC-2").design).toBe("DSC-2");
+    expect(requireSuccess(low.index().resolveDesignTarget(LoweredIdentifier.of("SC-1"))).design.asString()).toBe(
+      "DSC-1",
+    );
+    expect(requireSuccess(low.index().resolveDesignTarget(LoweredIdentifier.of("SC-2"))).design.asString()).toBe(
+      "DSC-2",
+    );
     expect(
       low
         .background()
@@ -600,7 +619,7 @@ describe("remap (design vocabulary attribution)", () => {
     ],
     scenarios: [{ id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: scenarioBindings({}) }],
   });
-  const low = u.lowered({ synthetics: true });
+  const low = requireSuccess(u.lowered({ synthetics: true }));
   const doc = (input: {
     findings?: { kind: string; frRefs: string[]; targets: string[]; witness: Json; detail: string }[];
     skipped?: { target: string; reason: string; detail?: string }[];
@@ -743,11 +762,19 @@ describe("remap (design vocabulary attribution)", () => {
 });
 
 describe("report ordering, cross-check, and degradations", () => {
-  const f = (kind: string, unitName: string, targets: string[], detail: string): DesignFinding =>
+  const f = (
+    kind: string,
+    unitName: string,
+    [head, ...tail]: readonly [string, ...string[]],
+    detail: string,
+  ): DesignFinding =>
     DesignFinding.of({
       kind: FindingKind.of(kind),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))),
+      targets: FindingTargets.of(
+        TargetIdentifier.of(head),
+        tail.map((raw) => TargetIdentifier.of(raw)),
+      ),
       witness: DesignWitness.core([]),
       unit: UnitName.of(unitName),
       detail,
@@ -1039,13 +1066,14 @@ describe("report ordering, cross-check, and degradations", () => {
 
 describe("lowered collections and the lowering index (first-class operations)", () => {
   const u = unit({});
-  const base = u.lowered({ synthetics: false });
+  const base = requireSuccess(u.lowered({ synthetics: false }));
 
   test("of/add/iterator/count/toArray hold OB/SC/BG numbering order", () => {
     const obs = base.obligations().add(
       LoweredObligation.of({
+        origin: LoweredOrigin.of({ kind: "passthrough", design: LoweredOriginReference.of("DOB-1") }),
         id: LoweredIdentifier.of("OB-99"),
-        nature: "invariant",
+        nature: ObligationNature.of("invariant"),
         functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       }),
     );
@@ -1055,8 +1083,9 @@ describe("lowered collections and the lowering index (first-class operations)", 
 
     const scs = base.scenarios().add(
       LoweredScenario.of({
+        origin: DesignScenarioIdentifier.of("DSC-1"),
         id: LoweredIdentifier.of("SC-99"),
-        kind: "accept",
+        expectation: ScenarioExpectation.of("accept"),
         functionalRequirementReferences: FunctionalRequirementReferences.of([]),
         bindings: scenarioBindings({}),
       }),
@@ -1073,14 +1102,7 @@ describe("lowered collections and the lowering index (first-class operations)", 
     expect(bgs.toArray().at(-1)?.id().asString()).toBe("BG-99");
   });
 
-  test("withPassthrough extends attribution immutably and rewrites fall back verbatim", () => {
-    const extended = base.index().withPassthrough("OB-99", "FR-7");
-    expect([extended.originOf("OB-99")?.design().asString(), kindOf(extended.originOf("OB-99"))]).toEqual([
-      "FR-7",
-      "passthrough",
-    ]);
-    expect(base.index().originOf("OB-99")).toBe(null);
-    expect(extended.resolveDesignTarget("OB-99").design).toBe("FR-7");
+  test("index derivation preserves an unknown lowered label without inventing attribution", () => {
     // 未知の lowered id は逐語で残る（detail・witness core とも）。
     expect(base.index().rewriteLoweredIds("No rule for OB-42 applies")).toBe("No rule for OB-42 applies");
     expect(base.index().rewriteLoweredIdTokens("g_OB_42")).toBe("g_OB_42");
@@ -1195,9 +1217,9 @@ const FR6_SYNTH_SHAPE = [
 const FR6_PLAIN_DOC = { bytes: 3230, sha256: "0a90c8683d0537160adbe7b5b0f43fdd15d8757760aa89ed27bae0b5864b53a4" };
 const FR6_SYNTH_DOC = { bytes: 5515, sha256: "4d5029a4c171a30383787c9923838afe068018203a44367c6dcd0847009d87cc" };
 const FR6_PLAIN_ORIGINS =
-  '[{"design":"DOB-1","id":"OB-1","kind":"passthrough","pair":["DOB-1","DOB-1"]},{"design":"DOB-2","id":"OB-2","kind":"passthrough","pair":["DOB-2","DOB-2"]},{"design":"DOB-3","id":"OB-3","kind":"passthrough","pair":["DOB-3","DOB-3"]},{"design":"DOB-4","id":"OB-4","kind":"passthrough","pair":["DOB-4","DOB-4"]},{"design":"TR-1","id":"OB-5","kind":"transition","pair":["TR-1","TR-1"]},{"design":"TR-2","id":"OB-6","kind":"transition","pair":["TR-2","TR-2"]},{"design":"SM-1","id":"OB-7","kind":"ignore","pair":["SM-1","SM-1"]},{"design":"SM-1","id":"OB-8","kind":"ignore","pair":["SM-1","SM-1"]},{"design":"TR-3","id":"OB-9","kind":"transition","pair":["TR-3","TR-3"]},{"design":"TR-4","id":"OB-10","kind":"transition","pair":["TR-4","TR-4"]},{"design":"SM-2","id":"OB-11","kind":"ignore","pair":["SM-2","SM-2"]}]';
+  '[{"design":"DOB-1","id":"OB-1","kind":"passthrough","pair":null},{"design":"DOB-2","id":"OB-2","kind":"passthrough","pair":null},{"design":"DOB-3","id":"OB-3","kind":"passthrough","pair":null},{"design":"DOB-4","id":"OB-4","kind":"passthrough","pair":null},{"design":"TR-1","id":"OB-5","kind":"transition","pair":null},{"design":"TR-2","id":"OB-6","kind":"transition","pair":null},{"design":"SM-1","id":"OB-7","kind":"ignore","pair":null},{"design":"SM-1","id":"OB-8","kind":"ignore","pair":null},{"design":"TR-3","id":"OB-9","kind":"transition","pair":null},{"design":"TR-4","id":"OB-10","kind":"transition","pair":null},{"design":"SM-2","id":"OB-11","kind":"ignore","pair":null}]';
 const FR6_SYNTH_ORIGINS =
-  '[{"design":"DOB-1","id":"OB-1","kind":"passthrough","pair":["DOB-1","DOB-1"]},{"design":"DOB-2","id":"OB-2","kind":"passthrough","pair":["DOB-2","DOB-2"]},{"design":"DOB-3","id":"OB-3","kind":"passthrough","pair":["DOB-3","DOB-3"]},{"design":"DOB-4","id":"OB-4","kind":"passthrough","pair":["DOB-4","DOB-4"]},{"design":"TR-1","id":"OB-5","kind":"transition","pair":["TR-1","TR-1"]},{"design":"TR-2","id":"OB-6","kind":"transition","pair":["TR-2","TR-2"]},{"design":"SM-1","id":"OB-7","kind":"ignore","pair":["SM-1","SM-1"]},{"design":"SM-1","id":"OB-8","kind":"ignore","pair":["SM-1","SM-1"]},{"design":"TR-3","id":"OB-9","kind":"transition","pair":["TR-3","TR-3"]},{"design":"TR-4","id":"OB-10","kind":"transition","pair":["TR-4","TR-4"]},{"design":"SM-2","id":"OB-11","kind":"ignore","pair":["SM-2","SM-2"]},{"design":"DOB-1","id":"OB-12","kind":"vac-dead","pair":["DOB-1","DOB-1"]},{"design":"TR-1","id":"OB-13","kind":"vac-dead","pair":["TR-1","TR-1"]},{"design":"TR-2","id":"OB-14","kind":"vac-dead","pair":["TR-2","TR-2"]},{"design":"TR-3","id":"OB-15","kind":"vac-dead","pair":["TR-3","TR-3"]},{"design":"TR-4","id":"OB-16","kind":"vac-dead","pair":["TR-4","TR-4"]},{"design":"DOB-1|TR-1","id":"OB-17","kind":"vac-shadow","pair":["DOB-1","TR-1"]},{"design":"TR-1|DOB-1","id":"OB-18","kind":"vac-shadow","pair":["TR-1","DOB-1"]},{"design":"TR-3|TR-4","id":"OB-19","kind":"vac-shadow","pair":["TR-3","TR-4"]},{"design":"TR-4|TR-3","id":"OB-20","kind":"vac-shadow","pair":["TR-4","TR-3"]}]';
+  '[{"design":"DOB-1","id":"OB-1","kind":"passthrough","pair":null},{"design":"DOB-2","id":"OB-2","kind":"passthrough","pair":null},{"design":"DOB-3","id":"OB-3","kind":"passthrough","pair":null},{"design":"DOB-4","id":"OB-4","kind":"passthrough","pair":null},{"design":"TR-1","id":"OB-5","kind":"transition","pair":null},{"design":"TR-2","id":"OB-6","kind":"transition","pair":null},{"design":"SM-1","id":"OB-7","kind":"ignore","pair":null},{"design":"SM-1","id":"OB-8","kind":"ignore","pair":null},{"design":"TR-3","id":"OB-9","kind":"transition","pair":null},{"design":"TR-4","id":"OB-10","kind":"transition","pair":null},{"design":"SM-2","id":"OB-11","kind":"ignore","pair":null},{"design":"DOB-1","id":"OB-12","kind":"vac-dead","pair":null},{"design":"TR-1","id":"OB-13","kind":"vac-dead","pair":null},{"design":"TR-2","id":"OB-14","kind":"vac-dead","pair":null},{"design":"TR-3","id":"OB-15","kind":"vac-dead","pair":null},{"design":"TR-4","id":"OB-16","kind":"vac-dead","pair":null},{"design":"DOB-1|TR-1","id":"OB-17","kind":"vac-shadow","pair":["DOB-1","TR-1"]},{"design":"TR-1|DOB-1","id":"OB-18","kind":"vac-shadow","pair":["TR-1","DOB-1"]},{"design":"TR-3|TR-4","id":"OB-19","kind":"vac-shadow","pair":["TR-3","TR-4"]},{"design":"TR-4|TR-3","id":"OB-20","kind":"vac-shadow","pair":["TR-4","TR-3"]}]';
 const FR6_REMAPPED =
   '{"findings":[{"detail":"The guard of TR-1 can never hold under the entity constraints and invariants (witness core attached): the transition is dead.","frRefs":["FR-1"],"kind":"unreachable","targets":["TR-1"],"unit":"u-fr6","witness":{"core":["ant_TR_1"]}},{"detail":"No rule for TR-3 applies","frRefs":["FR-9"],"kind":"completeness-gap","targets":["DSC-1","TR-3"],"unit":"u-fr6","witness":{"core":["g_TR_3","ty_x"]}},{"detail":"TR-3 and TR-4 are mutually redundant: same trigger, provably equivalent guards (under the entity constraints), and an identical effect — one of them can be removed.","frRefs":[],"kind":"redundancy","targets":["TR-3","TR-4"],"unit":"u-fr6","witness":{"core":[]}}],"method":"exhaustive","skipped":[{"detail":"machine SM-2 declares deterministic: false — the same-(state,trigger) overlap check is waived by the model","reason":"waived","target":"TR-3","unit":"u-fr6"},{"detail":"machine SM-2 declares deterministic: false — the same-(state,trigger) overlap check is waived by the model","reason":"waived","target":"TR-4","unit":"u-fr6"},{"detail":"check for DOB-1 timed out","reason":"timeout","target":"DOB-1","unit":"u-fr6"},{"detail":null,"reason":"capability","target":"DSC-2","unit":"u-fr6"}],"unavailable":null}';
 const FR6_UNREADABLE =
@@ -1320,8 +1342,8 @@ describe("lowering and remap stay byte-identical after the ownership move (FR6)"
     ],
   });
 
-  const plain = fr6.lowered({ synthetics: false });
-  const synth = fr6.lowered({ synthetics: true });
+  const plain = requireSuccess(fr6.lowered({ synthetics: false }));
+  const synth = requireSuccess(fr6.lowered({ synthetics: true }));
 
   const siblingDoc = (input: {
     findings?: { kind: string; frRefs: string[]; targets: string[]; witness: Json; detail: string }[];
@@ -1358,7 +1380,10 @@ describe("lowering and remap stay byte-identical after the ownership move (FR6)"
           id,
           design: o.design().asString(),
           kind: ORIGIN_KINDS.find((k) => o.isKind(k)) ?? "",
-          pair: o.pairRefs().map((r) => r.asString()),
+          pair: o
+            .subsumptionProbe()
+            ?.references()
+            .map((r) => r.asString()),
         })) as unknown as Json,
     );
 
@@ -1486,4 +1511,69 @@ describe("lowering and remap stay byte-identical after the ownership move (FR6)"
       ),
     ).toBe(FR6_UNAVAILABLE);
   });
+});
+
+test("設計クロスチェックは同じシナリオIDをユニットごとに区別する", () => {
+  const first = unit({
+    unit: "u1",
+    scenarios: [{ id: "DSC-1", kind: "accept", brRefs: [], frRefs: ["FR-1"], bindings: scenarioBindings({}) }],
+  });
+  const second = unit({
+    unit: "u2",
+    scenarios: [{ id: "DSC-1", kind: "accept", brRefs: [], frRefs: ["FR-2"], bindings: scenarioBindings({}) }],
+  });
+  const input = model([first, second]);
+  const hash = input.irHash();
+  const report = (backend: string, findings: DesignFindings, skipped: DesignSkips) =>
+    DesignReport.compose({
+      id: DesignReportIdentifier.of(ap("/v"), backend),
+      irVersion: input.irVersion(),
+      irHash: hash,
+      method: "exhaustive",
+      findings,
+      skipped,
+    });
+  const a = report(
+    "quint",
+    DesignFindings.of([
+      DesignFinding.of({
+        kind: FindingKind.scenarioViolation(),
+        unit: UnitName.of("u1"),
+        targets: FindingTargets.of(TargetIdentifier.of("DSC-1"), []),
+        functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+        witness: DesignWitness.core([]),
+        detail: "fixture",
+      }),
+    ]),
+    DesignSkips.of([]),
+  );
+  const b = report(
+    "smt",
+    DesignFindings.of([]),
+    DesignSkips.of([
+      DesignSkipped.of({
+        unit: UnitName.of("u2"),
+        target: TargetIdentifier.of("DSC-1"),
+        reason: SkipReason.capability(),
+      }),
+    ]),
+  );
+  const id = DesignReportIdentifier.of(ap("/v"), "cross-check");
+  const compared = DesignReports.of([a, b]).crossChecked(id, input, hash);
+  expect(
+    compared
+      .findings()
+      .toArray()
+      .map((finding) => ({ unit: finding.unit(), references: finding.functionalRequirementReferences().toStrings() })),
+  ).toEqual([{ unit: "u1", references: ["FR-1"] }]);
+  const duplicate = DesignReports.of([a, a]).crossChecked(id, input, hash);
+  expect(duplicate.isUnavailable()).toBe(true);
+  expect(duplicate.findingsCount()).toBe(0);
+  const comparison = ScenarioComparison.of(
+    ScenarioVerdict.clean(BackendName.of("a"), comparisonHash, TargetIdentifier.of("DSC-1"), UnitName.of("u2")),
+    ScenarioVerdict.violated(BackendName.of("b"), comparisonHash, TargetIdentifier.of("DSC-1"), UnitName.of("u2")),
+  );
+  expect(() => [...first.scenarios()][0].crossCheckFinding(UnitName.of("u1"), comparison)).toThrow(
+    "different-cross-check-subject",
+  );
 });

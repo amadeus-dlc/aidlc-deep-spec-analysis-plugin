@@ -1,48 +1,51 @@
+import type { AttributePath } from "@deep-spec-analysis/kernel-domain";
+import {
+  IllegalArgumentException,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
+import type { DesignMachine } from "./design-machine.ts";
 import type { LoweredOriginReference } from "./lowered-origin-reference.ts";
+import type { RuleSubsumptionProbe } from "./rule-subsumption-probe.ts";
 
-// 降ろし方の閉じた集合——帰属の内部表現（裁定 17）。外からは isKind / isSyntheticProbe で問う。
-type LoweringKind = "passthrough" | "transition" | "ignore" | "vac-dead" | "vac-shadow";
-
-// lowered 義務の設計帰属——降ろし元の設計 id、降ろし方（passthrough / transition
-// / ignore / 到達不能プローブ / 影プローブ）、影プローブなら対。プローブか
-// どうかと対の参照は帰属自身の知識（#71 波20）。
-// 未検証の構築引数。VO・エンティティ本体とは区別する。
-type LoweredOriginParam = {
-  design: LoweredOriginReference;
-  kind: LoweringKind;
-  pair?: readonly [LoweredOriginReference, LoweredOriginReference];
-};
+type LoweredOriginParam =
+  | { kind: "passthrough" | "ignore" | "vac-dead"; design: LoweredOriginReference }
+  | { kind: "transition"; design: LoweredOriginReference; machine: DesignMachine; attribute: AttributePath }
+  | { kind: "vac-shadow"; probe: RuleSubsumptionProbe };
 
 export class LoweredOrigin {
-  readonly #design: LoweredOriginReference;
-  readonly #kind: LoweringKind;
-  readonly #pair: readonly [LoweredOriginReference, LoweredOriginReference] | undefined;
-
+  readonly #value: LoweredOriginParam;
   private constructor(props: LoweredOriginParam) {
-    this.#design = props.design;
-    this.#kind = props.kind;
-    this.#pair = props.pair;
+    if (
+      props.kind === "transition" &&
+      (!props.machine.ownsTransition(props.design) || !props.machine.hasAttribute(props.attribute))
+    )
+      throw new IllegalArgumentException({ kind: "transition-origin-mismatch" });
+    this.#value = { ...props };
   }
-
   static of(props: LoweredOriginParam): LoweredOrigin {
     return new LoweredOrigin(props);
   }
-
+  static parse(props: LoweredOriginParam): Result<LoweredOrigin, ParseError> {
+    return parseConstruction(() => new LoweredOrigin(props));
+  }
   design(): LoweredOriginReference {
-    return this.#design;
+    return this.#value.kind === "vac-shadow" ? this.#value.probe.labelReference() : this.#value.design;
   }
-
-  isKind(kind: LoweringKind): boolean {
-    return this.#kind === kind;
+  isKind(kind: LoweredOriginParam["kind"]): boolean {
+    return this.#value.kind === kind;
   }
-
-  // 合成プローブ（到達不能・影）の帰属か——remap がノイズとして落とす skip の判定面。
   isSyntheticProbe(): boolean {
-    return this.#kind === "vac-dead" || this.#kind === "vac-shadow";
+    return this.#value.kind === "vac-dead" || this.#value.kind === "vac-shadow";
   }
-
-  // 影プローブの対（対を持たない帰属は自分自身との対——凍結挙動）。
-  pairRefs(): readonly [LoweredOriginReference, LoweredOriginReference] {
-    return this.#pair ?? [this.#design, this.#design];
+  subsumptionProbe(): RuleSubsumptionProbe | null {
+    return this.#value.kind === "vac-shadow" ? this.#value.probe : null;
+  }
+  machine(): DesignMachine | null {
+    return this.#value.kind === "transition" ? this.#value.machine : null;
+  }
+  attribute(): AttributePath | null {
+    return this.#value.kind === "transition" ? this.#value.attribute : null;
   }
 }

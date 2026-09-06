@@ -11,6 +11,7 @@ export {
 } from "./design-report-serializer.ts";
 export { DesignVerifyDirectoryRepositoryImplementation } from "./design-verify-directory-repository-implementation.ts";
 export { renderLoweredDocument } from "./lowered-document-serializer.ts";
+export { parseBusinessRuleReferenceIndex } from "./parse-business-rule-reference-index.ts";
 export { reachabilityVariant } from "./reachability-variant.ts";
 export type { RefinementChildQuery } from "./refinement-child-query.ts";
 export { RefinementMapRepositoryImplementation } from "./refinement-map-repository-implementation.ts";

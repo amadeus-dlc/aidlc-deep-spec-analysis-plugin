@@ -1,7 +1,7 @@
 import type {
   FindingKind,
+  FindingTargets,
   FunctionalRequirementReferences,
-  TargetIdentifiers,
   UnitName,
 } from "@deep-spec-analysis/kernel-domain";
 import type { WitnessReferences } from "./witness-references.ts";
@@ -14,7 +14,7 @@ import type { WitnessReferences } from "./witness-references.ts";
 type FindingParam = {
   kind: FindingKind;
   functionalRequirementReferences: FunctionalRequirementReferences;
-  targets: TargetIdentifiers;
+  targets: FindingTargets;
   witness: { refs: WitnessReferences };
   unit?: UnitName;
   detail: string;
@@ -23,7 +23,7 @@ type FindingParam = {
 export class Finding {
   readonly #kind: FindingKind;
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
-  readonly #targets: TargetIdentifiers;
+  readonly #targets: FindingTargets;
   readonly #witness: WitnessReferences;
   readonly #unit: UnitName | undefined;
   readonly #detail: string;
@@ -51,7 +51,7 @@ export class Finding {
     return this.#functionalRequirementReferences;
   }
 
-  targets(): TargetIdentifiers {
+  targets(): FindingTargets {
     return this.#targets;
   }
 

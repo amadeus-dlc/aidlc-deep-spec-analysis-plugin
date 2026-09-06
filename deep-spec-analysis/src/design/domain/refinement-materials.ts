@@ -1,10 +1,10 @@
+import { IllegalArgumentException } from "@deep-spec-analysis/kernel-infrastructure";
 // RefinementMaterials 集約 — Phase 3（refinement）の随伴文脈。恒等は設計
 // モデルへの 1:1 錨着（RefinementMaterialsIdentifier）。inactive は適用外（レコード
 // ルートまたは要件モデルが存在しない場合）だけを表す。取得失敗や不正入力は
 // Repository port の Result で運び、この集約の正当な状態に混ぜない。
 
 import { SkipReason, UnitName } from "@deep-spec-analysis/kernel-domain";
-import { DesignInputAnchors } from "./design-input-anchors.ts";
 import type { DesignModel } from "./design-model.ts";
 import { DesignSkipped } from "./design-skipped.ts";
 import { DesignSkips } from "./design-skips.ts";
@@ -40,6 +40,7 @@ export class RefinementMaterials {
   }
 
   prepare(model: DesignModel): RefinementPreparation {
+    if (!this.#id.isFor(model.id())) throw new IllegalArgumentException({ kind: "refinement-model-mismatch" });
     if (this.#state.kind === "inactive") return RefinementPreparation.of([], DesignSkips.of([]), null);
     const requirements = this.#state.requirements;
     const skipAll = (reason: SkipReason, detail: string): RefinementPreparation =>
@@ -76,7 +77,18 @@ export class RefinementMaterials {
         for (const unit of model) {
           const unitMap = map.unitMapOf(unit.id());
           if (unitMap !== undefined && unitMap !== null) {
-            plans.push(UnitRefinementPlan.of(unit, unitMap, requirements, artifact));
+            const plan = UnitRefinementPlan.parse(unit, unitMap, requirements, artifact);
+            if (plan.ok) plans.push(plan.value);
+            else
+              for (const target of requirements.allTargetIds())
+                skipped = skipped.add(
+                  DesignSkipped.of({
+                    target,
+                    reason: SkipReason.compileError(),
+                    unit: UnitName.of(unit.name()),
+                    detail: `refinement plan could not be constructed: ${plan.error.kind}`,
+                  }),
+                );
             continue;
           }
           for (const target of requirements.allTargetIds())
@@ -89,7 +101,7 @@ export class RefinementMaterials {
               }),
             );
         }
-        return RefinementPreparation.of(plans, skipped, DesignInputAnchors.of(inputs));
+        return RefinementPreparation.of(plans, skipped, inputs);
       },
     });
   }

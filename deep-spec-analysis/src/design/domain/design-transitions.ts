@@ -1,7 +1,8 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { DesignTransition } from "./design-transition.ts";
 
 // 遷移のファーストクラスコレクション。id の正準順（lowering の凍結順）を所有。
-export class DesignTransitions {
+export class DesignTransitions implements FirstClassCollection, IterableFirstClassCollection<DesignTransition> {
   readonly #values: readonly DesignTransition[];
 
   private constructor(values: readonly DesignTransition[]) {
@@ -30,5 +31,9 @@ export class DesignTransitions {
 
   toArray(): readonly DesignTransition[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

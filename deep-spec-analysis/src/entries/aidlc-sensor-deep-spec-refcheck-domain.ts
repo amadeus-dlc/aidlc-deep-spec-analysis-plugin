@@ -16,7 +16,9 @@
 //
 // Sensor contract: parses --stage / --output-path (+ --report-only for the
 // doctor: compute and report, write nothing); pass-through on writes that are
-// not components.md; one JSON verdict line on stdout; always exit 0.
+// not components.md. Verdicts (including not-applicable) emit one JSON line
+// on stdout and exit 0. A missing/invalid --output-path or report save failure
+// emits a diagnostic on stderr, no verdict, and exits 1.
 
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

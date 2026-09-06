@@ -1,10 +1,11 @@
+import type { FirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 // RefinementQueryVerdicts — クエリ id（QueryLabel）→ refinement 判定の索引。
 // 内側は KeyedIndex（裁定 3-1、2026-09-03）。
 
 import type { KeyedIndex, QueryLabel } from "@deep-spec-analysis/kernel-domain";
 import type { RefinementQueryVerdict } from "./refinement-query-verdict.ts";
 
-export class RefinementQueryVerdicts {
+export class RefinementQueryVerdicts implements FirstClassCollection {
   readonly #values: KeyedIndex<QueryLabel, RefinementQueryVerdict>;
 
   private constructor(values: KeyedIndex<QueryLabel, RefinementQueryVerdict>) {
@@ -17,5 +18,9 @@ export class RefinementQueryVerdicts {
 
   verdictOf(queryId: QueryLabel): RefinementQueryVerdict | undefined {
     return this.#values.get(queryId);
+  }
+
+  isEmpty(): boolean {
+    return this.#values.isEmpty();
   }
 }

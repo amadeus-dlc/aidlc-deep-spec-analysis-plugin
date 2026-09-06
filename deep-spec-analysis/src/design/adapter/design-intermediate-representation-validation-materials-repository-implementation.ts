@@ -45,7 +45,19 @@ import {
   TargetIdentifier,
   TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
-import { flatMapResult } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  combineResults,
+  err,
+  flatMapResult,
+  isObject,
+  type Json,
+  ok,
+  type Result,
+  err as repoErr,
+  traverseResult,
+  validateSchema,
+} from "@deep-spec-analysis/kernel-infrastructure";
+import { parseBusinessRuleReferenceIndex } from "./parse-business-rule-reference-index.ts";
 
 // 契約3 設計 IR の検査材料ゲートウェイ。markdown フェンスの抽出、JSON 解釈、
 // 契約スキーマの適用、生 Json の寛容な解体、そしてユニットごとの BR 材料
@@ -59,17 +71,7 @@ import { flatMapResult } from "@deep-spec-analysis/kernel-infrastructure";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { DesignIntermediateRepresentationValidationMaterialsRepository } from "@deep-spec-analysis/design-usecase";
-import {
-  combineResults,
-  err,
-  isObject,
-  type Json,
-  ok,
-  type Result,
-  err as repoErr,
-  traverseResult,
-  validateSchema,
-} from "@deep-spec-analysis/kernel-infrastructure";
+
 import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
 import { parseDesignEntities } from "./design-entities-parser.ts";
 import type { DesignIntermediateRepresentationValidationMaterialsConfiguration } from "./design-intermediate-representation-validation-materials-configuration.ts";
@@ -225,6 +227,8 @@ function buildUnitView(
   const rulesPath =
     recordRoot === null ? null : join(recordRoot, "construction", unitName, "functional-design", "rules.md");
   const rulesMarkdown = rulesPath === null ? null : readIfExists(rulesPath);
+  const rules = rulesMarkdown === null ? ok(null) : parseBusinessRuleReferenceIndex(rulesMarkdown);
+  if (!rules.ok) return err(JSON.stringify(rules.error));
 
   const targets = traverseResult(unformalizedTargets, TargetIdentifier.parse);
   if (!targets.ok) return err(JSON.stringify(targets.error));
@@ -238,7 +242,7 @@ function buildUnitView(
       background: DesignBackgroundDeclarations.of(background),
       unformalizedTargets: UnformalizedTargets.of(targets.value),
       directoryExists,
-      rulesMarkdown,
+      rules: rules.value,
     }),
   );
 }

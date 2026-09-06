@@ -1,7 +1,10 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { SatisfiabilityModuloTheoriesEventPairProbe } from "./satisfiability-modulo-theories-event-pair-probe.ts";
 
 // 同トリガ event 対プローブのファーストクラスコレクション（発行順を保持）。
-export class SatisfiabilityModuloTheoriesEventPairProbes {
+export class SatisfiabilityModuloTheoriesEventPairProbes
+  implements FirstClassCollection, IterableFirstClassCollection<SatisfiabilityModuloTheoriesEventPairProbe>
+{
   readonly #values: readonly SatisfiabilityModuloTheoriesEventPairProbe[];
 
   private constructor(values: readonly SatisfiabilityModuloTheoriesEventPairProbe[]) {
@@ -24,5 +27,9 @@ export class SatisfiabilityModuloTheoriesEventPairProbes {
 
   toArray(): readonly SatisfiabilityModuloTheoriesEventPairProbe[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

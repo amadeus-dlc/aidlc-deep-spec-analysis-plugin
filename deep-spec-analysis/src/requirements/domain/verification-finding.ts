@@ -1,8 +1,8 @@
 import {
   FindingKind,
+  type FindingTargets,
   type FunctionalRequirementReferences,
   type TargetIdentifier,
-  type TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
 import type { VerificationWitness } from "./verification-witness.ts";
 
@@ -16,7 +16,7 @@ import type { VerificationWitness } from "./verification-witness.ts";
 type VerificationFindingParam = {
   kind: FindingKind;
   functionalRequirementReferences: FunctionalRequirementReferences;
-  targets: TargetIdentifiers;
+  targets: FindingTargets;
   witness: VerificationWitness;
   detail: string;
 };
@@ -24,7 +24,7 @@ type VerificationFindingParam = {
 export class VerificationFinding {
   readonly #kind: FindingKind;
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
-  readonly #targets: TargetIdentifiers;
+  readonly #targets: FindingTargets;
   readonly #witness: VerificationWitness;
   readonly #detail: string;
 
@@ -42,6 +42,10 @@ export class VerificationFinding {
     return new VerificationFinding(props);
   }
 
+  isConflict(): boolean {
+    return this.#kind.asString() === "conflict";
+  }
+
   kind(): string {
     return this.#kind.asString();
   }
@@ -50,7 +54,7 @@ export class VerificationFinding {
     return this.#functionalRequirementReferences;
   }
 
-  targets(): TargetIdentifiers {
+  targets(): FindingTargets {
     return this.#targets;
   }
 

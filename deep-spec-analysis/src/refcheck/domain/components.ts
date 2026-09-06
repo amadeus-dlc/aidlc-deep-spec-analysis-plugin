@@ -4,9 +4,17 @@
 // 運ぶ。DD-1 の重複検出・DD-5 の所有競合・DD-7 の閉路検出は集まり＝
 // Components の知識。
 
-import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  FindingKind,
+  FindingTargets,
+  type FirstClassCollection,
+  type IterableFirstClassCollection,
+  TargetIdentifier,
+  TargetIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
 import type { Component } from "./component.ts";
-import { DD_1, DD_2, DD_3, DD_4, DD_5, DD_6, DD_7 } from "./component-check-families.ts";
+import { DD_1, DD_4, DD_5, DD_7 } from "./component-check-families.ts";
 import type { ComponentEntity } from "./component-entity.ts";
 import { ComponentName } from "./component-name.ts";
 import { EntityName } from "./entity-name.ts";
@@ -14,7 +22,7 @@ import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import { WitnessReference } from "./witness-reference.ts";
 
 // 宣言済みコンポーネントの集まり——名前解決・依存グラフの知識を持つ。
-export class Components {
+export class Components implements FirstClassCollection, IterableFirstClassCollection<Component> {
   readonly #values: readonly Component[];
 
   private constructor(values: readonly Component[]) {
@@ -134,30 +142,26 @@ export class Components {
     return this.#values;
   }
 
-  // DD-1..DD-7 の不変条件（種別規律の裁定 11）。判定は宣言と集まりの知識、
-  // 文言と発生順は golden 凍結。
   check(report: ReferenceCheckReport, artifact: ArtifactPath): void {
-    const art = artifact.asString();
+    for (const component of this.#values) component.checkName(report, artifact);
+    this.#checkDuplicateNames(report, artifact);
+    for (const component of this.#values) component.checkReferences(this, report, artifact);
+    for (const component of this.#values) component.checkSelfReferences(report, artifact);
+    this.#checkSymmetry(report, artifact);
+    for (const component of this.#values) component.checkIdentifiers(report, artifact);
+    this.#checkOwnership(report, artifact);
+    for (const component of this.#values) component.checkEntityReferences(this, report, artifact);
+    this.#checkCycles(report, artifact);
+  }
 
-    // --- DD-1: name uniqueness + PascalCase -------------------------------
-    for (const c of this) {
-      if (!c.nameIsPascalCase()) {
-        const cName = c.name().asString();
-        report.finding(
-          DD_1,
-          FindingKind.structureInvalid(),
-          [TargetIdentifiers.safe("component", cName)],
-          [WitnessReference.at(art, `${c.element().asString()}.name`, cName)],
-          `component name "${cName}" is not PascalCase`,
-        );
-      }
-    }
+  #checkDuplicateNames(report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    const art = artifact.asString();
     for (const { prior, current } of this.duplicateNamePairs()) {
       const cName = current.name().asString();
       report.finding(
         DD_1,
         FindingKind.structureInvalid(),
-        [TargetIdentifiers.safe("component", cName)],
+        FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", cName)), []),
         [
           WitnessReference.at(art, `${prior.element().asString()}.name`, cName),
           WitnessReference.at(art, `${current.element().asString()}.name`, cName),
@@ -165,48 +169,10 @@ export class Components {
         `component name "${cName}" is declared more than once`,
       );
     }
+  }
 
-    // --- DD-2: referenced components declared -----------------------------
-    for (const c of this) {
-      for (const r of [...c.dependsOn(), ...c.dependents()]) {
-        if (!this.declares(r.component())) {
-          report.finding(
-            DD_2,
-            FindingKind.referenceBroken(),
-            [TargetIdentifiers.safe("component", r.component().asString())],
-            [WitnessReference.at(art, r.element().asString(), r.component().asString())],
-            `"${c.name().asString()}" references undeclared component "${r.component().asString()}"`,
-          );
-        }
-      }
-      for (const e of c.entities()) {
-        for (const r of e.references()) {
-          if (!this.declares(r.ownedBy())) {
-            report.finding(
-              DD_2,
-              FindingKind.referenceBroken(),
-              [TargetIdentifiers.safe("component", r.ownedBy().asString())],
-              [WitnessReference.at(art, `${r.element().asString()}.owned_by`, r.ownedBy().asString())],
-              `entity "${e.name().asString()}" references owner component "${r.ownedBy().asString()}" which is not declared`,
-            );
-          }
-        }
-      }
-    }
-
-    // --- DD-3: no self-dependency ------------------------------------------
-    for (const c of this) {
-      for (const r of c.selfReferences()) {
-        report.finding(
-          DD_3,
-          FindingKind.structureInvalid(),
-          [TargetIdentifiers.safe("component", c.name().asString())],
-          [WitnessReference.at(art, r.element().asString(), c.name().asString())],
-          `component "${c.name().asString()}" lists itself as a dependency`,
-        );
-      }
-    }
-
+  #checkSymmetry(report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    const art = artifact.asString();
     // --- DD-4: depends_on / dependents symmetry ----------------------------
     for (const c of this) {
       for (const r of c.dependsOn()) {
@@ -216,10 +182,9 @@ export class Components {
           report.finding(
             DD_4,
             FindingKind.structureInvalid(),
-            [
-              TargetIdentifiers.safe("component", c.name().asString()),
-              TargetIdentifiers.safe("component", r.component().asString()),
-            ],
+            FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", c.name().asString())), [
+              TargetIdentifier.of(TargetIdentifiers.safe("component", r.component().asString())),
+            ]),
             [
               WitnessReference.at(art, r.element().asString(), r.component().asString()),
               WitnessReference.at(art, `${other.element().asString()}.dependents`, c.name().asString()),
@@ -235,10 +200,9 @@ export class Components {
           report.finding(
             DD_4,
             FindingKind.structureInvalid(),
-            [
-              TargetIdentifiers.safe("component", c.name().asString()),
-              TargetIdentifiers.safe("component", r.component().asString()),
-            ],
+            FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", c.name().asString())), [
+              TargetIdentifier.of(TargetIdentifiers.safe("component", r.component().asString())),
+            ]),
             [
               WitnessReference.at(art, r.element().asString(), r.component().asString()),
               WitnessReference.at(art, `${other.element().asString()}.depends_on`, c.name().asString()),
@@ -248,60 +212,38 @@ export class Components {
         }
       }
     }
+  }
 
-    // --- DD-5: entity single ownership + identifier ------------------------
-    for (const c of this) {
-      for (const e of c.entities()) {
-        if (!e.hasIdentifier()) {
-          report.finding(
-            DD_5,
-            FindingKind.structureInvalid(),
-            [TargetIdentifiers.safe("entity", e.name().asString())],
-            [WitnessReference.at(art, `${e.element().asString()}.identifier`)],
-            `entity "${e.name().asString()}" has no identifier`,
-          );
-        }
-      }
-    }
+  #checkOwnership(report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    const art = artifact.asString();
     for (const conflict of this.ownershipConflicts()) {
       const name = conflict.name.asString();
       report.finding(
         DD_5,
         FindingKind.structureInvalid(),
-        [TargetIdentifiers.safe("entity", name)],
+        FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", name)), []),
         conflict.owners.map((o) =>
           WitnessReference.at(art, o.entity.element().asString(), o.component.name().asString()),
         ),
         `entity "${name}" is owned by ${conflict.owners.length} components (${conflict.owners.map((o) => o.component.name().asString()).join(", ")}) — must be exactly one`,
       );
     }
+  }
 
-    // --- DD-6: references.entity declared under its owned_by ---------------
-    for (const c of this) {
-      for (const e of c.entities()) {
-        for (const r of e.references()) {
-          const owner = this.byName(r.ownedBy());
-          if (!owner) continue; // DD-2 already reported the undeclared owner
-          if (!owner.entities().declaresEntity(r.entity())) {
-            report.finding(
-              DD_6,
-              FindingKind.referenceBroken(),
-              [TargetIdentifiers.safe("entity", r.entity().asString())],
-              [WitnessReference.at(art, `${r.element().asString()}.entity`, r.entity().asString())],
-              `entity "${e.name().asString()}" references "${r.entity().asString()}" as owned by "${r.ownedBy().asString()}", but "${r.ownedBy().asString()}" declares no such entity`,
-            );
-          }
-        }
-      }
-    }
-
+  #checkCycles(report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    const art = artifact.asString();
     // --- DD-7: acyclic depends_on graph -------------------------------------
     // Self-loops are DD-3's finding; DD-7 reports only genuine multi-node cycles.
-    for (const cycle of this.dependencyCycles().filter((c) => c.length > 1)) {
+    for (const cycle of this.dependencyCycles()) {
+      const [head, ...tail] = cycle;
+      if (head === undefined || tail.length === 0) continue;
       report.finding(
         DD_7,
         FindingKind.structureInvalid(),
-        cycle.map((n) => TargetIdentifiers.safe("component", n)),
+        FindingTargets.of(
+          TargetIdentifier.of(TargetIdentifiers.safe("component", head)),
+          tail.map((name) => TargetIdentifier.of(TargetIdentifiers.safe("component", name))),
+        ),
         cycle.map((n, i) =>
           WitnessReference.at(
             art,
@@ -312,5 +254,9 @@ export class Components {
         `dependency cycle: ${[...cycle, cycle[0]].join(" -> ")}`,
       );
     }
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

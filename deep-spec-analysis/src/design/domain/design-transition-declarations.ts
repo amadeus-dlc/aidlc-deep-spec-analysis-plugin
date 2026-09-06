@@ -1,6 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { DesignTransitionDeclaration } from "./design-transition-declaration.ts";
 
-export class DesignTransitionDeclarations {
+export class DesignTransitionDeclarations
+  implements FirstClassCollection, IterableFirstClassCollection<DesignTransitionDeclaration>
+{
   readonly #values: readonly DesignTransitionDeclaration[];
 
   private constructor(values: readonly DesignTransitionDeclaration[]) {
@@ -21,5 +24,9 @@ export class DesignTransitionDeclarations {
 
   toArray(): readonly DesignTransitionDeclaration[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

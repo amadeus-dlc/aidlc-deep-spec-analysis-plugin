@@ -3,7 +3,9 @@ import {
   ContentHash,
   FindingKind,
   FindingsSchema,
+  FindingTargets,
   FunctionalRequirementReferences,
+  KeyedIndex,
   RequirementIdentifier,
   RequirementIdentifiers,
   TargetIdentifier,
@@ -35,8 +37,9 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import type { Result } from "@deep-spec-analysis/kernel-infrastructure";
+import type { ParseError, Result } from "@deep-spec-analysis/kernel-infrastructure";
 import {
+  buildSiblingUnitEntities,
   DesignRecordRepositoryImplementation,
   parseComponentCatalog,
   parseDomainEntitiesDocument,
@@ -47,8 +50,6 @@ import {
   renderReportBytes,
 } from "@deep-spec-analysis/refcheck-adapter";
 import {
-  AttributeName,
-  AttributeNames,
   BlockIndex,
   ContractRows,
   ContractsTableOutcome,
@@ -57,7 +58,6 @@ import {
   DesignRecordIdentifier,
   type DomainEntitiesOutcome,
   type EntitiesOutcome,
-  EntityName,
   Finding,
   Findings,
   type FunctionalSpecificationOutcome,
@@ -399,7 +399,7 @@ type FunctionalOverrides = {
   spec?: FunctionalSpecificationOutcome;
   requirementIdsKnown?: RequirementIdentifiers | null;
   domainEntities?: DomainEntitiesOutcome;
-  siblingUnits?: SiblingUnitIndex;
+  siblingUnits?: Result<SiblingUnitIndex, ParseError>;
 };
 
 // 文書は (input, outcome) の対か null（無い）。unit は明示の undefined で
@@ -425,7 +425,7 @@ function functionalReport(overrides: FunctionalOverrides): ReferenceCheckReport 
         requirements: doc("requirements.md", overrides.requirementIdsKnown ?? undefined),
         componentsArtifact: ArtifactPath.of("components.md"),
         components: doc("components.md", overrides.domainEntities),
-        siblingUnits: overrides.siblingUnits ?? SiblingUnitIndex.of(new Map()),
+        siblingUnits: overrides.siblingUnits ?? SiblingUnitIndex.parse(KeyedIndex.empty()),
         siblingInputs: InputAnchors.of([]),
       },
     }).checkFunctionalDesign(ap("/tmp/r")),
@@ -690,16 +690,7 @@ describe("functional branches the fixtures do not exercise", () => {
       entities: parseEntitiesDocument(entitiesMd),
       spec: parseFunctionalSpecDocument("# prose only, no machines\n"),
       domainEntities: parseDomainEntitiesDocument(componentsMd),
-      siblingUnits: SiblingUnitIndex.of(
-        new Map([
-          [
-            "u1",
-            new Map([
-              ["order", { name: EntityName.of("Order"), attrs: AttributeNames.of([AttributeName.of("status")]) }],
-            ]),
-          ],
-        ]),
-      ),
+      siblingUnits: buildSiblingUnitEntities([{ unit: "u1", text: entitiesMd }]),
     });
     const skipDetails = report
       .skipped()
@@ -721,14 +712,12 @@ describe("functional branches the fixtures do not exercise", () => {
     const report = functionalReport({
       unit: undefined,
       domainEntities: parseDomainEntitiesDocument(componentsMd),
-      siblingUnits: SiblingUnitIndex.of(
-        new Map([
-          [
-            "u2",
-            new Map([["order", { name: EntityName.of("Order"), attrs: AttributeNames.of([AttributeName.of("qty")]) }]]),
-          ],
-        ]),
-      ),
+      siblingUnits: buildSiblingUnitEntities([
+        {
+          unit: "u2",
+          text: "```yaml\nentities:\n  - name: Order\n    attributes:\n      - name: qty\n        type: integer\n```\n",
+        },
+      ]),
     });
     const reasons = report
       .skipped()
@@ -747,7 +736,7 @@ describe("functional branches the fixtures do not exercise", () => {
         Finding.of({
           kind: FindingKind.conflict(),
           functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-          targets: TargetIdentifiers.of(Array.from(["check:DD-0"], (raw) => TargetIdentifier.of(raw))),
+          targets: FindingTargets.of(TargetIdentifier.of("check:DD-0"), []),
           witness: { refs: WitnessReferences.of([]) },
           detail: "DD-0: x",
         }),

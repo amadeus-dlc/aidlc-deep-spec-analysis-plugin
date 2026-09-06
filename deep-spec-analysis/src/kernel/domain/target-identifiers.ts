@@ -1,3 +1,5 @@
+import type { FirstClassCollection } from "./first-class-collection.ts";
+import type { IterableFirstClassCollection } from "./iterable-first-class-collection.ts";
 // finding / checked / crossChecked ペイロードが運ぶ target id 列のファースト
 // クラスコレクション。要素は TargetIdentifier（#71 波10——生 string の集合ではない）。
 // of は型付きの TargetIdentifier を受け取る。
@@ -7,7 +9,7 @@
 import { sortedUniqueCanonically } from "@deep-spec-analysis/kernel-infrastructure";
 import { TargetIdentifier } from "./target-identifier.ts";
 
-export class TargetIdentifiers {
+export class TargetIdentifiers implements FirstClassCollection, IterableFirstClassCollection<TargetIdentifier> {
   readonly #values: readonly TargetIdentifier[];
 
   private constructor(values: readonly TargetIdentifier[]) {
@@ -57,7 +59,7 @@ export class TargetIdentifiers {
     return new TargetIdentifiers([...this.#values].sort((a, b) => a.compareTo(b)));
   }
 
-  // finding の targets 面の凍結正準形（一意化 + id 順）。
+  // checked / crossChecked の対象列を一意化し、id順に並べる。
   sortedUniqueCanonically(): TargetIdentifiers {
     return TargetIdentifiers.of(
       Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetIdentifier.of(raw)),
@@ -75,5 +77,9 @@ export class TargetIdentifiers {
   // 境界: 描画・アダプタ・生 id 材料専用。
   toStrings(): string[] {
     return this.#values.map((v) => v.asString());
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

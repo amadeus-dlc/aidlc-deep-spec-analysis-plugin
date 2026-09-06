@@ -98,7 +98,7 @@ describe("domain construction contracts", () => {
   contract(DesignMachineIdentifier, "SM-1", "");
   contract(DesignBackgroundIdentifier, "DBG-1", "");
   contract(TransitionReference, "value", "");
-  contract(LoweredIdentifier, "value", "");
+  contract(LoweredIdentifier, "OB-1", "");
   contract(ObligationIdentifier, "OB-1", "");
   contract(IntermediateRepresentationAttributeName, "value", "");
   contract(ScenarioIdentifier, "SC-1", "");

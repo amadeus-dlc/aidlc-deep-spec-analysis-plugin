@@ -1,0 +1,12 @@
+{
+  "extends": "../../../../../../../deep-spec-analysis/tsconfig.json",
+  "compilerOptions": {
+    "typeRoots": [
+      "../../../../../../../deep-spec-analysis/node_modules/@types"
+    ]
+  },
+  "include": [
+    "probe.ts",
+    "schema-cost.ts"
+  ]
+}

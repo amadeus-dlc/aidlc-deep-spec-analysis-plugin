@@ -1,8 +1,20 @@
+import {
+  type ArtifactPath,
+  FindingKind,
+  FindingTargets,
+  TargetIdentifier,
+  TargetIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
+import { DD_1, DD_2, DD_3 } from "./component-check-families.ts";
 import type { ComponentEntities } from "./component-entities.ts";
 import type { ComponentName } from "./component-name.ts";
 import type { ComponentReference } from "./component-reference.ts";
 import type { ComponentReferences } from "./component-references.ts";
+import type { Components } from "./components.ts";
 import type { ElementPath } from "./element-path.ts";
+import type { EntityName } from "./entity-name.ts";
+import type { ReferenceCheckReport } from "./reference-check-report.ts";
+import { WitnessReference } from "./witness-reference.ts";
 
 // components.md のコンポーネント宣言。名の形（DD-1 の PascalCase）と自己依存
 // の検出（DD-3）は宣言自身が所有する（#71 波6）。
@@ -32,6 +44,53 @@ export class Component {
 
   static of(props: ComponentParam): Component {
     return new Component(props);
+  }
+
+  checkName(report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    const name = this.#name.asString();
+    if (!this.nameIsPascalCase())
+      report.finding(
+        DD_1,
+        FindingKind.structureInvalid(),
+        FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", name)), []),
+        [WitnessReference.at(artifact.asString(), `${this.#element.asString()}.name`, name)],
+        `component name "${name}" is not PascalCase`,
+      );
+  }
+  checkReferences(components: Components, report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const reference of [...this.#dependsOn, ...this.#dependents]) {
+      if (!components.declares(reference.component()))
+        report.finding(
+          DD_2,
+          FindingKind.referenceBroken(),
+          FindingTargets.of(
+            TargetIdentifier.of(TargetIdentifiers.safe("component", reference.component().asString())),
+            [],
+          ),
+          [WitnessReference.at(artifact.asString(), reference.element().asString(), reference.component().asString())],
+          `"${this.#name.asString()}" references undeclared component "${reference.component().asString()}"`,
+        );
+    }
+    for (const entity of this.#entities) entity.checkReferenceOwners(components, report, artifact);
+  }
+  checkSelfReferences(report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const reference of this.selfReferences())
+      report.finding(
+        DD_3,
+        FindingKind.structureInvalid(),
+        FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", this.#name.asString())), []),
+        [WitnessReference.at(artifact.asString(), reference.element().asString(), this.#name.asString())],
+        `component "${this.#name.asString()}" lists itself as a dependency`,
+      );
+  }
+  checkIdentifiers(report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const entity of this.#entities) entity.checkIdentifier(report, artifact);
+  }
+  checkEntityReferences(components: Components, report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const entity of this.#entities) entity.checkReferenceTargets(components, report, artifact);
+  }
+  declaresEntity(name: EntityName): boolean {
+    return this.#entities.declaresEntity(name);
   }
 
   name(): ComponentName {

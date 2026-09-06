@@ -1,14 +1,17 @@
-import type { UnitName } from "@deep-spec-analysis/kernel-domain";
-import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import type {
+  ArtifactPath,
+  FirstClassCollection,
+  IterableFirstClassCollection,
+  UnitName,
+} from "@deep-spec-analysis/kernel-domain";
 import type { DomainEntitySketch } from "./domain-entity-sketch.ts";
-import { XS_1, XS_2, XS_3 } from "./functional-check-families.ts";
+import { XS_3 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { SiblingUnitIndex } from "./sibling-unit-index.ts";
-import { WitnessReference } from "./witness-reference.ts";
 
 // domain-design 側素描のコレクション。名前順の整列と正規化名での一意化
 // （XS 検査の凍結挙動）を所有する。
-export class DomainEntitySketches {
+export class DomainEntitySketches implements FirstClassCollection, IterableFirstClassCollection<DomainEntitySketch> {
   readonly #values: readonly DomainEntitySketch[];
 
   private constructor(values: readonly DomainEntitySketch[]) {
@@ -55,51 +58,8 @@ export class DomainEntitySketches {
     unitEntities: SiblingUnitIndex,
     unit: UnitName | undefined,
   ): void {
-    const compArt = componentsArtifact.asString();
-    // 正規化名での一意化と整列はコレクションが所有する（重複宣言そのものは
-    // DD-5 の finding）。
-    for (const de of this.sortedDistinctByNormalizedName()) {
-      const key = de.name().normalized().asString();
-      const definers = unitEntities.definersOf(key);
-      if (definers.length >= 2) {
-        report.finding(
-          XS_1,
-          FindingKind.consistencyMismatch(),
-          [TargetIdentifiers.safe("entity", de.name().asString())],
-          [
-            WitnessReference.at(compArt, de.catalogLabel()),
-            ...definers.map((u) =>
-              WitnessReference.at(`construction/${u}/functional-design/entities.md`, `entity ${de.name().asString()}`),
-            ),
-          ],
-          `domain entity "${de.name().asString()}" is defined in ${definers.length} units (${definers.join(", ")}) — ownership is duplicated`,
-        );
-      } else if (definers.length === 0 && unitEntities.hasAnyUnit()) {
-        report.finding(
-          XS_2,
-          FindingKind.consistencyMismatch(),
-          [TargetIdentifiers.safe("entity", de.name().asString())],
-          [WitnessReference.at(compArt, de.catalogLabel())],
-          `domain entity "${de.name().asString()}" is defined in no unit's entities.md — it was dropped on the way to functional design`,
-        );
-      }
-      // XS-3: 属性の取り落としは素描が自分で告げる（このユニットの定義に対してのみ）。
-      if (unit !== undefined) {
-        const mine = unitEntities.entityDeclaredIn(unit.asString(), key);
-        if (mine) {
-          const dropped = de.attributesDroppedIn(mine.attrs);
-          if (dropped.length > 0) {
-            report.finding(
-              XS_3,
-              FindingKind.consistencyMismatch(),
-              [TargetIdentifiers.safe("entity", de.name().asString())],
-              dropped.map((a) => WitnessReference.at(compArt, `entity ${de.name().asString()}.attributes`, a)),
-              `domain-design declares attribute(s) ${dropped.join(", ")} on "${de.name().asString()}" that this unit's entities.md does not carry`,
-            );
-          }
-        }
-      }
-    }
+    for (const declaration of this.sortedDistinctByNormalizedName())
+      declaration.checkAgainst(unitEntities, unit, report, componentsArtifact);
     if (unit === undefined) {
       report.skip(
         XS_3,
@@ -107,5 +67,9 @@ export class DomainEntitySketches {
         "the unit for this functional-design record could not be determined from its path",
       );
     }
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

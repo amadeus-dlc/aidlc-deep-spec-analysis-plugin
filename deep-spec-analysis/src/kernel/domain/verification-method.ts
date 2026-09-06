@@ -1,5 +1,9 @@
-import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  IllegalArgumentException,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 // 検証方法（exhaustive / bounded / simulation / static）。
 // 新規生成も文書の復元も同じ閉集合の契約を通る。
@@ -22,6 +26,10 @@ export class VerificationMethod {
 
   static parse(raw: string): Result<VerificationMethod, ParseError> {
     return parseConstruction(() => new VerificationMethod(raw));
+  }
+
+  isBounded(): boolean {
+    return this.#value === "bounded";
   }
 
   equals(other: VerificationMethod): boolean {

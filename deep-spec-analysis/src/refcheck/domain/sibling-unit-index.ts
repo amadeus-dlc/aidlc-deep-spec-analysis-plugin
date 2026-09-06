@@ -1,31 +1,65 @@
-import type { AttributeNames } from "./attribute-names.ts";
-import type { EntityName } from "./entity-name.ts";
+import {
+  type FirstClassCollection,
+  KeyedIndex,
+  type NormalizedName,
+  type UnitName,
+} from "@deep-spec-analysis/kernel-domain";
+import {
+  IllegalArgumentException,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
+import type { EntityDeclaration } from "./entity-declaration.ts";
+import type { EntityDeclarations } from "./entity-declarations.ts";
+import { UnitNames } from "./unit-names.ts";
 
-// 兄弟ユニットの entities.md 索引。ユニット横断の定義元探索と、ユニット内の
-// 正規化名解決という集合の知識を所有する（XS 検査の凍結挙動）。
-export class SiblingUnitIndex {
-  readonly #units: ReadonlyMap<string, ReadonlyMap<string, { name: EntityName; attrs: AttributeNames }>>;
+// ユニットごとの宣言を保持し、正規化名から所有元と宣言を解決する。
+export class SiblingUnitIndex implements FirstClassCollection {
+  readonly #units: KeyedIndex<UnitName, KeyedIndex<NormalizedName, EntityDeclaration>>;
 
-  private constructor(units: ReadonlyMap<string, ReadonlyMap<string, { name: EntityName; attrs: AttributeNames }>>) {
-    this.#units = units;
+  /** XS一実行の予算はユニット数・実体宣言数それぞれ65,536件。索引化より先に検査する。 */
+  private constructor(units: KeyedIndex<UnitName, EntityDeclarations>) {
+    if (units.size() > 65_536)
+      throw new IllegalArgumentException({ kind: "too-many-sibling-units", raw: units.size() });
+    let count = 0;
+    for (const declarations of units.values())
+      for (const _entity of declarations)
+        if (++count > 65_536) throw new IllegalArgumentException({ kind: "too-many-sibling-entities", raw: count });
+    this.#units = KeyedIndex.of(
+      [...units].map(
+        ([unit, declarations]) =>
+          [
+            unit,
+            KeyedIndex.of([...declarations].map((entity) => [entity.name().normalized(), entity] as const)),
+          ] as const,
+      ),
+    );
   }
 
-  static of(
-    units: ReadonlyMap<string, ReadonlyMap<string, { name: EntityName; attrs: AttributeNames }>>,
-  ): SiblingUnitIndex {
-    return new SiblingUnitIndex(new Map(units));
+  static of(units: KeyedIndex<UnitName, EntityDeclarations>): SiblingUnitIndex {
+    return new SiblingUnitIndex(units);
   }
 
-  // この正規化名のエンティティを定義しているユニット（登録順——凍結順）。
-  definersOf(normalizedName: string): string[] {
-    return [...this.#units.entries()].filter(([, m]) => m.has(normalizedName)).map(([u]) => u);
+  static parse(units: KeyedIndex<UnitName, EntityDeclarations>): Result<SiblingUnitIndex, ParseError> {
+    return parseConstruction(() => new SiblingUnitIndex(units));
   }
 
-  entityDeclaredIn(unit: string, normalizedName: string): { name: EntityName; attrs: AttributeNames } | undefined {
+  definersOf(normalizedName: NormalizedName): UnitNames {
+    return UnitNames.of(
+      [...this.#units].filter(([, declarations]) => declarations.has(normalizedName)).map(([unit]) => unit),
+    );
+  }
+
+  entityDeclaredIn(unit: UnitName, normalizedName: NormalizedName): EntityDeclaration | undefined {
     return this.#units.get(unit)?.get(normalizedName);
   }
 
+  isEmpty(): boolean {
+    return this.#units.isEmpty();
+  }
+
   hasAnyUnit(): boolean {
-    return this.#units.size > 0;
+    return !this.#units.isEmpty();
   }
 }

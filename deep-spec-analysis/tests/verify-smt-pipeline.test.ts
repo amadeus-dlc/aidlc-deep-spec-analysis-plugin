@@ -1,5 +1,11 @@
+import { FindingTargets } from "@deep-spec-analysis/kernel-domain";
+import { requireSuccess } from "./result-fixtures.ts";
+
+const comparisonHash = ContentHash.ofText("fixture-model");
+
 import {
   ArtifactPath,
+  BackendName,
   ContentHash,
   EnumerationMember,
   EnumerationMembers,
@@ -10,8 +16,12 @@ import {
   IntermediateRepresentationVersion,
   KeyedIndex,
   KeySet,
+  ObligationNature,
   QueryLabel,
   RequirementIdentifier,
+  ScenarioComparison,
+  ScenarioExpectation,
+  ScenarioVerdict,
   SkipReason,
   TargetIdentifier,
   TargetIdentifiers,
@@ -66,7 +76,6 @@ import {
   FunctionalRequirementReferences,
   Obligation,
   ObligationIdentifier,
-  ObligationNature,
   Obligations,
   RequirementAttributeDeclaration,
   RequirementAttributeDeclarations,
@@ -122,7 +131,10 @@ type RawObligation = Omit<Parameters<typeof Obligation.of>[0], "functionalRequir
   frRefs: string[];
   trigger?: string;
 };
-type RawScenario = Omit<Parameters<typeof Scenario.of>[0], "functionalRequirementReferences"> & { frRefs: string[] };
+type RawScenario = Omit<Parameters<typeof Scenario.of>[0], "functionalRequirementReferences" | "expectation"> & {
+  kind: "accept" | "reject";
+  frRefs: string[];
+};
 function model(seed: {
   irVersion?: IntermediateRepresentationVersion;
   attributes?: RawAttributeDeclaration[];
@@ -161,6 +173,7 @@ function model(seed: {
       (seed.scenarios ?? []).map((s) =>
         Scenario.of({
           ...s,
+          expectation: ScenarioExpectation.of(s.kind),
           functionalRequirementReferences: FunctionalRequirementReferences.of(
             Array.from(s.frRefs, (raw) => RequirementIdentifier.of(raw)),
           ),
@@ -490,9 +503,11 @@ describe("smt verdict interpretation", () => {
     ]);
     for (const [id, verdict] of entries) complete.set(id, verdict);
     for (const id of missing) complete.delete(id);
-    return plan.interpret(
-      twoInvariants,
-      verdictsOf([...complete].map(([id, v]) => [id, SatisfiabilityModuloTheoriesQueryVerdict.of(v)] as const)),
+    return requireSuccess(
+      plan.interpret(
+        twoInvariants,
+        verdictsOf([...complete].map(([id, v]) => [id, SatisfiabilityModuloTheoriesQueryVerdict.of(v)] as const)),
+      ),
     );
   };
 
@@ -522,18 +537,18 @@ describe("smt verdict interpretation", () => {
     expect(findings.toArray()[0]?.targets().toStrings()).toEqual(["OB-1", "OB-2"]);
   });
 
-  test("a conflict with no effective targets is dropped entirely", () => {
+  test("a conflict with no effective targets is an interpretation failure", () => {
     const bare = model({
       obligations: [{ id: ObligationIdentifier.of("OB-3"), nature: ObligationNature.of("event"), frRefs: [] }],
     });
-    const { findings } = SatisfiabilityModuloTheoriesVerificationPlan.of({
+    const interpreted = SatisfiabilityModuloTheoriesVerificationPlan.of({
       ...EMPTY_PLAN,
       compiled: compiledOf(["OB-3"]),
     }).interpret(
       bare,
       verdictsOf([["global", SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "unsat", core: [] })]]),
     );
-    expect([...findings]).toEqual([]);
+    expect(interpreted).toEqual({ ok: false, error: { kind: "missing-finding-targets" } });
   });
 
   test("global timeout skips every compiled invariant", () => {
@@ -715,7 +730,7 @@ describe("cross-check computation", () => {
             VerificationFinding.of({
               kind: FindingKind.of("scenario-violation"),
               functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-              targets: TargetIdentifiers.of(Array.from([t], (raw) => TargetIdentifier.of(raw))),
+              targets: FindingTargets.of(TargetIdentifier.of(t), []),
               witness: VerificationWitness.core([]),
               detail: "x",
             }),
@@ -776,6 +791,24 @@ describe("cross-check computation", () => {
       { backend: "quint", targets: ["SC-2"] },
       { backend: "smt", targets: ["SC-2"] },
     ]);
+  });
+
+  test("同じバックエンドの重複報告を合意や不一致として公開しない", () => {
+    const duplicate = VerificationReports.of([sibling("smt", {}), sibling("smt", { violated: ["SC-1"] })]).crossChecked(
+      id,
+      m,
+      ContentHash.ofText("h1"),
+    );
+    expect(duplicate.isUnavailable()).toBe(true);
+    expect(duplicate.unavailableReason()).toContain("duplicate-scenario-backend");
+    expect(duplicate.findingsCount()).toBe(0);
+    const scenario = [...m.scenarios()][0];
+    const other = TargetIdentifier.of("SC-9");
+    const comparison = ScenarioComparison.of(
+      ScenarioVerdict.clean(BackendName.of("smt"), comparisonHash, other, null),
+      ScenarioVerdict.violated(BackendName.of("quint"), comparisonHash, other, null),
+    );
+    expect(() => scenario.crossCheckFinding(comparison)).toThrow("different-cross-check-subject");
   });
 
   test("fewer than two comparable documents produce an empty cross-check", () => {
@@ -858,11 +891,14 @@ describe("degradation reports and ordering", () => {
   });
 
   test("finding order: kind rank, then joined targets, then detail; invalid kinds are rejected", () => {
-    const f = (kind: string, targets: string[], detail: string): VerificationFinding =>
+    const f = (kind: string, [head, ...tail]: readonly [string, ...string[]], detail: string): VerificationFinding =>
       VerificationFinding.of({
         kind: FindingKind.of(kind),
         functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-        targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))),
+        targets: FindingTargets.of(
+          TargetIdentifier.of(head),
+          tail.map((raw) => TargetIdentifier.of(raw)),
+        ),
         witness: VerificationWitness.core([]),
         detail,
       });
@@ -906,14 +942,14 @@ describe("degradation reports and ordering", () => {
         VerificationFinding.of({
           kind: FindingKind.of("scenario-violation"),
           functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-          targets: TargetIdentifiers.of(Array.from(["SC-1"], (raw) => TargetIdentifier.of(raw))),
+          targets: FindingTargets.of(TargetIdentifier.of("SC-1"), []),
           witness: VerificationWitness.core([]),
           detail: "b",
         }),
         VerificationFinding.of({
           kind: FindingKind.of("conflict"),
           functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-          targets: TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))),
+          targets: FindingTargets.of(TargetIdentifier.of("OB-1"), []),
           witness: VerificationWitness.core([]),
           detail: "a",
         }),
@@ -1014,17 +1050,13 @@ describe("degradation reports and ordering", () => {
     expect(
       m
         .functionalRequirementReferencesOf(
-          TargetIdentifiers.of(Array.from(["OB-1", "SC-1"], (raw) => TargetIdentifier.of(raw))),
+          FindingTargets.of(TargetIdentifier.of("OB-1"), [TargetIdentifier.of("SC-1")]),
         )
         .toStrings(),
     ).toEqual(["FR-1", "FR-2"]);
-    expect(
-      m
-        .functionalRequirementReferencesOf(
-          TargetIdentifiers.of(Array.from(["OB-999"], (raw) => TargetIdentifier.of(raw))),
-        )
-        .toArray(),
-    ).toEqual([]);
+    expect(m.functionalRequirementReferencesOf(FindingTargets.of(TargetIdentifier.of("OB-999"), [])).toArray()).toEqual(
+      [],
+    );
     expect(m.attributeAt("Ticket.priority")?.maxBound()?.asNumber()).toBe(3);
     expect(m.attributeAt("Ticket.priority")?.minBound()?.asNumber()).toBe(0);
     expect(m.attributeAt("Ticket.priority")?.isInt()).toBe(true);

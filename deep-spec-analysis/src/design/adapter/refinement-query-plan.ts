@@ -1,5 +1,19 @@
 import {
+  type DesignEventRule,
+  DesignEventRuleCatalog,
+  DesignSkipped,
+  DesignSkips,
+  type DesignUnit,
+  EffectAssignments,
+  RefinementMapDefect,
+  RefinementProbe,
+  RefinementSolverPlan,
+  TransitionReferences,
+  type UnitRefinementPlan,
+} from "@deep-spec-analysis/design-domain";
+import {
   type Expression,
+  ExpressionTree,
   KeyedIndex,
   QueryLabel,
   SkipReason,
@@ -20,21 +34,6 @@ import type { RefinementAttributeParam } from "./refinement-attribute-param.ts";
 // compile-error skip（plan.compileSkips）に落ちる。
 // 旧 refinement-lib の designSmtCtx / smtOfExpr / designBase / assembleQuery /
 // decodeDesignModel とクエリ構築部からの逐語移植。
-
-import type { DesignUnit } from "@deep-spec-analysis/design-domain";
-import {
-  type DesignEvent,
-  DesignEventCatalog,
-  DesignSkipped,
-  DesignSkips,
-  EffectAssignments,
-  ObligationIdentifier,
-  RefinementMapDefect,
-  RefinementProbe,
-  RefinementSolverPlan,
-  ScenarioIdentifier,
-  type UnitRefinementPlan,
-} from "@deep-spec-analysis/design-domain";
 
 import { smtIntOf, smtLit, smtName, smtVar } from "@deep-spec-analysis/kernel-adapter";
 
@@ -253,7 +252,7 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
       sort: (a.kind === "bool" ? "Bool" : "Int") as "Int" | "Bool",
     })),
   ];
-  const catalog = DesignEventCatalog.of(u);
+  const catalog = DesignEventRuleCatalog.parse(u);
   const queries: RefinementChildQuery[] = [];
   const pending = new Map<string, RefinementProbe>();
   const compileSkips: DesignSkipped[] = [];
@@ -272,7 +271,7 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
   const failureMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
   const mappings = plan.attributeMappings();
-  for (const [obId, st] of plan.sortedObligationStatuses()) {
+  obligations: for (const [obId, st] of plan.sortedObligationStatuses()) {
     if (!st.isCheckable()) continue;
     const ob = req.obligationById(obId);
     if (!ob) continue;
@@ -291,7 +290,7 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
           modelVars,
         );
         queries.push(q);
-        pending.set(q.id, RefinementProbe.invariant(ObligationIdentifier.of(obId)));
+        pending.set(q.id, RefinementProbe.invariant(ob, UnitName.of(u.name())));
       } catch (err) {
         if (!(err instanceof SatisfiabilityModuloTheoriesCompileError)) throw err;
         alphaFail(obId, failureMessage(err));
@@ -301,6 +300,10 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
     const event = ob.eventDefinition();
     if (event !== null) {
       const mapped = plan.mappedTransitionsOf(obId);
+      if (!catalog.ok) {
+        alphaFail(obId, `design event catalog could not be constructed: ${catalog.error.kind}`);
+        continue;
+      }
       const alphaG = mappings.substitute(event.guard, false);
       if (!alphaG.ok) {
         alphaFail(obId, alphaG.error.message());
@@ -310,8 +313,8 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
         // enabledness：alpha(guard) は成り立つが、写像済み設計イベントが
         // ひとつも発火可能でない。
         const designGuards = mapped
-          .map((id) => catalog.eventOf(TargetIdentifier.of(id.asString())))
-          .filter((d): d is DesignEvent => d !== null)
+          .map((id) => catalog.value.eventOf(TargetIdentifier.of(id.asString())))
+          .filter((d): d is DesignEventRule => d !== null)
           .map((d) => smtOfExpr(ctx, d.guard()));
         const notEnabled = designGuards.length === 0 ? "true" : `(not (or ${designGuards.join(" ")}))`;
         const qe = assembleQuery(
@@ -325,13 +328,20 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
           modelVars,
         );
         queries.push(qe);
-        pending.set(qe.id, RefinementProbe.enabledness(ObligationIdentifier.of(obId)));
+        pending.set(
+          qe.id,
+          RefinementProbe.enabledness(
+            ob,
+            UnitName.of(u.name()),
+            TransitionReferences.of(plan.mappedTransitionsOf(obId)),
+          ),
+        );
 
         // 写像済み設計イベントごとのワンステップシミュレーション：alpha(guard)
         // が成り立つところで踏んだ 1 歩の抽象 post が、要件効果か抽象フレーム
         // （Q2：未代入の要件属性は抽象値を保つ。unmapped 属性のフレーム等式は
         // 検査不能なので省く）に反する。
-        const decomposed = EffectAssignments.parse(event.effect);
+        const decomposed = EffectAssignments.fromEffect(ExpressionTree.of(event.effect));
         if (!decomposed.ok) {
           alphaFail(
             obId,
@@ -346,7 +356,11 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
         for (const a of req.attributes().sortedByPath()) {
           if (assigned.covers(a.path())) continue;
           const eq = mappings.equalityFor(a.path().asString());
-          if (eq !== null) frameParts.push(smtOfExpr(ctx, eq));
+          if (!eq.ok) {
+            alphaFail(obId, eq.error.message());
+            continue obligations;
+          }
+          if (eq.value !== null) frameParts.push(smtOfExpr(ctx, eq.value));
         }
         const alphaF = mappings.substitute(event.effect, false);
         if (!alphaF.ok) {
@@ -356,7 +370,7 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
         const fBar = smtOfExpr(ctx, alphaF.value);
         const postCond = frameParts.length === 0 ? fBar : `(and ${fBar} ${frameParts.join(" ")})`;
         for (const designId of mapped) {
-          const ev = catalog.eventOf(TargetIdentifier.of(designId.asString()));
+          const ev = catalog.value.eventOf(TargetIdentifier.of(designId.asString()));
           if (!ev) continue;
           const stepParts: string[] = [smtOfExpr(ctx, ev.guard())];
           for (const attr of ctx.attrs) {
@@ -385,7 +399,7 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
             modelVarsBoth,
           );
           queries.push(qs);
-          pending.set(qs.id, RefinementProbe.simulation(ObligationIdentifier.of(obId), designId));
+          pending.set(qs.id, RefinementProbe.simulation(ob, UnitName.of(u.name()), designId));
         }
       } catch (err) {
         if (!(err instanceof SatisfiabilityModuloTheoriesCompileError)) throw err;
@@ -426,7 +440,7 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
         modelVars,
       );
       queries.push(q);
-      pending.set(q.id, RefinementProbe.scenario(ScenarioIdentifier.of(scId)));
+      pending.set(q.id, RefinementProbe.scenario(sc, UnitName.of(u.name())));
     } catch (err) {
       if (!(err instanceof SatisfiabilityModuloTheoriesCompileError)) throw err;
       alphaFail(scId, failureMessage(err));

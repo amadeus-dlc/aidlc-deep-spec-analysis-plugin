@@ -1,3 +1,4 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { SkipReason, UnitName } from "@deep-spec-analysis/kernel-domain";
 
 // Quint 側の refinement 追加不変量 — checkable な invariant/numeric 要件義務
@@ -12,7 +13,9 @@ import { DesignSkips } from "./design-skips.ts";
 import type { RefinementQuintInvariant } from "./refinement-quint-invariant.ts";
 
 // 追加不変量のファーストクラスコレクション（義務 id の正準順で導出される）。
-export class RefinementQuintInvariants {
+export class RefinementQuintInvariants
+  implements FirstClassCollection, IterableFirstClassCollection<RefinementQuintInvariant>
+{
   readonly #values: readonly RefinementQuintInvariant[];
 
   private constructor(values: readonly RefinementQuintInvariant[]) {

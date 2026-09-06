@@ -1,25 +1,24 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import {
-  BackendName,
+  type BackendName,
   type ContentHash,
-  FindingKind,
-  FunctionalRequirementReferences,
+  KeyedIndex,
+  ScenarioVerdicts,
   TargetIdentifier,
   TargetIdentifiers,
   UnitName,
 } from "@deep-spec-analysis/kernel-domain";
-
+import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
 import { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
 import { DesignCrossCheckedEntry } from "./design-cross-checked-entry.ts";
-import { DesignFinding } from "./design-finding.ts";
+import type { DesignFinding } from "./design-finding.ts";
 import { DesignFindings } from "./design-findings.ts";
 import type { DesignModel } from "./design-model.ts";
 import { DesignReport } from "./design-report.ts";
 import type { DesignReportIdentifier } from "./design-report-identifier.ts";
 import { DesignSkips } from "./design-skips.ts";
-import { DesignWitness } from "./design-witness.ts";
 
-// 兄弟文書のファーストクラスコレクション（設計クロスチェックの入力）。
-export class DesignReports {
+export class DesignReports implements FirstClassCollection, IterableFirstClassCollection<DesignReport> {
   readonly #values: readonly DesignReport[];
 
   private constructor(values: readonly DesignReport[]) {
@@ -30,10 +29,6 @@ export class DesignReports {
     return new DesignReports(values);
   }
 
-  add(value: DesignReport): DesignReports {
-    return new DesignReports([...this.#values, value]);
-  }
-
   *[Symbol.iterator](): Iterator<DesignReport> {
     yield* this.#values;
   }
@@ -41,85 +36,45 @@ export class DesignReports {
   toArray(): readonly DesignReport[] {
     return this.#values;
   }
-  // 設計クロスチェック — 同一 irHash の全バックエンド文書から (unit, scenario)
-  // ごとの判定合意を計算して cross-check レポートを組む（v1 と同じ収束設計：
-  // 最後の書き手が勝ち、全書き手が同一バイトへ収束。detail 文言は golden 凍結
-  // "...not in the design itself."）。旧 designCrossCheckReport の逐語移植
-  // （読めないファイルの黙殺は Repository 側）。
+  // レポート自身が判定を決め、共通の比較規則からシナリオに診断を依頼する。
   crossChecked(id: DesignReportIdentifier, model: DesignModel, irHash: ContentHash): DesignReport {
-    // 比較に参加するのは同一 irHash の可用文書のみ（旧実装の読込時選別と同値）。
-    const docs = this.toArray()
-      .filter((s) => s.irHash().equals(irHash) && !s.isUnavailable())
-      .map((s) => ({
-        backend: s.id().backendName().asString(),
-        findings: s.findings().toArray(),
-        skipped: new Set(
-          s
-            .skipped()
-            .toArray()
-            .map((e) => `${e.unit()}|${e.target().asString()}`),
-        ),
-      }));
-
     const findings: DesignFinding[] = [];
-    const comparedByBackend = new Map<string, Set<string>>();
-    for (let i = 0; i < docs.length; i++) {
-      for (let j = i + 1; j < docs.length; j++) {
-        const a = docs[i];
-        const b = docs[j];
-        if (!a || !b) continue;
-        for (const u of model.units()) {
-          for (const sc of u.scenarios()) {
-            const key = `${u.name()}|${sc.id().asString()}`;
-            if (a.skipped.has(key) || b.skipped.has(key)) continue;
-            const verdictOf = (d: (typeof docs)[number]): boolean =>
-              d.findings.some(
-                (f) =>
-                  f.kind() === "scenario-violation" &&
-                  f.unit() === u.name() &&
-                  f.targets().includes(TargetIdentifier.of(sc.id().asString())),
-              );
-            const va = verdictOf(a);
-            const vb = verdictOf(b);
-            (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set()).get(a.backend))?.add(
-              sc.id().asString(),
-            );
-            (comparedByBackend.get(b.backend) ?? comparedByBackend.set(b.backend, new Set()).get(b.backend))?.add(
-              sc.id().asString(),
-            );
-            if (va !== vb) {
-              const verdicts: { [backend: string]: "violated" | "clean" } = {};
-              verdicts[a.backend] = va ? "violated" : "clean";
-              verdicts[b.backend] = vb ? "violated" : "clean";
-              findings.push(
-                DesignFinding.of({
-                  kind: FindingKind.crossCheckDisagreement(),
-                  functionalRequirementReferences: FunctionalRequirementReferences.of([
-                    ...sc.functionalRequirementReferences(),
-                  ]).sortedUnique(),
-                  targets: TargetIdentifiers.of(Array.from([sc.id().asString()], (raw) => TargetIdentifier.of(raw))),
-                  witness: DesignWitness.verdicts(verdicts),
-                  unit: UnitName.of(u.name()),
-                  detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()} of unit ${u.name()}. This signals a defect in the formalization or in a backend compiler, not in the design itself.`,
-                }),
-              );
-            }
+    const crossChecked: DesignCrossCheckedEntry[] = [];
+    let failure: ParseError | null = null;
+    scenarios: for (const unit of model.units()) {
+      const unitName = UnitName.of(unit.name());
+      let compared = KeyedIndex.empty<BackendName, TargetIdentifier[]>();
+      for (const scenario of unit.scenarios()) {
+        const target = TargetIdentifier.of(scenario.id().asString());
+        const verdicts = ScenarioVerdicts.parse(
+          this.#values.map((report) => report.scenarioVerdictFor(unitName, target, irHash)),
+        );
+        if (!verdicts.ok) {
+          failure = verdicts.error;
+          break scenarios;
+        }
+        for (const comparison of verdicts.value.comparisons()) {
+          for (const backend of comparison.backends()) {
+            const targets = compared.get(backend);
+            if (targets === undefined) compared = compared.with(backend, [target]);
+            else targets.push(target);
           }
+          const finding = scenario.crossCheckFinding(unitName, comparison);
+          if (finding !== null) findings.push(finding);
         }
       }
+      for (const [backend, targets] of compared) {
+        crossChecked.push(
+          DesignCrossCheckedEntry.of({
+            backend,
+            unit: unitName,
+            targets: TargetIdentifiers.of(targets).sortedUniqueCanonically(),
+          }),
+        );
+      }
     }
-    const crossChecked: DesignCrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) =>
-        DesignCrossCheckedEntry.of({
-          backend: BackendName.of(backend),
-          targets: TargetIdentifiers.of(
-            Array.from([...targets], (raw) => TargetIdentifier.of(raw)),
-          ).sortedCanonically(),
-        }),
-      )
-      .sort((x, y) => x.compareByBackend(y));
-
-    return DesignReport.compose({
+    crossChecked.sort((a, b) => a.compareTo(b));
+    const report = DesignReport.compose({
       id,
       irVersion: model.irVersion(),
       irHash,
@@ -128,5 +83,12 @@ export class DesignReports {
       skipped: DesignSkips.of([]),
       crossChecked: DesignCrossCheckedEntries.of(crossChecked),
     });
+    return failure === null
+      ? report
+      : report.degraded(`scenario cross-check could not be constructed: ${failure.kind}`);
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

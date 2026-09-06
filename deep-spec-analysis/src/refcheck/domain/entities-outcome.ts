@@ -1,4 +1,4 @@
-import { type ArtifactPath, FindingKind } from "@deep-spec-analysis/kernel-domain";
+import { type ArtifactPath, FindingKind, FindingTargets, TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
 import type { DeclaredEntities } from "./declared-entities.ts";
 import { FenceCount } from "./fence-count.ts";
 import { FD_E1, FD_E2, FD_E3, FD_E4, FD_E5, FD_E6 } from "./functional-check-families.ts";
@@ -75,7 +75,7 @@ export class EntitiesOutcome {
         report.finding(
           FD_E1,
           FindingKind.structureInvalid(),
-          [FD_E1.asCheckTarget()],
+          FindingTargets.of(TargetIdentifier.of(FD_E1.asCheckTarget()), []),
           [WitnessReference.at(art, "yaml fence")],
           `entities.md must carry exactly one fenced yaml source-of-truth block (found ${found})`,
         );
@@ -88,7 +88,7 @@ export class EntitiesOutcome {
         report.finding(
           FD_E1,
           FindingKind.structureInvalid(),
-          [FD_E1.asCheckTarget()],
+          FindingTargets.of(TargetIdentifier.of(FD_E1.asCheckTarget()), []),
           [WitnessReference.at(art, `yaml fence (line ${line.asNumber()})`)],
           `yaml block does not parse in the supported subset: ${error}`,
         );

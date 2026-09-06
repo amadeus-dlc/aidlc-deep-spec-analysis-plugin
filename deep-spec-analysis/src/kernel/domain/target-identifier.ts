@@ -1,7 +1,7 @@
-import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
 import {
   compareCanonically,
   IllegalArgumentException,
+  type ParseError,
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
@@ -43,6 +43,10 @@ export class TargetIdentifier {
   // 正準順序——skipped ソートと finding の targets 面（= golden バイト）を決める。
   compareTo(other: TargetIdentifier): number {
     return compareCanonically(this.#value, other.#value);
+  }
+
+  isRequirementObligation(): boolean {
+    return this.#value.startsWith("OB-");
   }
 
   asString(): string {

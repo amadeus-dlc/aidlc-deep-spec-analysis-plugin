@@ -1,9 +1,6 @@
-// id 様トークンの正準順序 — 英字骨格→数値セグメント比較。skipped の並びと
-// checked[] の順序（= golden バイト）を決める。
-//
-// kernel の非公開ヘルパー（種別規律の裁定 1、2026-09-02）: facade からは出さず、
-// 公開面は DP の `compareTo`（TargetIdentifier）とコレクションの正準ソート
-// （TargetIdentifiers / FunctionalRequirementReferences）だけ。他の文脈は必ずその門を通る。
+// kernelの公開facadeから共有する、識別子の正準比較と重複除去ソート。
+// 数字とドットを除いた部分→数値セグメントの順に比較する。
+// skipped・checked[]の順序はgoldenバイトにも影響する。
 
 function numSegments(id: string): number[] {
   return (id.match(/[0-9]+/g) ?? []).map((s) => Number.parseInt(s, 10));

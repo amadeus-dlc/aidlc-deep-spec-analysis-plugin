@@ -3,6 +3,7 @@ import {
   BackendName,
   ContentHash,
   FindingKind,
+  FindingTargets,
   FunctionalRequirementReferences,
   IntermediateRepresentationVersion,
   RequirementIdentifier,
@@ -39,14 +40,17 @@ export function parseFindingsValues(raw: Json) {
           traverseResult(entry.frRefs, RequirementIdentifier.parse),
           FunctionalRequirementReferences.parse,
         ),
-        targets: traverseResult(entry.targets, TargetIdentifier.parse),
+        targets: flatMapResult(traverseResult(entry.targets, TargetIdentifier.parse), (targets) => {
+          const [head, ...tail] = targets;
+          return head === undefined ? err({ kind: "empty-finding-targets" }) : FindingTargets.parse(head, tail);
+        }),
         unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit),
       });
       if (!fields.ok) return fields;
       return ok({
         ...fields.value,
         functionalRequirementReferences: fields.value.functionalRequirementReferences,
-        targets: TargetIdentifiers.of(fields.value.targets),
+        targets: fields.value.targets,
         witness: entry.witness,
         detail: entry.detail,
       });
@@ -75,10 +79,15 @@ export function parseFindingsValues(raw: Json) {
         : traverseResult(doc.crossChecked, (entry) => {
             const fields = combineResults({
               backend: BackendName.parse(entry.backend),
+              unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit),
               targets: traverseResult(entry.targets, TargetIdentifier.parse),
             });
             if (!fields.ok) return fields;
-            return ok({ backend: fields.value.backend, targets: TargetIdentifiers.of(fields.value.targets) });
+            return ok({
+              backend: fields.value.backend,
+              unit: fields.value.unit,
+              targets: TargetIdentifiers.of(fields.value.targets),
+            });
           }),
   });
   if (!parsed.ok) return err(JSON.stringify(parsed.error));

@@ -1,3 +1,4 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import {
   IllegalArgumentException,
   type ParseError,
@@ -6,7 +7,7 @@ import {
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { StageScope } from "./stage-scope.ts";
 
-export class StageScopes {
+export class StageScopes implements FirstClassCollection, IterableFirstClassCollection<StageScope> {
   readonly #values: readonly StageScope[];
   /** stage宣言の処理予算は1,024スコープ。コピーより先に確認する。 */
   private constructor(values: readonly StageScope[]) {
@@ -24,5 +25,9 @@ export class StageScopes {
   }
   *[Symbol.iterator](): Iterator<StageScope> {
     yield* this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

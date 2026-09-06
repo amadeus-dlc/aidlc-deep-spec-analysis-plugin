@@ -13,8 +13,10 @@
 // 成果物パス（識別）から集約を解決して検査〜永続化までを起動する。
 //
 // Sensor contract: parses --stage / --output-path (+ --report-only);
-// pass-through on writes that are not contract-summary.md; one JSON verdict
-// line on stdout; always exit 0.
+// pass-through on writes that are not contract-summary.md. Verdicts (including
+// not-applicable) emit one JSON line on stdout and exit 0. A missing/invalid
+// --output-path or report save failure emits a diagnostic on stderr, no verdict,
+// and exits 1.
 
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

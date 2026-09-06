@@ -2,7 +2,9 @@ import {
   ContentHash,
   type FindingsSchema,
   IntermediateRepresentationVersion,
+  ScenarioVerdict,
   SkipReason,
+  type TargetIdentifier,
   VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
 
@@ -13,7 +15,7 @@ import {
 // degraded は契約適合の降格形（findings/skipped/crossChecked を空にして
 // unavailable 理由だけ残す——旧 writeFindingsDoc の自己検証降格と同じ姿）。
 
-import type { Json } from "@deep-spec-analysis/kernel-infrastructure";
+import type { Json, ParseError } from "@deep-spec-analysis/kernel-infrastructure";
 import type { CrossCheckedEntries } from "./cross-checked-entries.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import { VerificationFindings } from "./verification-findings.ts";
@@ -204,6 +206,23 @@ export class VerificationReport {
     });
   }
 
+  static interpretationUnavailable(
+    id: VerificationReportIdentifier,
+    model: RequirementsModel,
+    method: VerificationMethod,
+    error: ParseError,
+  ): VerificationReport {
+    return VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method: method.asString(),
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([]),
+      unavailableReason: `verification evidence could not be represented: ${JSON.stringify(error)}`,
+    });
+  }
+
   // 型付きの文書を、要素の並びを保持して構築する。
   static of(seed: VerificationReportParam): VerificationReport {
     return new VerificationReport(seed);
@@ -222,6 +241,18 @@ export class VerificationReport {
       crossChecked: null,
       unavailableReason: reason,
     });
+  }
+
+  scenarioVerdictFor(target: TargetIdentifier, irHash: ContentHash): ScenarioVerdict {
+    const backend = this.#id.backendName();
+    if (!this.#irHash.equals(irHash) || this.isUnavailable())
+      return ScenarioVerdict.unavailable(backend, this.#irHash, target, null);
+    for (const skip of this.#skipped)
+      if (skip.isFor(target)) return ScenarioVerdict.skipped(backend, this.#irHash, target, null);
+    for (const finding of this.#findings)
+      if (finding.isKind("scenario-violation") && finding.implicates(target))
+        return ScenarioVerdict.violated(backend, this.#irHash, target, null);
+    return ScenarioVerdict.clean(backend, this.#irHash, target, null);
   }
 
   id(): VerificationReportIdentifier {
@@ -260,9 +291,9 @@ export class VerificationReport {
     return this.#unavailableReason !== null;
   }
 
-  // verdict 行の pass はこの述語から導く（findings ゼロ＝pass）。
+  // 判定できなかったレポートを、診断がないことだけで成功扱いしない。
   passes(): boolean {
-    return this.#findings.isEmpty();
+    return !this.isUnavailable() && this.#findings.isEmpty();
   }
 
   findingsCount(): number {

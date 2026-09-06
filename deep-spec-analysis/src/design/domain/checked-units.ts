@@ -1,10 +1,11 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { TargetIdentifier, TargetIdentifiers, UnitName } from "@deep-spec-analysis/kernel-domain";
 
 // CheckedUnits — 設計レポートの checked[]（検査済みユニット名）のファースト
 // クラスコレクション。要素は UnitName（裁定 3-1、2026-09-03）。正準一意化は
 // 文書の凍結正準形。
 
-export class CheckedUnits {
+export class CheckedUnits implements FirstClassCollection, IterableFirstClassCollection<UnitName> {
   readonly #values: readonly UnitName[];
 
   private constructor(values: readonly UnitName[]) {

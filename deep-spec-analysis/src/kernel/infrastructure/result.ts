@@ -11,8 +11,7 @@ export function err<E>(error: E): ResultFailure<E> {
   return { ok: false, error };
 }
 
-// 閉じた変種集合の網羅性の証人。ここへ到達するのは defect であって
-// 予期される失敗ではない — domain 層で唯一許される throw。
+// 閉じた変種集合を網羅した分岐の到達不能点。到達した場合は実装の欠陥としてpanicする。
 export function unreachable(x: never): never {
   throw new Error(`defect: unreachable variant ${JSON.stringify(x)}`);
 }

@@ -1,3 +1,4 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { AttributePath, EnumerationMember, type VerificationMethod } from "@deep-spec-analysis/kernel-domain";
 import {
   IllegalArgumentException,
@@ -12,7 +13,7 @@ import { MachineReachability } from "./machine-reachability.ts";
 import { ReachabilityProbe } from "./reachability-probe.ts";
 
 // 機械順・初期状態除外・検査手法の適用可能性は計画の責務。
-export class ReachabilityPlan {
+export class ReachabilityPlan implements FirstClassCollection, IterableFirstClassCollection<MachineReachability> {
   readonly #machines: readonly MachineReachability[];
 
   /** 1ユニットで65,536機械・総計65,536候補。多段集合で上限を乗算しない。 */
@@ -60,5 +61,9 @@ export class ReachabilityPlan {
 
   *[Symbol.iterator](): Iterator<MachineReachability> {
     yield* this.#machines;
+  }
+
+  isEmpty(): boolean {
+    return this.#machines.length === 0;
   }
 }

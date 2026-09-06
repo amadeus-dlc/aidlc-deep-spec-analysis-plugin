@@ -1,0 +1,80 @@
+{
+  "base": "5d56ef2668048a5073e903f1b00c2e65134de96e",
+  "head": "3c588ff1e010cbdcbf6ed648877fffbcbb1c767e",
+  "comparedFiles": 575,
+  "equalTranspiledCode": 574,
+  "renamedTestLabels": 2,
+  "removedEmptyModules": 1,
+  "changed": [
+    {
+      "path": "deep-spec-analysis/src/design/adapter/refinement-map-parse.ts",
+      "before": "7cfade11af30af2d36334fde748f7ed1d4a312f99624e4b5bfbf347740c017c5",
+      "after": "c236662322732f1ea277d663647f876544a370310b8517520ba29cfaf0f5f578"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/index.ts",
+      "before": "c457a49c0dcf4ca34ec987ee784be27c4cc5a367060b6e7c8c2726fa9e71449b",
+      "after": "728a0a7032cde9d4f5fd7eb9ecd67c4bccb764e04672228e6ad15b94b10e6f9c"
+    },
+    {
+      "path": "deep-spec-analysis/src/entries/aidlc-sensor-deep-spec-refcheck-contract.ts",
+      "before": "55a994e97837adfbe902fa44488eaa72858b3749d9c95c80630ef363aab7198a",
+      "after": "24ead93c2bd27198144e47448295321708735da6befd4b6de3f8d48f2a4c6477"
+    },
+    {
+      "path": "deep-spec-analysis/src/entries/aidlc-sensor-deep-spec-refcheck-domain.ts",
+      "before": "bd1db71bb20c3e73d402677c52bdaeca00d6f9e1a71a35521740384b0d90bb1a",
+      "after": "e714b67da0b1b4060fc840c7732af57fae07a1eb529fa38ee6a49a42dbb0cd21"
+    },
+    {
+      "path": "deep-spec-analysis/src/entries/aidlc-sensor-deep-spec-refcheck-functional.ts",
+      "before": "2ff70e0870e1c0b48e2af78bdd9af4096285fd9f4a50bdcef5603b6d2312081e",
+      "after": "b64c4d52d16892084e55ac5c4eab57f59ff7eb859410e836ede223e9ca4676b8"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/adapter/read-if-exists.ts",
+      "before": "59933a56a30a92350db7c4ba51ff470f70bce451c3a919cb02919aecb1753e9e",
+      "after": "9dbdd1c5594d8252918b7b3465ff11aedaa7f7da535a66e6a0bf0680628374ee"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/infrastructure/canonical-order.ts",
+      "before": "777b67a12d8782b97a4269b5b31c503a99b2caa978107f91c0d62b33156c4dfd",
+      "after": "9c98fc2dced9e6e4519a2ddd441011e221f561be4739140b6161acc8f452fccd"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/infrastructure/result.ts",
+      "before": "bd6311ecfcf00fd94cdcf7f8a23ad3549777a9c657ff798dec457ba7fb0f9e0b",
+      "after": "a9f3173bcce889b21cc00d041d7a67b3bb827a36477ef341908804afccab5303"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/adapter/functional-design-parser.ts",
+      "before": "9fa9de43343cca2a180a78ebfe73b26e142bd4278b46af3c17b44782d04108c4",
+      "after": "85147424b8a88a9168423ea1291c51405381f67afe4b86726a8b0b4d49231460"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/functional-design.ts",
+      "removedEmptyModule": true,
+      "before": "3a3fb04275188cca81d48e783f1089513bb2f87d302b66c910733540c9ed3eeb"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/reference-check-report.ts",
+      "before": "ac9839b061662111f321cb7ea0d70e646fe1af13692db6f9f685a806b55e6c12",
+      "after": "f5bbd07ad6a3ecc15df04710ba011487b9579b9754243119dda4bbbe72ef09c3"
+    },
+    {
+      "path": "deep-spec-analysis/tests/architecture/rules.ts",
+      "before": "dbf02434692d4b1393c066434508cd70091ef736748443ccf2fa54cdcf308e4e",
+      "after": "a55bbcbc845c63d63d763b502e24ac525aa07c05683a36074e0d14aa271fd3dd"
+    },
+    {
+      "path": "deep-spec-analysis/tests/intent-e2e.test.ts",
+      "before": "1e8a5d6258346f9552bdecfa00ac80fafd73496a0a9a28ca1014b2df583a88ed",
+      "after": "270b6df91cb92759f66d72f47e0b6f2c0d1b1a9956786bda63243160a4c377ae"
+    },
+    {
+      "path": "deep-spec-analysis/tests/refcheck-report.test.ts",
+      "before": "9422ef727ff77f8e1e49ac3857dc6c0b6095a3dcbde7ac6fa340a56d6a78d5e4",
+      "after": "e50666596f8674c594baaf1fa15e10bcb262c754232c010655d05df832120a3c"
+    }
+  ]
+}

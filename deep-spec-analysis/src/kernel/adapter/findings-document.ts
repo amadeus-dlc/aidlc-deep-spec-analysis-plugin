@@ -1,5 +1,6 @@
 // JSON の形を復号する境界。欠損・型不一致を空の検査結果へ補完しない。
 // kind / method / reason の語彙の適合はドメイン側に残し、未知の文字列も逐語で運ぶ。
+import { MAX_FINDING_TARGETS } from "@deep-spec-analysis/kernel-domain";
 import { err, isObject, type Json, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 
 export interface FindingsDocument {
@@ -12,7 +13,7 @@ export interface FindingsDocument {
   unavailable?: { reason: string };
   inputs?: { artifact: string; sha256: string }[];
   checked?: string[];
-  crossChecked?: { backend: string; targets: string[] }[];
+  crossChecked?: { backend: string; unit?: string; targets: string[] }[];
 }
 
 const strings = (value: Json | undefined): boolean => Array.isArray(value) && value.every((v) => typeof v === "string");
@@ -29,6 +30,9 @@ export function decodeFindingsDocument(raw: Json): Result<FindingsDocument, stri
       (f) =>
         isObject(f) &&
         typeof f.kind === "string" &&
+        Array.isArray(f.targets) &&
+        f.targets.length > 0 &&
+        f.targets.length <= MAX_FINDING_TARGETS &&
         strings(f.frRefs) &&
         strings(f.targets) &&
         isObject(f.witness) &&
@@ -65,7 +69,13 @@ export function decodeFindingsDocument(raw: Json): Result<FindingsDocument, stri
   if (
     raw.crossChecked !== undefined &&
     (!Array.isArray(raw.crossChecked) ||
-      !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && strings(c.targets)))
+      !raw.crossChecked.every(
+        (c) =>
+          isObject(c) &&
+          typeof c.backend === "string" &&
+          (c.unit === undefined || typeof c.unit === "string") &&
+          strings(c.targets),
+      ))
   ) {
     return err("crossChecked must be an array of backend comparisons");
   }

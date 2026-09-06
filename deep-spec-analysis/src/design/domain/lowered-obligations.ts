@@ -1,8 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { LoweredObligation } from "./lowered-obligation.ts";
 
 // lowered 義務のファーストクラスコレクション。OB-n 採番順は文書バイトに
 // 効く凍結面——順序保持で運ぶ。
-export class LoweredObligations {
+export class LoweredObligations implements FirstClassCollection, IterableFirstClassCollection<LoweredObligation> {
   readonly #values: readonly LoweredObligation[];
 
   private constructor(values: readonly LoweredObligation[]) {
@@ -28,5 +29,9 @@ export class LoweredObligations {
   // 境界（serializer・テスト）専用のエスケープハッチ。
   toArray(): readonly LoweredObligation[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

@@ -6,10 +6,11 @@ import {
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { AttributePath } from "./attribute-path.ts";
 import type { BindingValue } from "./binding-value.ts";
+import type { FirstClassCollection } from "./first-class-collection.ts";
 import type { ScenarioBinding } from "./scenario-binding.ts";
 
 // 同一属性へ一意に値を束縛するシナリオ状態。空集合は部分束縛として有効。
-export class ScenarioBindings {
+export class ScenarioBindings implements FirstClassCollection {
   readonly #values: readonly ScenarioBinding[];
 
   /** 1シナリオの束縛数の処理予算は10,000件。 */
@@ -55,5 +56,9 @@ export class ScenarioBindings {
     return Object.fromEntries(
       this.entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()]),
     );
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

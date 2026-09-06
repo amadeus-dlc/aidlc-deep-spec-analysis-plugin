@@ -8,12 +8,14 @@
   "crossChecked": [
     {
       "backend": "quint",
+      "unit": "u1-tickets",
       "targets": [
         "DSC-1"
       ]
     },
     {
       "backend": "smt",
+      "unit": "u1-tickets",
       "targets": [
         "DSC-1"
       ]

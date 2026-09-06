@@ -306,9 +306,9 @@ describe("sourceDigest anchoring — requirements drift is caught by content, no
     requirements = join(record, "inception", "requirements-analysis", "requirements.md");
     model = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
     original = readFileSync(requirements, "utf-8");
-    // The late-adoption SMT test is node-gated; make the verified state
-    // deterministic here regardless (model present + at least one findings
-    // file — the doctor only checks presence).
+    // The late-adoption SMT test is node-gated; ensure a model and at least
+    // one findings file are present even when it is skipped. The doctor also
+    // checks the sourceDigest against the current requirements.
     const verifyDir = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-verify");
     mkdirSync(verifyDir, { recursive: true });
     if (!existsSync(model)) cpSync(join(fixtures, "deep-spec-analysis-formal-model.md"), model);
@@ -325,7 +325,7 @@ describe("sourceDigest anchoring — requirements drift is caught by content, no
   });
 
   afterAll(() => {
-    // Restore, so every later doctor scan sees this intent verified again.
+    // Restore the original requirements before later doctor scans.
     writeFileSync(requirements, original);
   });
 

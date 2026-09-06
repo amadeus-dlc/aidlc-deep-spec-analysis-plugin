@@ -2,6 +2,7 @@ import {
   ContentHash,
   type FindingKind,
   type FindingsSchema,
+  type FindingTargets,
   FunctionalRequirementReferences,
   RequirementIdentifier,
   SkipReason,
@@ -12,13 +13,11 @@ import {
 
 // ReferenceCheckReport 集約 — 契約2 の refcheck 文書のドメイン表現。
 //
-// ドメインは型付きの語彙（findings / skipped / inputs / checked / 降格理由）
-// だけを話す。JSON への描画点は `toDocument()`（契約2 のキー順を所有）に
-// 封じ、アダプタは `JSON.stringify` で描画するだけ（design 集約と同じ分担、
-// PR2b 改訂）。契約適合の判定も `conformedTo(FindingsSchema)` としてここに
-// 持つ——文言は値オブジェクト FindingsSchema が凍結で所有する。
+// 型付きのfindings・skipped・inputs・checked・降格理由を保持する。
+// toDocument()が文書形とキー順を所有し、アダプタはJSONと改行へ描画する。
+// conformedTo(FindingsSchema)が契約適合を判定し、降格理由はFindingsSchemaが所有する。
 //
-// 検査の書き込み側は本集約ルートが所有する（種別規律の裁定 14、2026-09-02）。
+// 検査の書き込み側は本集約ルートが所有する。
 // `open` が検査ファミリー面で空の文書を開き、`finding`／`skip`／`input` は
 // レポートのコマンド（void）。「checked = 全 family − failed − skipped」の
 // 導出と正準順（inputs は artifact 順・checked は一意化＋id 順・findings と
@@ -26,12 +25,6 @@ import {
 // 描画（finding detail の `${family}: ${detail}`、checked／skip target の
 // `check:${family}`）は CheckFamily の知識で、golden バイト凍結。unit は
 // functional センサーのみが持つ（finding／skip のキー順の末尾、凍結）。
-//
-// 入口は 3 つ：
-//   - open         … 検査ファミリーで空の文書を開く（検査はコマンドで書き込む）
-//   - degraded     … 契約不適合と判定された文書の降格形（理由文言は emitter＝
-//                    アダプタが組んで渡す。inputs は保持、内容は空になる——凍結挙動）
-//   - of … 書かれた真実（アダプタが型付きに解いた状態）からの再構成
 
 import { canonicalStringify, type Json } from "@deep-spec-analysis/kernel-infrastructure";
 import { CATALOG_VERSION } from "./catalog-version.ts";
@@ -89,8 +82,8 @@ export class ReferenceCheckReport {
     );
   }
 
-  // 契約不適合時の降格形。inputs は保持し内容を空にする（凍結挙動）。
-  // 理由文言は emitter（アダプタ）が組んで渡す——ドメインは値として保持する。
+  // 契約不適合時はinputsを保持し、検査結果を空にする。
+  // conformedToがFindingsSchemaから受け取った降格理由を保持する。
   degraded(reason: string): ReferenceCheckReport {
     return new ReferenceCheckReport(
       this.#id,
@@ -132,7 +125,7 @@ export class ReferenceCheckReport {
   finding(
     family: CheckFamily,
     kind: FindingKind,
-    targets: string[],
+    targets: FindingTargets,
     refs: WitnessReference[],
     detail: string,
     functionalRequirementReferences: string[] = [],
@@ -144,9 +137,7 @@ export class ReferenceCheckReport {
           functionalRequirementReferences: FunctionalRequirementReferences.of(
             Array.from(functionalRequirementReferences, (raw) => RequirementIdentifier.of(raw)),
           ).sortedUnique(),
-          targets: TargetIdentifiers.of(
-            Array.from(targets, (raw) => TargetIdentifier.of(raw)),
-          ).sortedUniqueCanonically(),
+          targets: targets.sortedUniqueCanonically(),
           witness: { refs: WitnessReferences.of(refs) },
           detail: family.prefixedDetail(detail),
           ...(this.#unit !== undefined ? { unit: this.#unit } : {}),

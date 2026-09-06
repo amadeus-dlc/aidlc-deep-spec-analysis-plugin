@@ -1,3 +1,4 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 // BusinessRuleReferences — 設計要素が指す業務規則 id の列（ファーストクラスコレクション）。
 // 要素は BusinessRuleReference（裁定 3-1、2026-09-03）。of は型付きの BusinessRuleReference を受け取る。
 
@@ -9,7 +10,9 @@ import {
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { BusinessRuleReference } from "./business-rule-reference.ts";
 
-export class BusinessRuleReferences {
+export class BusinessRuleReferences
+  implements FirstClassCollection, IterableFirstClassCollection<BusinessRuleReference>
+{
   readonly #values: readonly BusinessRuleReference[];
 
   private constructor(values: readonly BusinessRuleReference[]) {
@@ -41,5 +44,9 @@ export class BusinessRuleReferences {
   // 境界: 描画・アダプタ専用。
   toStrings(): readonly string[] {
     return this.#values.map((v) => v.asString());
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

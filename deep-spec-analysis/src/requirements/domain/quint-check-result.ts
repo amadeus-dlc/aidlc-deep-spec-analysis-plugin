@@ -37,14 +37,16 @@ export class QuintCheckResult {
       case "machine-uncompilable":
         return VerificationReport.machineUncompilable(id, model, result.method.asString(), result.error.asString());
       case "checked": {
-        const interpreted = result.plan.interpret(model, result.compileSkips, result.method.asString(), result.runs);
+        const interpreted = result.plan.interpret(model, result.compileSkips, result.method, result.runs);
+        if (!interpreted.ok)
+          return VerificationReport.interpretationUnavailable(id, model, result.method, interpreted.error);
         return VerificationReport.compose({
           id,
           irVersion: model.irVersion(),
           irHash: model.irHash(),
           method: result.method.asString(),
-          findings: interpreted.findings,
-          skipped: interpreted.skipped,
+          findings: interpreted.value.findings,
+          skipped: interpreted.value.skipped,
         });
       }
     }

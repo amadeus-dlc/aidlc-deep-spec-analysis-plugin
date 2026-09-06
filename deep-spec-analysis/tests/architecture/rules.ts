@@ -33,8 +33,8 @@ const CONTEXTS = ["kernel", "requirements", "design", "refinement", "refcheck", 
 // RPC クライアント・永続化は置かない——それらは adapter のゲートウェイ責務。
 const LAYERS = ["infrastructure", "domain", "usecase", "adapter"] as const;
 
-// 層パッケージの bare specifier の接頭辞。src/<ctx>/<layer>/ の 17 層は
-// それぞれ workspace パッケージ @deep-spec-analysis/<ctx>-<layer> で、層をまたぐ辺は
+// 層パッケージのbare specifierの接頭辞。src/<ctx>/<layer>/package.jsonで定義する
+// workspaceパッケージは@deep-spec-analysis/<ctx>-<layer>で、層をまたぐ辺は
 // この形だけで書く（src/entries/ は @deep-spec-analysis/entries）。
 const PACKAGE_SCOPE = "@deep-spec-analysis/";
 

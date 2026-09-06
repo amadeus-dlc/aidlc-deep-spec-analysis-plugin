@@ -1,3 +1,4 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import {
   IllegalArgumentException,
   type ParseError,
@@ -7,7 +8,7 @@ import {
 import type { DesignArtifactReference } from "./design-artifact-reference.ts";
 
 // doctor一回の対象台帳。後続の観測数も同じ65,536件以内に保つ。
-export class DesignArtifacts {
+export class DesignArtifacts implements FirstClassCollection, IterableFirstClassCollection<DesignArtifactReference> {
   readonly #values: readonly DesignArtifactReference[];
   private constructor(values: readonly DesignArtifactReference[]) {
     if (values.length > 65_536)
@@ -22,5 +23,9 @@ export class DesignArtifacts {
   }
   *[Symbol.iterator](): Iterator<DesignArtifactReference> {
     yield* this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

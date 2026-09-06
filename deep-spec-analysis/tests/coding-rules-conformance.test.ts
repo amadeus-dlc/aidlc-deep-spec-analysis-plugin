@@ -5,9 +5,13 @@ import { join } from "node:path";
 import {
   DesignBackgroundIdentifier,
   DesignMachineIdentifier,
+  DesignMachines,
   DesignObligationIdentifier,
   DesignScenarioIdentifier,
   DesignTransitionIdentifier,
+  LoweredBackgrounds,
+  LoweredObligations,
+  LoweredScenarios,
   LoweringIndex,
 } from "@deep-spec-analysis/design-domain";
 import {
@@ -25,6 +29,8 @@ import {
   AttributeName,
   AttributeNames,
   CardinalityNotation,
+  CheckFamilies,
+  CheckFamily,
   ComponentName,
   DeclaredEntities,
   DeclaredRuleIdentifier,
@@ -36,6 +42,8 @@ import {
   LineNumber,
   MachineSpecification,
   NumericBound,
+  ReferenceCheckReport,
+  ReferenceCheckReportIdentifier,
   RelationshipDeclaration,
   RelationshipDeclarations,
   RuleCategory,
@@ -62,6 +70,7 @@ import {
   ScenarioIdentifier,
   VerificationReportIdentifier,
 } from "@deep-spec-analysis/requirements-domain";
+import { requireSuccess } from "./result-fixtures.ts";
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
@@ -179,7 +188,9 @@ describe("SMT response completeness", () => {
     const input = model();
     const plan = buildSmtPlan(input);
     expect(plan.queries.map((q) => q.id)).toEqual(["global"]);
-    const result = plan.plan.interpret(input, SatisfiabilityModuloTheoriesQueryVerdicts.of(KeyedIndex.empty()));
+    const result = requireSuccess(
+      plan.plan.interpret(input, SatisfiabilityModuloTheoriesQueryVerdicts.of(KeyedIndex.empty())),
+    );
     expect(result.findings.toArray()).toHaveLength(0);
     expect(result.skipped.toArray().map((s) => ({ target: s.target().asString(), reason: s.reason() }))).toEqual([
       { target: "OB-1", reason: "unrecognized-format" },
@@ -196,10 +207,12 @@ describe("SMT response completeness", () => {
     });
     const plan = buildSmtPlan(input);
     expect(plan.queries.map((q) => q.id)).toEqual(["global", "vac:OB-1"]);
-    const result = plan.plan.interpret(
-      input,
-      SatisfiabilityModuloTheoriesQueryVerdicts.of(
-        KeyedIndex.of([[QueryLabel.of("global"), SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "sat" })]]),
+    const result = requireSuccess(
+      plan.plan.interpret(
+        input,
+        SatisfiabilityModuloTheoriesQueryVerdicts.of(
+          KeyedIndex.of([[QueryLabel.of("global"), SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "sat" })]]),
+        ),
       ),
     );
     expect(result.skipped.toArray().map((s) => s.detail())).toEqual([
@@ -238,12 +251,12 @@ describe("ID construction contracts match their schema", () => {
   }
 
   test("mixed design targets are queried through parse instead of forging a transition ID", () => {
-    const index = LoweringIndex.of({
-      origins: KeyedIndex.empty(),
-      scenarioDesignIds: KeyedIndex.empty(),
-      machinesByTransition: KeyedIndex.empty(),
-      attrPathsByMachine: KeyedIndex.empty(),
-    });
+    const index = LoweringIndex.of(
+      LoweredObligations.of([]),
+      LoweredScenarios.of([]),
+      DesignMachines.of([]),
+      LoweredBackgrounds.of([]),
+    );
     expect(index.isTransition("DOB-1")).toBe(false);
     expect(index.machineOfTransition("DOB-1")).toBeNull();
     expect(index.attrPathOfMachine("TR-1")).toBeNull();
@@ -302,8 +315,13 @@ describe("declarations own their state", () => {
     const rule = RuleDeclaration.of(seed);
     missing.push("statement");
     seed.id = DeclaredRuleIdentifier.of("BR2.1");
-    expect(rule.missing()).toEqual([]);
-    expect(rule.id()?.asString()).toBe("BR1.1");
+    const output = ReferenceCheckReport.open(
+      ReferenceCheckReportIdentifier.of(ArtifactPath.of("/review"), "functional-design"),
+      CheckFamilies.of([CheckFamily.of("FD-R1")]),
+    );
+    rule.checkRequiredKeys(output, ArtifactPath.of("rules.md"));
+    expect(output.findingsCount()).toBe(0);
+    expect(rule.identifierForUniqueness()?.asString()).toBe("BR1.1");
   });
 
   test("entity declarations and sketches keep their captured identities", () => {
@@ -335,7 +353,22 @@ describe("declarations own their state", () => {
     };
     const machine = StateMachineSketch.of(seed);
     seed.unsupported = "changed";
-    expect(machine.unsupported()).toBeNull();
+    const output = ReferenceCheckReport.open(
+      ReferenceCheckReportIdentifier.of(ArtifactPath.of("/review"), "functional-design"),
+      CheckFamilies.of([CheckFamily.of("FD-S1"), CheckFamily.of("FD-S2")]),
+    );
+    machine.check(
+      output,
+      ArtifactPath.of("spec.md"),
+      ArtifactPath.of("entities.md"),
+      DeclaredEntities.of({
+        entities: EntityDeclarations.of([]),
+        rels: RelationshipDeclarations.of([]),
+        shapeErrors: ShapeErrors.of([]),
+      }),
+    );
+    expect(output.skippedCount()).toBe(0);
+    expect(output.findingsCount()).toBe(1);
     const declaredSeed = {
       entities: EntityDeclarations.of([]),
       rels: RelationshipDeclarations.of([]),

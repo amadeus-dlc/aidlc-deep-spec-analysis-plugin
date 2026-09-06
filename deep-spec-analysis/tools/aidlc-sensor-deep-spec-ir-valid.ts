@@ -194,59 +194,88 @@ function resolveRef(root, ref) {
 }
 function validateSchema(root, schema, value, path, errors) {
   const before = errors.length;
+  for (const error of schemaErrors(root, schema, value, path))
+    errors.push(error);
+  return errors.length === before;
+}
+function matchesSchema(root, schema, value, path) {
+  if (typeof schema.$ref === "string")
+    return matchesSchema(root, resolveRef(root, schema.$ref), value, path);
+  if (Array.isArray(schema.oneOf))
+    return schemaErrors(root, schema, value, path).next().done === true;
+  if (isObject(value) && isObject(schema.properties)) {
+    for (const [key, property] of Object.entries(schema.properties)) {
+      if (!(key in value) || !isObject(property))
+        continue;
+      let resolved = property;
+      while (typeof resolved.$ref === "string")
+        resolved = resolveRef(root, resolved.$ref);
+      if (Array.isArray(resolved.oneOf))
+        continue;
+      const condition = {};
+      if ("const" in resolved)
+        condition.const = resolved.const;
+      if (Array.isArray(resolved.enum))
+        condition.enum = resolved.enum;
+      if (Object.keys(condition).length > 0 && !schemaErrors(root, condition, value[key], `${path}/${key}`).next().done)
+        return false;
+    }
+  }
+  return schemaErrors(root, schema, value, path).next().done === true;
+}
+function* schemaErrors(root, schema, value, path) {
   if (typeof schema.$ref === "string") {
-    return validateSchema(root, resolveRef(root, schema.$ref), value, path, errors);
+    yield* schemaErrors(root, resolveRef(root, schema.$ref), value, path);
+    return;
   }
   if (Array.isArray(schema.oneOf)) {
     let matched = 0;
     for (const branch of schema.oneOf) {
       if (!isObject(branch))
         continue;
-      const probe = [];
-      if (validateSchema(root, branch, value, path, probe))
+      if (matchesSchema(root, branch, value, path))
         matched++;
     }
     if (matched !== 1) {
-      errors.push(`${path}: matches ${matched} oneOf branches (must match exactly 1)`);
+      yield `${path}: matches ${matched} oneOf branches (must match exactly 1)`;
     }
-    return errors.length === before;
+    return;
   }
   if (typeof schema.type === "string" && !typeMatches(schema.type, value)) {
-    errors.push(`${path}: expected type ${schema.type}`);
-    return false;
+    yield `${path}: expected type ${schema.type}`;
+    return;
   }
   if ("const" in schema && JSON.stringify(schema.const) !== JSON.stringify(value)) {
-    errors.push(`${path}: expected const ${JSON.stringify(schema.const)}`);
-    return false;
+    yield `${path}: expected const ${JSON.stringify(schema.const)}`;
+    return;
   }
   if (Array.isArray(schema.enum)) {
     const hit = schema.enum.some((e) => JSON.stringify(e) === JSON.stringify(value));
     if (!hit) {
-      errors.push(`${path}: not one of ${JSON.stringify(schema.enum)}`);
-      return false;
+      yield `${path}: not one of ${JSON.stringify(schema.enum)}`;
+      return;
     }
   }
   if (typeof value === "string" && typeof schema.pattern === "string") {
     if (!new RegExp(schema.pattern).test(value)) {
-      errors.push(`${path}: does not match pattern ${schema.pattern}`);
+      yield `${path}: does not match pattern ${schema.pattern}`;
     }
   }
   if (Array.isArray(value)) {
     if (typeof schema.minItems === "number" && value.length < schema.minItems) {
-      errors.push(`${path}: fewer than ${schema.minItems} items`);
+      yield `${path}: fewer than ${schema.minItems} items`;
     }
     if (typeof schema.maxItems === "number" && value.length > schema.maxItems) {
-      errors.push(`${path}: more than ${schema.maxItems} items`);
+      yield `${path}: more than ${schema.maxItems} items`;
     }
     if (schema.uniqueItems === true) {
       const seen = new Set(value.map((v) => JSON.stringify(v)));
       if (seen.size !== value.length)
-        errors.push(`${path}: items are not unique`);
+        yield `${path}: items are not unique`;
     }
     if (isObject(schema.items)) {
-      value.forEach((item, i) => {
-        validateSchema(root, schema.items, item, `${path}/${i}`, errors);
-      });
+      for (const [index, item] of value.entries())
+        yield* schemaErrors(root, schema.items, item, `${path}/${index}`);
     }
   }
   if (isObject(value)) {
@@ -254,29 +283,29 @@ function validateSchema(root, schema, value, path, errors) {
     if (Array.isArray(schema.required)) {
       for (const key of schema.required) {
         if (typeof key === "string" && !(key in value)) {
-          errors.push(`${path}: missing required property "${key}"`);
+          yield `${path}: missing required property "${key}"`;
         }
       }
     }
     if (typeof schema.minProperties === "number" && Object.keys(value).length < schema.minProperties) {
-      errors.push(`${path}: fewer than ${schema.minProperties} properties`);
+      yield `${path}: fewer than ${schema.minProperties} properties`;
     }
     for (const [key, val] of Object.entries(value)) {
       if (key in props && isObject(props[key])) {
-        validateSchema(root, props[key], val, `${path}/${key}`, errors);
+        yield* schemaErrors(root, props[key], val, `${path}/${key}`);
       } else if (schema.additionalProperties === false) {
-        errors.push(`${path}: unexpected property "${key}"`);
+        yield `${path}: unexpected property "${key}"`;
       } else if (isObject(schema.additionalProperties)) {
-        validateSchema(root, schema.additionalProperties, val, `${path}/${key}`, errors);
+        yield* schemaErrors(root, schema.additionalProperties, val, `${path}/${key}`);
       }
       if (isObject(schema.propertyNames) && typeof schema.propertyNames.pattern === "string") {
         if (!new RegExp(schema.propertyNames.pattern).test(key)) {
-          errors.push(`${path}: property name "${key}" does not match required pattern`);
+          yield `${path}: property name "${key}" does not match required pattern`;
         }
       }
     }
   }
-  return errors.length === before;
+  return;
 }
 // src/kernel/domain/artifact-path.ts
 class ArtifactPath {
@@ -585,6 +614,9 @@ class DeclaredBindings {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/kernel/domain/declared-bound.ts
 class DeclaredBound {
@@ -695,6 +727,9 @@ class EnumerationMembers {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/kernel/domain/error-message.ts
 class ErrorMessage {
@@ -804,6 +839,24 @@ class ExpressionTree {
     };
     go(this.#root);
   }
+  inspectTerms(handlers) {
+    const compared = new Map;
+    this.walk((node) => {
+      const args = node.args ?? [];
+      if (args.length !== 2)
+        return;
+      const reference = args.find((arg) => arg.op === "ref" && typeof arg.path === "string");
+      const literal = args.find((arg) => arg.op === "enum");
+      if (reference?.path !== undefined && literal !== undefined)
+        compared.set(literal, reference.path);
+    });
+    this.walk((node) => {
+      if (node.op === "ref" && typeof node.path === "string")
+        handlers.reference(node.path, node.prime === true);
+      if (node.op === "enum" && typeof node.value === "string")
+        handlers.enumLiteral(node.value, compared.get(node));
+    });
+  }
   usesPrime() {
     let found = false;
     this.walk((node) => {
@@ -909,6 +962,56 @@ class FindingKind {
   }
   asString() {
     return this.#value;
+  }
+}
+// src/kernel/domain/finding-targets.ts
+var MAX_FINDING_TARGETS = 65536;
+
+class FindingTargets {
+  #values;
+  constructor(head, tail) {
+    if (tail.length >= MAX_FINDING_TARGETS)
+      throw new IllegalArgumentException({ kind: "too-many-finding-targets", raw: tail.length + 1 });
+    const snapshot = [head];
+    for (const value of tail) {
+      if (snapshot.length === MAX_FINDING_TARGETS)
+        throw new IllegalArgumentException({ kind: "too-many-finding-targets", raw: snapshot.length + 1 });
+      snapshot.push(value);
+    }
+    this.#values = Object.freeze(snapshot);
+  }
+  static of(head, tail) {
+    return new FindingTargets(head, tail);
+  }
+  static parse(head, tail) {
+    return parseConstruction(() => new FindingTargets(head, tail));
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  count() {
+    return this.#values.length;
+  }
+  includes(value) {
+    return this.#values.some((target) => target.equals(value));
+  }
+  sortedCanonically() {
+    const [head, ...tail] = [...this.#values].sort((a, b) => a.compareTo(b));
+    return new FindingTargets(head, tail);
+  }
+  sortedUniqueCanonically() {
+    const unique = new Map(this.#values.map((target) => [target.asString(), target]));
+    const [head, ...tail] = [...unique.values()].sort((a, b) => a.compareTo(b));
+    return new FindingTargets(head, tail);
+  }
+  joined(separator) {
+    return this.toStrings().join(separator);
+  }
+  toArray() {
+    return this.#values;
+  }
+  toStrings() {
+    return this.#values.map((target) => target.asString());
   }
 }
 // src/kernel/domain/findings-schema.ts
@@ -1226,6 +1329,9 @@ class RequirementIdentifiers {
   toStrings() {
     return this.#values.toArray().map((v) => v.asString());
   }
+  isEmpty() {
+    return this.#values.isEmpty();
+  }
 }
 // src/kernel/domain/scenario-binding.ts
 class ScenarioBinding {
@@ -1286,6 +1392,162 @@ class ScenarioBindings {
   }
   toDocument() {
     return Object.fromEntries(this.entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()]));
+  }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
+}
+// src/kernel/domain/scenario-comparison.ts
+class ScenarioComparison {
+  #first;
+  #second;
+  constructor(first, second) {
+    if (!first.sameSubjectAs(second))
+      throw new IllegalArgumentException({ kind: "different-comparison-subjects" });
+    if (!first.isComparable() || !second.isComparable())
+      throw new IllegalArgumentException({ kind: "uncomparable-scenario-verdict" });
+    if (first.backend().equals(second.backend()))
+      throw new IllegalArgumentException({ kind: "same-comparison-backend" });
+    this.#first = first;
+    this.#second = second;
+  }
+  static of(first, second) {
+    return new ScenarioComparison(first, second);
+  }
+  static parse(first, second) {
+    return parseConstruction(() => new ScenarioComparison(first, second));
+  }
+  isFor(target, unit) {
+    return this.#first.isFor(target, unit);
+  }
+  disagrees() {
+    return !this.#first.agreesWith(this.#second);
+  }
+  backends() {
+    return [this.#first.backend(), this.#second.backend()];
+  }
+  description() {
+    return `Backends "${this.#first.backend().asString()}" and "${this.#second.backend().asString()}"`;
+  }
+  toVerdictTable() {
+    return Object.fromEntries([
+      [this.#first.backend().asString(), this.#first.verdictLabel()],
+      [this.#second.backend().asString(), this.#second.verdictLabel()]
+    ]);
+  }
+}
+// src/kernel/domain/scenario-expectation.ts
+class ScenarioExpectation {
+  #kind;
+  constructor(value) {
+    if (value.length > 6)
+      throw new IllegalArgumentException({ kind: "scenario-expectation-too-long", raw: value.length });
+    if (value !== "accept" && value !== "reject")
+      throw new IllegalArgumentException({ kind: "unknown-scenario-expectation", raw: value });
+    this.#kind = value;
+  }
+  static of(value) {
+    return new ScenarioExpectation(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new ScenarioExpectation(value));
+  }
+  isAccept() {
+    return this.#kind === "accept";
+  }
+  isReject() {
+    return this.#kind === "reject";
+  }
+  isViolatedBySatisfiability(satisfiable) {
+    return this.#kind === "accept" ? !satisfiable : satisfiable;
+  }
+  asString() {
+    return this.#kind;
+  }
+}
+// src/kernel/domain/scenario-verdict.ts
+class ScenarioVerdict {
+  #backend;
+  #modelHash;
+  #state;
+  #target;
+  #unit;
+  constructor(backend, modelHash, target, unit, state) {
+    this.#backend = backend;
+    this.#modelHash = modelHash;
+    this.#state = state;
+    this.#target = target;
+    this.#unit = unit;
+  }
+  static clean(backend, modelHash, target, unit) {
+    return new ScenarioVerdict(backend, modelHash, target, unit, "clean");
+  }
+  static violated(backend, modelHash, target, unit) {
+    return new ScenarioVerdict(backend, modelHash, target, unit, "violated");
+  }
+  static skipped(backend, modelHash, target, unit) {
+    return new ScenarioVerdict(backend, modelHash, target, unit, "skipped");
+  }
+  static unavailable(backend, modelHash, target, unit) {
+    return new ScenarioVerdict(backend, modelHash, target, unit, "unavailable");
+  }
+  backend() {
+    return this.#backend;
+  }
+  isComparable() {
+    return this.#state === "clean" || this.#state === "violated";
+  }
+  isFor(target, unit) {
+    return this.#target.equals(target) && (this.#unit === null ? unit === null : unit !== null && this.#unit.equals(unit));
+  }
+  sameSubjectAs(other) {
+    return this.#modelHash.equals(other.#modelHash) && this.isFor(other.#target, other.#unit);
+  }
+  agreesWith(other) {
+    return this.#state === other.#state;
+  }
+  verdictLabel() {
+    if (this.#state !== "clean" && this.#state !== "violated")
+      throw new Error("defect: an unverified scenario has no verdict label");
+    return this.#state;
+  }
+}
+// src/kernel/domain/scenario-verdicts.ts
+class ScenarioVerdicts {
+  #values;
+  constructor(values) {
+    if (values.length > 128)
+      throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: values.length });
+    const snapshot = [];
+    for (const value of values) {
+      if (snapshot.length === 128)
+        throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: snapshot.length + 1 });
+      snapshot.push(value);
+    }
+    const comparable = snapshot.filter((value) => value.isComparable());
+    if (comparable.some((value) => !value.sameSubjectAs(comparable[0])))
+      throw new IllegalArgumentException({ kind: "different-scenario-subjects" });
+    if (KeySet.of(comparable.map((value) => value.backend())).size() !== comparable.length)
+      throw new IllegalArgumentException({ kind: "duplicate-scenario-backend" });
+    this.#values = [...comparable];
+  }
+  static of(values) {
+    return new ScenarioVerdicts(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ScenarioVerdicts(values));
+  }
+  *comparisons() {
+    for (let i = 0;i < this.#values.length; i++)
+      for (let j = i + 1;j < this.#values.length; j++) {
+        const comparison = ScenarioComparison.parse(this.#values[i], this.#values[j]);
+        if (!comparison.ok)
+          throw new Error(`defect: validated scenario verdicts cannot be compared (${comparison.error.kind})`);
+        yield comparison.value;
+      }
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/kernel/domain/skip-reason.ts
@@ -1379,6 +1641,9 @@ class TargetIdentifier {
   compareTo(other) {
     return compareCanonically(this.#value, other.#value);
   }
+  isRequirementObligation() {
+    return this.#value.startsWith("OB-");
+  }
   asString() {
     return this.#value;
   }
@@ -1425,6 +1690,9 @@ class TargetIdentifiers {
   }
   toStrings() {
     return this.#values.map((v) => v.asString());
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/kernel/domain/trigger-name.ts
@@ -1506,6 +1774,9 @@ class VerificationMethod {
   }
   static parse(raw) {
     return parseConstruction(() => new VerificationMethod(raw));
+  }
+  isBounded() {
+    return this.#value === "bounded";
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1740,7 +2011,7 @@ function decodeFindingsDocument(raw) {
     if (typeof raw[field] !== "string")
       return err(`${field} must be a string`);
   }
-  if (!Array.isArray(raw.findings) || !raw.findings.every((f) => isObject(f) && typeof f.kind === "string" && strings(f.frRefs) && strings(f.targets) && isObject(f.witness) && typeof f.detail === "string" && optionalString(f.unit))) {
+  if (!Array.isArray(raw.findings) || !raw.findings.every((f) => isObject(f) && typeof f.kind === "string" && Array.isArray(f.targets) && f.targets.length > 0 && f.targets.length <= MAX_FINDING_TARGETS && strings(f.frRefs) && strings(f.targets) && isObject(f.witness) && typeof f.detail === "string" && optionalString(f.unit))) {
     return err("findings must be an array of complete finding records");
   }
   if (!Array.isArray(raw.skipped) || !raw.skipped.every((s) => isObject(s) && typeof s.target === "string" && typeof s.reason === "string" && optionalString(s.detail) && optionalString(s.unit))) {
@@ -1754,7 +2025,7 @@ function decodeFindingsDocument(raw) {
   }
   if (raw.checked !== undefined && !strings(raw.checked))
     return err("checked must be an array of strings");
-  if (raw.crossChecked !== undefined && (!Array.isArray(raw.crossChecked) || !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && strings(c.targets)))) {
+  if (raw.crossChecked !== undefined && (!Array.isArray(raw.crossChecked) || !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && (c.unit === undefined || typeof c.unit === "string") && strings(c.targets)))) {
     return err("crossChecked must be an array of backend comparisons");
   }
   return ok(raw);
@@ -1774,7 +2045,10 @@ function parseFindingsValues(raw) {
       const fields = combineResults({
         kind: FindingKind.parse(entry.kind),
         functionalRequirementReferences: flatMapResult(traverseResult(entry.frRefs, RequirementIdentifier.parse), FunctionalRequirementReferences.parse),
-        targets: traverseResult(entry.targets, TargetIdentifier.parse),
+        targets: flatMapResult(traverseResult(entry.targets, TargetIdentifier.parse), (targets) => {
+          const [head, ...tail] = targets;
+          return head === undefined ? err({ kind: "empty-finding-targets" }) : FindingTargets.parse(head, tail);
+        }),
         unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
       });
       if (!fields.ok)
@@ -1782,7 +2056,7 @@ function parseFindingsValues(raw) {
       return ok({
         ...fields.value,
         functionalRequirementReferences: fields.value.functionalRequirementReferences,
-        targets: TargetIdentifiers.of(fields.value.targets),
+        targets: fields.value.targets,
         witness: entry.witness,
         detail: entry.detail
       });
@@ -1804,11 +2078,16 @@ function parseFindingsValues(raw) {
     crossChecked: doc.crossChecked === undefined ? ok(undefined) : traverseResult(doc.crossChecked, (entry) => {
       const fields = combineResults({
         backend: BackendName.parse(entry.backend),
+        unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit),
         targets: traverseResult(entry.targets, TargetIdentifier.parse)
       });
       if (!fields.ok)
         return fields;
-      return ok({ backend: fields.value.backend, targets: TargetIdentifiers.of(fields.value.targets) });
+      return ok({
+        backend: fields.value.backend,
+        unit: fields.value.unit,
+        targets: TargetIdentifiers.of(fields.value.targets)
+      });
     })
   });
   if (!parsed.ok)
@@ -1914,6 +2193,9 @@ class BackgroundAssumptions {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/requirements/domain/cross-checked-entries.ts
 class CrossCheckedEntries {
@@ -1933,6 +2215,9 @@ class CrossCheckedEntries {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/requirements/domain/cross-checked-entry.ts
 class CrossCheckedEntry {
@@ -1940,10 +2225,16 @@ class CrossCheckedEntry {
   #targets;
   constructor(props) {
     this.#backend = props.backend;
+    for (const target of props.targets)
+      if (!target.asString().startsWith("SC-"))
+        throw new IllegalArgumentException({ kind: "invalid-cross-checked-target", raw: target.asString() });
     this.#targets = props.targets;
   }
   static of(props) {
     return new CrossCheckedEntry(props);
+  }
+  static parse(props) {
+    return parseConstruction(() => new CrossCheckedEntry(props));
   }
   backend() {
     return this.#backend;
@@ -2016,6 +2307,9 @@ class FunctionalRequirementReferenceClaims {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/requirements/domain/functional-requirement-reference-index.ts
 class FunctionalRequirementReferenceIndex {
@@ -2038,6 +2332,88 @@ class FunctionalRequirementReferenceIndex {
       const owners = [...this.#ownersByRef.get(RequirementIdentifier.of(id))?.ownerDescriptions() ?? []].sort().join(", ");
       return `frRef "${id}" (used by ${owners}) does not exist in requirements.md`;
     });
+  }
+  isEmpty() {
+    return this.#ownersByRef.isEmpty();
+  }
+}
+// src/requirements/domain/intermediate-representation-attribute-catalog.ts
+class IntermediateRepresentationAttributeCatalog {
+  #byPath;
+  constructor(declarations) {
+    let count = 0;
+    for (const entity of declarations) {
+      if (++count > 65536)
+        throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
+      entity.inspectAttributes(() => {
+        if (++count > 65536)
+          throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
+      });
+    }
+    if (declarations.hasAmbiguousAttributes())
+      throw new IllegalArgumentException({ kind: "ambiguous-requirement-attributes" });
+    const attributes = new Map;
+    for (const entity of declarations)
+      entity.inspectAttributes((path, attribute) => {
+        attributes.set(path, attribute);
+      });
+    this.#byPath = KeyedIndex.of([...attributes].map(([path, attribute]) => [AttributePath.of(path), attribute]));
+  }
+  #attributeAt(path) {
+    const parsed = AttributePath.parse(path);
+    return parsed.ok ? this.#byPath.get(parsed.value) : undefined;
+  }
+  static of(declarations) {
+    return new IntermediateRepresentationAttributeCatalog(declarations);
+  }
+  static parse(declarations) {
+    return parseConstruction(() => new IntermediateRepresentationAttributeCatalog(declarations));
+  }
+  diagnostics() {
+    const errors = [];
+    const encoded = new Map;
+    for (const coordinate of this.#byPath.keys()) {
+      const path = coordinate.asString();
+      const key = path.replace(/\./g, "_");
+      const prior = encoded.get(key);
+      if (prior !== undefined) {
+        errors.push(`schema: attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`);
+      } else {
+        encoded.set(key, path);
+      }
+    }
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+  expressionDiagnostics(expression, where, primesAllowed) {
+    const errors = [];
+    ExpressionTree.of(expression).inspectTerms({
+      reference: (path, primed) => {
+        if (!(this.#attributeAt(path) !== undefined))
+          errors.push(`${where}: unresolvable reference "${path}"`);
+        if (primed && !primesAllowed)
+          errors.push(`${where}: primed reference "${path}" is only legal in event effects and event-scenario expectations`);
+      },
+      enumLiteral: (value) => {
+        if (![...this.#byPath.values()].some((attribute) => attribute.admitsEnumLiteral(value)))
+          errors.push(`${where}: enum literal "${value}" is not a value of any declared enum attribute`);
+      }
+    });
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+  bindingDiagnostics(bindings, context) {
+    const errors = [];
+    for (const binding of bindings) {
+      const path = binding.path().asString();
+      const attribute = this.#attributeAt(path);
+      if (!attribute)
+        errors.push(`${context}: binding for unknown attribute "${path}"`);
+      else if (!attribute.fitsBinding(binding.value()))
+        errors.push(`${context}: binding value ${binding.value().describe()} does not fit ${attribute.kindLabel()} attribute "${path}"`);
+    }
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+  isEmpty() {
+    return this.#byPath.isEmpty();
   }
 }
 // src/requirements/domain/intermediate-representation-attribute-declaration.ts
@@ -2094,6 +2470,9 @@ class IntermediateRepresentationAttributeDeclarations {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/requirements/domain/intermediate-representation-attribute-name.ts
 class IntermediateRepresentationAttributeName {
@@ -2132,15 +2511,16 @@ class IntermediateRepresentationBackgroundDeclaration {
   static of(props) {
     return new IntermediateRepresentationBackgroundDeclaration(props);
   }
+  diagnostics(catalog) {
+    const context = `background ${this.#id.asString()}`;
+    const errors = [];
+    if (this.#assert !== undefined)
+      for (const message of catalog.expressionDiagnostics(this.#assert, context, false))
+        errors.push(message.asString());
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
   id() {
     return this.#id;
-  }
-  assertion() {
-    return this.#assert;
-  }
-  inspectExpressions(visitor) {
-    if (this.#assert !== undefined)
-      visitor(this.#assert, false);
   }
 }
 // src/requirements/domain/intermediate-representation-background-declarations.ts
@@ -2160,6 +2540,9 @@ class IntermediateRepresentationBackgroundDeclarations {
   }
   toArray() {
     return this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-entity-declaration.ts
@@ -2203,8 +2586,44 @@ class IntermediateRepresentationEntityDeclarations {
   *[Symbol.iterator]() {
     yield* this.#values;
   }
+  #inspect(entityFound, attributeFound) {
+    const names = new Set;
+    for (const entity of this.#values) {
+      const name = entity.name().asString();
+      entityFound(entity, names.has(name));
+      names.add(name);
+      entity.inspectAttributes(attributeFound);
+    }
+  }
+  hasAmbiguousAttributes() {
+    let ambiguous = false;
+    this.#inspect((_entity, duplicate) => {
+      ambiguous ||= duplicate;
+    }, (_path, _attribute, duplicate) => {
+      ambiguous ||= duplicate;
+    });
+    return ambiguous;
+  }
+  diagnostics() {
+    const messages = [];
+    this.#inspect((entity, duplicate) => {
+      if (duplicate)
+        messages.push(`schema: duplicate entity "${entity.name().asString()}"`);
+    }, (coordinate, attribute, duplicate) => {
+      if (duplicate)
+        messages.push(`schema: duplicate attribute "${coordinate}"`);
+      if (attribute.boundsInverted())
+        messages.push(`schema: ${coordinate}: min > max`);
+      if (attribute.boundsOutsideSafeRange())
+        messages.push(`schema: ${coordinate}: bounds must be safe integers`);
+    });
+    return ErrorMessages.collect(messages.map(ErrorMessage.parse));
+  }
   toArray() {
     return this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-entity-name.ts
@@ -2245,56 +2664,17 @@ class IntermediateRepresentationModelDeclaration {
   static of(seed) {
     return new IntermediateRepresentationModelDeclaration(seed);
   }
-  wellFormednessErrors() {
+  diagnostics() {
     const errors = [];
-    const attrTypes = new Map;
-    const entityNames = new Set;
-    for (const ent of this.#entities) {
-      const entName = ent.name().asString();
-      if (entityNames.has(entName))
-        errors.push(`schema: duplicate entity "${entName}"`);
-      entityNames.add(entName);
-      ent.inspectAttributes((coord, attr, duplicated) => {
-        if (duplicated) {
-          errors.push(`schema: duplicate attribute "${coord}"`);
-        }
-        if (attr.boundsInverted()) {
-          errors.push(`schema: ${coord}: min > max`);
-        }
-        if (attr.boundsOutsideSafeRange()) {
-          errors.push(`schema: ${coord}: bounds must be safe integers`);
-        }
-        attrTypes.set(coord, attr);
-      });
-    }
-    const encoded = new Map;
-    for (const path of attrTypes.keys()) {
-      const key = path.replace(/\./g, "_");
-      const prior = encoded.get(key);
-      if (prior !== undefined) {
-        errors.push(`schema: attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`);
-      } else {
-        encoded.set(key, path);
-      }
-    }
-    const checkExpr = (e, where, primesAllowed) => {
-      ExpressionTree.of(e).walk((node) => {
-        if (node.op === "ref" && typeof node.path === "string") {
-          if (!attrTypes.has(node.path)) {
-            errors.push(`${where}: unresolvable reference "${node.path}"`);
-          }
-          if (node.prime === true && !primesAllowed) {
-            errors.push(`${where}: primed reference "${node.path}" is only legal in event effects and event-scenario expectations`);
-          }
-        }
-        if (node.op === "enum" && typeof node.value === "string") {
-          const known = [...attrTypes.values()].some((t) => t.admitsEnumLiteral(node.value));
-          if (!known) {
-            errors.push(`${where}: enum literal "${node.value}" is not a value of any declared enum attribute`);
-          }
-        }
-      });
-    };
+    for (const message of this.#entities.diagnostics())
+      errors.push(message.asString());
+    const parsed = IntermediateRepresentationAttributeCatalog.parse(this.#entities);
+    const catalog = parsed.ok ? parsed.value : null;
+    if (!parsed.ok && parsed.error.kind !== "ambiguous-requirement-attributes")
+      errors.push(`schema: attribute catalog: ${parsed.error.kind}`);
+    if (catalog !== null)
+      for (const message of catalog.diagnostics())
+        errors.push(message.asString());
     const seenIds = new Set;
     const dupCheck = (id, where) => {
       if (seenIds.has(id))
@@ -2304,31 +2684,25 @@ class IntermediateRepresentationModelDeclaration {
     for (const ob of this.#obligations) {
       const where = `obligation ${ob.id().asString()}`;
       dupCheck(ob.id().asString(), where);
-      ob.inspectExpressions((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
+      if (catalog !== null)
+        for (const message of ob.diagnostics(catalog))
+          errors.push(message.asString());
     }
     for (const sc of this.#scenarios) {
       const where = `scenario ${sc.id().asString()}`;
       dupCheck(sc.id().asString(), where);
-      for (const binding of sc.bindings()) {
-        const path = binding.path();
-        const val = binding.value();
-        const t = attrTypes.get(path.asString());
-        if (!t) {
-          errors.push(`${where}: binding for unknown attribute "${path.asString()}"`);
-          continue;
-        }
-        if (!t.fitsBinding(val)) {
-          errors.push(`${where}: binding value ${val.describe()} does not fit ${t.kindLabel()} attribute "${path.asString()}"`);
-        }
-      }
-      sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
+      if (catalog !== null)
+        for (const message of sc.diagnostics(catalog))
+          errors.push(message.asString());
     }
     for (const bg of this.#background) {
       const where = `background ${bg.id().asString()}`;
       dupCheck(bg.id().asString(), where);
-      bg.inspectExpressions((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
+      if (catalog !== null)
+        for (const message of bg.diagnostics(catalog))
+          errors.push(message.asString());
     }
-    return errors;
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
 }
 // src/requirements/domain/intermediate-representation-obligation-declaration.ts
@@ -2351,10 +2725,19 @@ class IntermediateRepresentationObligationDeclaration {
   static of(props) {
     return new IntermediateRepresentationObligationDeclaration(props);
   }
+  diagnostics(catalog) {
+    const context = `obligation ${this.#id.asString()}`;
+    const errors = [];
+    this.#inspectExpressions((expression, primesAllowed) => {
+      for (const message of catalog.expressionDiagnostics(expression, context, primesAllowed))
+        errors.push(message.asString());
+    });
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
   id() {
     return this.#id;
   }
-  inspectExpressions(visitor) {
+  #inspectExpressions(visitor) {
     if (this.#assert !== undefined)
       visitor(this.#assert, false);
     if (this.#guard !== undefined)
@@ -2382,6 +2765,9 @@ class IntermediateRepresentationObligationDeclarations {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/requirements/domain/intermediate-representation-scenario-declaration.ts
 class IntermediateRepresentationScenarioDeclaration {
@@ -2401,15 +2787,18 @@ class IntermediateRepresentationScenarioDeclaration {
   static of(props) {
     return new IntermediateRepresentationScenarioDeclaration(props);
   }
+  diagnostics(catalog) {
+    const context = `scenario ${this.#id.asString()}`;
+    const errors = [];
+    for (const message of catalog.bindingDiagnostics(this.#bindings, context))
+      errors.push(message.asString());
+    if (this.#expect !== undefined)
+      for (const message of catalog.expressionDiagnostics(this.#expect, context, this.#hasEvent))
+        errors.push(message.asString());
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
   id() {
     return this.#id;
-  }
-  bindings() {
-    return this.#bindings;
-  }
-  inspectExpectation(visitor) {
-    if (this.#expect !== undefined)
-      visitor(this.#expect, this.#hasEvent);
   }
 }
 // src/requirements/domain/intermediate-representation-scenario-declarations.ts
@@ -2429,6 +2818,9 @@ class IntermediateRepresentationScenarioDeclarations {
   }
   toArray() {
     return this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-temporal-declaration.ts
@@ -2499,8 +2891,8 @@ class RequirementsSourceValidation {
     return ValidationAssessment.of(ErrorMessages.collect(this.#diagnostics(source)));
   }
   *#diagnostics(source) {
-    for (const message of this.#view.wellFormednessErrors())
-      yield ErrorMessage.parse(message);
+    for (const message of this.#view.diagnostics())
+      yield ok(message);
     if (source === null) {
       yield ErrorMessage.parse("requirements.md not found under this intent record \u2014 frRefs cannot be reverse-verified");
     } else {
@@ -2539,6 +2931,18 @@ class VerificationFindings {
   }
   isEmpty() {
     return this.#values.length === 0;
+  }
+  distinctConflicts() {
+    const seen = new Set;
+    return new VerificationFindings(this.#values.filter((finding) => {
+      if (!finding.isConflict())
+        return true;
+      const key = finding.targets().joined(",");
+      if (seen.has(key))
+        return false;
+      seen.add(key);
+      return true;
+    }));
   }
   toArray() {
     return this.#values;
@@ -2608,6 +3012,9 @@ class VerificationSkips {
   }
   toArray() {
     return this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 
@@ -2720,6 +3127,17 @@ class VerificationReport {
       unavailableReason: input.unavailableReason ?? null
     });
   }
+  static interpretationUnavailable(id, model, method, error) {
+    return VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method: method.asString(),
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([]),
+      unavailableReason: `verification evidence could not be represented: ${JSON.stringify(error)}`
+    });
+  }
   static of(seed) {
     return new VerificationReport(seed);
   }
@@ -2734,6 +3152,18 @@ class VerificationReport {
       crossChecked: null,
       unavailableReason: reason
     });
+  }
+  scenarioVerdictFor(target, irHash) {
+    const backend = this.#id.backendName();
+    if (!this.#irHash.equals(irHash) || this.isUnavailable())
+      return ScenarioVerdict.unavailable(backend, this.#irHash, target, null);
+    for (const skip of this.#skipped)
+      if (skip.isFor(target))
+        return ScenarioVerdict.skipped(backend, this.#irHash, target, null);
+    for (const finding of this.#findings)
+      if (finding.isKind("scenario-violation") && finding.implicates(target))
+        return ScenarioVerdict.violated(backend, this.#irHash, target, null);
+    return ScenarioVerdict.clean(backend, this.#irHash, target, null);
   }
   id() {
     return this.#id;
@@ -2763,7 +3193,7 @@ class VerificationReport {
     return this.#unavailableReason !== null;
   }
   passes() {
-    return this.#findings.isEmpty();
+    return !this.isUnavailable() && this.#findings.isEmpty();
   }
   findingsCount() {
     return this.#findings.count();
@@ -2869,6 +3299,60 @@ class IntermediateRepresentationValidationMaterialsIdentifier {
     return this.#model;
   }
 }
+// src/requirements/domain/verification-finding.ts
+class VerificationFinding {
+  #kind;
+  #functionalRequirementReferences;
+  #targets;
+  #witness;
+  #detail;
+  constructor(props) {
+    this.#kind = props.kind;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
+    this.#targets = props.targets;
+    this.#witness = props.witness;
+    this.#detail = props.detail;
+  }
+  static of(props) {
+    return new VerificationFinding(props);
+  }
+  isConflict() {
+    return this.#kind.asString() === "conflict";
+  }
+  kind() {
+    return this.#kind.asString();
+  }
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
+  }
+  targets() {
+    return this.#targets;
+  }
+  witness() {
+    return this.#witness;
+  }
+  detail() {
+    return this.#detail;
+  }
+  isKind(kind) {
+    const parsed = FindingKind.parse(kind);
+    return parsed.ok && this.#kind.equals(parsed.value);
+  }
+  implicates(target) {
+    return this.#targets.includes(target);
+  }
+  compareTo(other) {
+    const kr = this.#kind.compareTo(other.#kind);
+    if (kr !== 0)
+      return kr;
+    const ta = this.#targets.joined(",");
+    const tb = other.#targets.joined(",");
+    if (ta !== tb)
+      return ta < tb ? -1 : 1;
+    return this.#detail < other.#detail ? -1 : this.#detail > other.#detail ? 1 : 0;
+  }
+}
+
 // src/requirements/domain/obligation.ts
 class Obligation {
   #id;
@@ -2901,6 +3385,39 @@ class Obligation {
   }
   static of(props) {
     return new Obligation(props);
+  }
+  interpretQuintTemporal(method, verdict) {
+    if (!this.isStateTemporal() || this.#temporal?.pattern !== "leads-to")
+      return ok({ findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) });
+    const target = this.#id.asTargetId();
+    let skip = null;
+    if (!method.isBounded())
+      skip = VerificationSkipped.of({
+        target,
+        reason: SkipReason.capability(),
+        detail: "leads-to temporal properties require bounded mode (quint verify with Apalache); simulation cannot decide them"
+      });
+    else if (verdict === undefined)
+      skip = VerificationSkipped.of({
+        target,
+        reason: SkipReason.unavailable(),
+        detail: "quint returned no run for this temporal obligation"
+      });
+    else
+      skip = verdict.skipFor(target);
+    if (skip !== null)
+      return ok({ findings: VerificationFindings.of([]), skipped: VerificationSkips.of([skip]) });
+    const finding = verdict?.isViolation() ? VerificationFinding.of({
+      kind: FindingKind.conflict(),
+      functionalRequirementReferences: this.#functionalRequirementReferences.sortedUnique(),
+      targets: FindingTargets.of(target, []),
+      witness: verdict.witness(),
+      detail: `Temporal obligation ${this.#id.asString()} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`
+    }) : null;
+    return ok({
+      findings: VerificationFindings.of(finding === null ? [] : [finding]),
+      skipped: VerificationSkips.of([])
+    });
   }
   id() {
     return this.#id;
@@ -3030,6 +3547,9 @@ class Obligations {
   *[Symbol.iterator]() {
     yield* this.#values;
   }
+  compiledInvariantTargets(compiled) {
+    return TargetIdentifiers.of(this.#values.filter((obligation) => obligation.isInvariantLike() && compiled.has(obligation.id())).map((obligation) => obligation.id().asTargetId()));
+  }
   byId(id) {
     return this.#values.find((o) => o.id().asString() === id);
   }
@@ -3038,6 +3558,9 @@ class Obligations {
   }
   toArray() {
     return this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/quint-check-result.ts
@@ -3057,14 +3580,16 @@ class QuintCheckResult {
       case "machine-uncompilable":
         return VerificationReport.machineUncompilable(id, model, result.method.asString(), result.error.asString());
       case "checked": {
-        const interpreted = result.plan.interpret(model, result.compileSkips, result.method.asString(), result.runs);
+        const interpreted = result.plan.interpret(model, result.compileSkips, result.method, result.runs);
+        if (!interpreted.ok)
+          return VerificationReport.interpretationUnavailable(id, model, result.method, interpreted.error);
         return VerificationReport.compose({
           id,
           irVersion: model.irVersion(),
           irHash: model.irHash(),
           method: result.method.asString(),
-          findings: interpreted.findings,
-          skipped: interpreted.skipped
+          findings: interpreted.value.findings,
+          skipped: interpreted.value.skipped
         });
       }
     }
@@ -3200,6 +3725,60 @@ class QuintMachineComponents {
     return this.#values;
   }
 }
+// src/requirements/domain/quint-machine-plan.ts
+class QuintMachinePlan {
+  #invariantComponents;
+  #eventIds;
+  #scenariosWithInit;
+  constructor(props) {
+    this.#invariantComponents = props.invariantComponents;
+    this.#eventIds = props.eventIds;
+    this.#scenariosWithInit = props.scenariosWithInit;
+  }
+  static of(seed) {
+    return new QuintMachinePlan({
+      invariantComponents: seed.invariantComponents,
+      eventIds: seed.eventIds,
+      scenariosWithInit: KeySet.of(seed.scenariosWithInit)
+    });
+  }
+  machineTargets() {
+    return TargetIdentifiers.of([
+      ...this.#invariantComponents.ids().toTargetIds(),
+      ...this.#eventIds.toTargetIds()
+    ]).sortedUniqueCanonically();
+  }
+  #hasInitFor(id) {
+    return this.#scenariosWithInit.has(id);
+  }
+  interpret(model, compileSkips, method, runs) {
+    const findings = [];
+    const skipped = [...compileSkips];
+    const collect = (evidence) => {
+      findings.push(...evidence.findings);
+      skipped.push(...evidence.skipped);
+    };
+    const machine = runs.machineRun().interpret(model, this.#invariantComponents, this.#eventIds, method);
+    if (!machine.ok)
+      return machine;
+    collect(machine.value);
+    for (const obligation of model.obligations()) {
+      if (!skipped.some((skip) => skip.isFor(obligation.id().asTargetId()))) {
+        const temporal = obligation.interpretQuintTemporal(method, runs.temporalOf(obligation.id()));
+        if (!temporal.ok)
+          return temporal;
+        collect(temporal.value);
+      }
+    }
+    for (const scenario of model.scenarios()) {
+      const interpreted = scenario.interpretQuint(model, runs.scenarioOf(scenario.id()), this.#hasInitFor(scenario.id()), this.#invariantComponents);
+      if (!interpreted.ok)
+        return interpreted;
+      collect(interpreted.value);
+    }
+    return ok({ findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) });
+  }
+}
 // src/requirements/domain/trace-state.ts
 class TraceState {
   #values;
@@ -3208,6 +3787,9 @@ class TraceState {
   }
   static empty() {
     return new TraceState(KeyedIndex.empty());
+  }
+  static fromBindings(bindings) {
+    return TraceState.of(bindings.entriesCanonically().map((binding) => [binding.path(), TraceValue.of(binding.value().toDocument())]));
   }
   static of(entries) {
     return new TraceState(KeyedIndex.of(entries));
@@ -3221,56 +3803,8 @@ class TraceState {
       out[path.asString()] = value.toDocument();
     return out;
   }
-}
-
-// src/requirements/domain/verification-finding.ts
-class VerificationFinding {
-  #kind;
-  #functionalRequirementReferences;
-  #targets;
-  #witness;
-  #detail;
-  constructor(props) {
-    this.#kind = props.kind;
-    this.#functionalRequirementReferences = props.functionalRequirementReferences;
-    this.#targets = props.targets;
-    this.#witness = props.witness;
-    this.#detail = props.detail;
-  }
-  static of(props) {
-    return new VerificationFinding(props);
-  }
-  kind() {
-    return this.#kind.asString();
-  }
-  functionalRequirementReferences() {
-    return this.#functionalRequirementReferences;
-  }
-  targets() {
-    return this.#targets;
-  }
-  witness() {
-    return this.#witness;
-  }
-  detail() {
-    return this.#detail;
-  }
-  isKind(kind) {
-    const parsed = FindingKind.parse(kind);
-    return parsed.ok && this.#kind.equals(parsed.value);
-  }
-  implicates(target) {
-    return this.#targets.includes(target);
-  }
-  compareTo(other) {
-    const kr = this.#kind.compareTo(other.#kind);
-    if (kr !== 0)
-      return kr;
-    const ta = this.#targets.joined(",");
-    const tb = other.#targets.joined(",");
-    if (ta !== tb)
-      return ta < tb ? -1 : 1;
-    return this.#detail < other.#detail ? -1 : this.#detail > other.#detail ? 1 : 0;
+  isEmpty() {
+    return this.#values.isEmpty();
   }
 }
 
@@ -3303,168 +3837,6 @@ class VerificationWitness {
   }
 }
 
-// src/requirements/domain/quint-machine-plan.ts
-class QuintMachinePlan {
-  #invariantComponents;
-  #eventIds;
-  #scenariosWithInit;
-  constructor(props) {
-    this.#invariantComponents = props.invariantComponents;
-    this.#eventIds = props.eventIds;
-    this.#scenariosWithInit = props.scenariosWithInit;
-  }
-  static of(seed) {
-    return new QuintMachinePlan({
-      invariantComponents: seed.invariantComponents,
-      eventIds: seed.eventIds,
-      scenariosWithInit: KeySet.of(seed.scenariosWithInit)
-    });
-  }
-  machineTargets() {
-    return TargetIdentifiers.of([
-      ...this.#invariantComponents.ids().toTargetIds(),
-      ...this.#eventIds.toTargetIds()
-    ]).sortedUniqueCanonically();
-  }
-  #hasInitFor(id) {
-    return this.#scenariosWithInit.has(id);
-  }
-  interpret(model, compileSkips, method, runs) {
-    const bounded = method === "bounded";
-    const findings = [];
-    const skipped = [...compileSkips.toArray()];
-    const machineTargets = this.machineTargets();
-    const eventTargets = this.#eventIds.toTargetIds();
-    const machineRun = runs.machineRun();
-    if (machineRun === null) {
-      for (const target of machineTargets) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("unavailable"),
-          detail: "quint returned no machine run: the event machine was not decided"
-        }));
-      }
-    }
-    if (machineRun !== null) {
-      skipped.push(...machineRun.skipsFor(machineTargets, bounded));
-      if (machineRun.isDeadlock()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.completenessGap(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(eventTargets),
-          targets: this.#eventIds.isEmpty() ? machineTargets : eventTargets.sortedCanonically(),
-          witness: machineRun.witness(),
-          detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified."
-        }));
-      } else if (machineRun.isViolation()) {
-        const violatedComponents = this.#invariantComponents.violatedBy(machineRun.finalState());
-        const targets = violatedComponents.isEmpty() ? eventTargets.sortedCanonically() : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.conflict(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
-          targets,
-          witness: machineRun.witness(),
-          detail: `The event machine can reach a state that violates ${targets.joined(", ")} (step trace attached): the event rules do not preserve the obligation.`
-        }));
-      }
-    }
-    for (const ob of model.obligations()) {
-      if (!ob.isStateTemporal() || ob.temporal()?.pattern !== "leads-to")
-        continue;
-      const target = ob.id().asTargetId();
-      if (skipped.some((s) => s.isFor(target)))
-        continue;
-      if (!bounded) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("capability"),
-          detail: "leads-to temporal properties require bounded mode (quint verify with Apalache); simulation cannot decide them"
-        }));
-        continue;
-      }
-      const r = runs.temporalOf(ob.id());
-      if (!r) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("unavailable"),
-          detail: "quint returned no run for this temporal obligation"
-        }));
-        continue;
-      }
-      const skip = r.skipFor(target);
-      if (skip !== null) {
-        skipped.push(skip);
-      } else if (r.isViolation()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.conflict(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([target])),
-          targets: TargetIdentifiers.of([target]),
-          witness: r.witness(),
-          detail: `Temporal obligation ${ob.id().asString()} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`
-        }));
-      }
-    }
-    for (const sc of model.scenarios()) {
-      const target = sc.id().asTargetId();
-      if (sc.hasEvent()) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("capability"),
-          detail: "scenarios with a When-event are not checked by the quint backend in v1"
-        }));
-        continue;
-      }
-      if (!this.#hasInitFor(sc.id())) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("capability"),
-          detail: "quint scenario evaluation requires bindings for every declared attribute"
-        }));
-        continue;
-      }
-      const r = runs.scenarioOf(sc.id());
-      if (!r) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("unavailable"),
-          detail: "quint returned no run for this scenario"
-        }));
-        continue;
-      }
-      const skip = r.skipFor(target);
-      if (skip !== null) {
-        skipped.push(skip);
-        continue;
-      }
-      const bindings = sc.bindings().entriesCanonically();
-      const state = TraceState.of(bindings.map((binding) => [binding.path(), TraceValue.of(binding.value().toDocument())]));
-      const boundModel = sc.bindings().toDocument();
-      if (sc.isAccept() && r.isViolated()) {
-        const violatedComponents = this.#invariantComponents.violatedBy(state);
-        const targets = TargetIdentifiers.of([
-          target,
-          ...violatedComponents.ids().toTargetIds()
-        ]).sortedUniqueCanonically();
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.scenarioViolation(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
-          targets,
-          witness: VerificationWitness.model(boundModel),
-          detail: `Accept scenario ${sc.id().asString()} describes a state the obligations rule out \u2014 the requirements reject an example that should be accepted.`
-        }));
-      }
-      if (sc.isReject() && !r.isViolated()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.scenarioViolation(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([target])),
-          targets: TargetIdentifiers.of([target]),
-          witness: VerificationWitness.model(boundModel),
-          detail: `Reject scenario ${sc.id().asString()} is accepted by every obligation \u2014 the requirements do not exclude an example that should be rejected.`
-        }));
-      }
-    }
-    return { findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) };
-  }
-}
 // src/requirements/domain/quint-machine-run-verdict.ts
 class QuintMachineRunVerdict {
   #kind;
@@ -3474,6 +3846,9 @@ class QuintMachineRunVerdict {
     this.#kind = props.kind;
     this.#trace = props.trace;
     this.#outputTail = props.outputTail;
+  }
+  static missing() {
+    return new QuintMachineRunVerdict({ kind: "missing", trace: null, outputTail: "" });
   }
   static timeout() {
     return new QuintMachineRunVerdict({ kind: "timeout", trace: null, outputTail: "" });
@@ -3495,6 +3870,12 @@ class QuintMachineRunVerdict {
   }
   skipsFor(targets, bounded) {
     const kind = this.#kind;
+    if (kind === "missing")
+      return [...targets].map((target) => VerificationSkipped.of({
+        target,
+        reason: SkipReason.unavailable(),
+        detail: "quint returned no machine run: the event machine was not decided"
+      }));
     if (kind === "timeout") {
       return [...targets].map((target) => VerificationSkipped.of({
         target,
@@ -3511,6 +3892,49 @@ class QuintMachineRunVerdict {
       }));
     }
     return [];
+  }
+  interpret(model, components, events, method) {
+    const findings = [];
+    const machineTargets = TargetIdentifiers.of([
+      ...components.ids().toTargetIds(),
+      ...events.toTargetIds()
+    ]).sortedUniqueCanonically();
+    const eventTargets = events.toTargetIds();
+    if (this.isDeadlock()) {
+      const [head, ...tail] = events.isEmpty() ? machineTargets : eventTargets.sortedCanonically();
+      if (head === undefined)
+        return err({ kind: "missing-finding-targets" });
+      const parsedTargets = FindingTargets.parse(head, tail);
+      if (!parsedTargets.ok)
+        return parsedTargets;
+      findings.push(VerificationFinding.of({
+        kind: FindingKind.completenessGap(),
+        functionalRequirementReferences: model.functionalRequirementReferencesOf(eventTargets),
+        targets: parsedTargets.value,
+        witness: this.witness(),
+        detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified."
+      }));
+    } else if (this.isViolation()) {
+      const violatedComponents = components.violatedBy(this.finalState());
+      const targets = violatedComponents.isEmpty() ? eventTargets.sortedCanonically() : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
+      const [head, ...tail] = targets;
+      if (head === undefined)
+        return err({ kind: "missing-finding-targets" });
+      const parsedTargets = FindingTargets.parse(head, tail);
+      if (!parsedTargets.ok)
+        return parsedTargets;
+      findings.push(VerificationFinding.of({
+        kind: FindingKind.conflict(),
+        functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
+        targets: parsedTargets.value,
+        witness: this.witness(),
+        detail: `The event machine can reach a state that violates ${targets.joined(", ")} (step trace attached): the event rules do not preserve the obligation.`
+      }));
+    }
+    return ok({
+      findings: VerificationFindings.of(findings),
+      skipped: VerificationSkips.of(this.skipsFor(machineTargets, method.isBounded()))
+    });
   }
   isDeadlock() {
     return this.#kind === "deadlock";
@@ -3532,7 +3956,7 @@ class QuintRuns {
   #temporals;
   #scenarios;
   constructor(seed) {
-    this.#machine = seed.machine;
+    this.#machine = seed.machine ?? QuintMachineRunVerdict.missing();
     this.#temporals = seed.temporals;
     this.#scenarios = seed.scenarios;
   }
@@ -3713,6 +4137,9 @@ class RequirementAttributeDeclarations {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/requirements/domain/requirements-model.ts
 class RequirementsModel {
@@ -3854,13 +4281,15 @@ class SatisfiabilityModuloTheoriesCheck {
       return VerificationReport.solverUnavailable(id, model, this.#plan.planSkipped(), this.#result.reason.asString());
     }
     const interpreted = this.#plan.interpret(model, this.#result.verdicts);
+    if (!interpreted.ok)
+      return VerificationReport.interpretationUnavailable(id, model, VerificationMethod.of("exhaustive"), interpreted.error);
     return VerificationReport.compose({
       id,
       irVersion: model.irVersion(),
       irHash: model.irHash(),
       method: "exhaustive",
-      findings: interpreted.findings,
-      skipped: interpreted.skipped
+      findings: interpreted.value.findings,
+      skipped: interpreted.value.skipped
     });
   }
   match(cases) {
@@ -3884,22 +4313,37 @@ class SatisfiabilityModuloTheoriesEventPairProbe {
   static of(props) {
     return new SatisfiabilityModuloTheoriesEventPairProbe(props);
   }
-  a() {
-    return this.#a;
-  }
-  b() {
-    return this.#b;
-  }
-  trigger() {
-    return this.#trigger;
+  interpret(model, results) {
+    const overlap = this.#overlapVerdictIn(results);
+    const joint = this.#jointVerdictIn(results);
+    if (overlap.isSat() && joint.isUnsat()) {
+      const targets = FindingTargets.of(this.#a.asTargetId(), [this.#b.asTargetId()]).sortedUniqueCanonically();
+      return ok({
+        findings: VerificationFindings.of([
+          VerificationFinding.of({
+            kind: FindingKind.conflict(),
+            functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
+            targets,
+            witness: VerificationWitness.core(joint.sortedCore()),
+            detail: `Events ${this.#a.asString()} and ${this.#b.asString()} for trigger "${this.#trigger.asString()}" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.`
+          })
+        ]),
+        skipped: VerificationSkips.of([])
+      });
+    }
+    const pending = [overlap, joint].find((verdict) => verdict.isMissing()) ?? (overlap.isUndecided() ? overlap : joint);
+    return ok({
+      findings: VerificationFindings.of([]),
+      skipped: overlap.isUndecided() || joint.isUndecided() ? pending.skipsFor(this.targets(), `event-pair check for trigger "${this.#trigger.asString()}"`) : VerificationSkips.of([])
+    });
   }
   targets() {
     return TargetIdentifiers.of([this.#a.asTargetId(), this.#b.asTargetId()]);
   }
-  overlapVerdictIn(results) {
+  #overlapVerdictIn(results) {
     return results.verdictOf(this.#qOverlap);
   }
-  jointVerdictIn(results) {
+  #jointVerdictIn(results) {
     return results.verdictOf(this.#qJoint);
   }
 }
@@ -3920,6 +4364,9 @@ class SatisfiabilityModuloTheoriesEventPairProbes {
   }
   toArray() {
     return this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/satisfiability-modulo-theories-query-verdict.ts
@@ -3982,7 +4429,95 @@ class SatisfiabilityModuloTheoriesQueryVerdicts {
   verdictOf(queryId) {
     return this.#values.get(queryId) ?? SatisfiabilityModuloTheoriesQueryVerdict.missing();
   }
+  isEmpty() {
+    return this.#values.isEmpty();
+  }
 }
+// src/requirements/domain/satisfiability-modulo-theories-probe.ts
+class SatisfiabilityModuloTheoriesProbe {
+  #query;
+  #subject;
+  constructor(query, subject) {
+    this.#query = query;
+    this.#subject = { ...subject };
+  }
+  static consistency(fallback, labels) {
+    return new SatisfiabilityModuloTheoriesProbe(QueryLabel.of("global"), { kind: "consistency", fallback, labels });
+  }
+  static vacuity(query, subject, labels) {
+    return new SatisfiabilityModuloTheoriesProbe(query, { kind: "vacuity", subject, labels });
+  }
+  static completeness(trigger, targets) {
+    return new SatisfiabilityModuloTheoriesProbe(QueryLabel.of(`gap:${trigger.asString()}`), {
+      kind: "completeness",
+      trigger,
+      targets
+    });
+  }
+  static scenario(query, subject, labels) {
+    return new SatisfiabilityModuloTheoriesProbe(query, { kind: "scenario", subject, labels });
+  }
+  allowsVacuityChecks(results) {
+    return this.#subject.kind === "consistency" && !results.verdictOf(this.#query).isUnsat();
+  }
+  #coreTargets(labels) {
+    const state = this.#subject;
+    if (state.kind === "completeness")
+      return TargetIdentifiers.of([]);
+    return TargetIdentifiers.of(labels.map((label) => state.labels.get(label)).filter((target) => target?.isRequirementObligation() ?? false)).sortedUniqueCanonically();
+  }
+  interpret(model, results) {
+    const verdict = results.verdictOf(this.#query);
+    const state = this.#subject;
+    if (state.kind === "scenario")
+      return state.subject.interpretSatisfiability(model, verdict, this.#coreTargets([...verdict.coreLabels()]));
+    const targets = state.kind === "consistency" ? state.fallback : state.kind === "vacuity" ? TargetIdentifiers.of([state.subject.asTargetId()]) : state.targets;
+    const context = state.kind === "consistency" ? "global consistency check" : state.kind === "vacuity" ? `vacuity check for ${state.subject.asString()}` : `completeness check for trigger "${state.trigger.asString()}"`;
+    if (verdict.isUndecided())
+      return ok({
+        findings: VerificationFindings.of([]),
+        skipped: verdict.skipsFor(targets, context)
+      });
+    let finding = null;
+    if (state.kind === "completeness" && verdict.isSat()) {
+      const [head, ...tail] = targets;
+      if (head === undefined)
+        return err({ kind: "missing-finding-targets" });
+      const parsedTargets = FindingTargets.parse(head, tail);
+      if (!parsedTargets.ok)
+        return parsedTargets;
+      finding = VerificationFinding.of({
+        kind: FindingKind.completenessGap(),
+        functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
+        targets: parsedTargets.value,
+        witness: VerificationWitness.model(verdict.witnessModel()),
+        detail: `No rule for trigger "${state.trigger.asString()}" applies to the witness state: the behavior of this input region is unspecified.`
+      });
+    }
+    if (state.kind !== "completeness" && verdict.isUnsat()) {
+      const core = this.#coreTargets([...verdict.coreLabels()]);
+      const effective = state.kind === "vacuity" ? TargetIdentifiers.of([...core, state.subject.asTargetId()]).sortedUniqueCanonically() : core.count() > 0 ? core : state.fallback;
+      const [head, ...tail] = effective;
+      if (head === undefined)
+        return err({ kind: "missing-finding-targets" });
+      const parsedTargets = FindingTargets.parse(head, tail);
+      if (!parsedTargets.ok)
+        return parsedTargets;
+      finding = VerificationFinding.of({
+        kind: FindingKind.conflict(),
+        functionalRequirementReferences: model.functionalRequirementReferencesOf(effective),
+        targets: parsedTargets.value,
+        witness: VerificationWitness.core(verdict.sortedCore()),
+        detail: state.kind === "consistency" ? "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them." : `The condition of obligation ${state.subject.asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`
+      });
+    }
+    return ok({
+      findings: VerificationFindings.of(finding === null ? [] : [finding]),
+      skipped: VerificationSkips.of([])
+    });
+  }
+}
+
 // src/requirements/domain/satisfiability-modulo-theories-verification-plan.ts
 class SatisfiabilityModuloTheoriesVerificationPlan {
   #compiled;
@@ -4009,122 +4544,46 @@ class SatisfiabilityModuloTheoriesVerificationPlan {
   }
   interpret(model, results) {
     const findings = [];
-    const skipped = [...this.#skipped.toArray()];
-    const conflictKeys = new Set;
-    const invariantIds = TargetIdentifiers.of(model.obligations().toArray().filter((o) => o.isInvariantLike() && this.#compiled.has(o.id())).map((o) => o.id().asTargetId()));
-    const coreToTargets = (core) => {
-      const targets = core.map((label) => this.#labelToTarget.get(label)).filter((t) => t?.asString().startsWith("OB-") ?? false);
-      return TargetIdentifiers.of(targets).sortedUniqueCanonically();
-    };
-    const addConflict = (targets, core, detail) => {
-      const effective = targets.count() > 0 ? targets : invariantIds;
-      if (effective.count() === 0)
-        return;
-      const key = effective.joined(",");
-      if (conflictKeys.has(key))
-        return;
-      conflictKeys.add(key);
-      findings.push(VerificationFinding.of({
-        kind: FindingKind.conflict(),
-        functionalRequirementReferences: model.functionalRequirementReferencesOf(effective),
-        targets: effective,
-        witness: VerificationWitness.core(core.map((label) => label.asString()).sort()),
-        detail
-      }));
-    };
-    const global = results.verdictOf(QueryLabel.of("global"));
-    let globallyUnsat = false;
-    if (global.isUnsat()) {
-      globallyUnsat = true;
-      addConflict(coreToTargets([...global.coreLabels()]), [...global.coreLabels()], "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them.");
-    } else if (global.isUndecided()) {
-      skipped.push(...global.skipsFor(invariantIds, "global consistency check"));
+    const skipped = [...this.#skipped];
+    for (const result of this.#interpretProbes(model, results)) {
+      if (!result.ok)
+        return result;
+      findings.push(...result.value.findings);
+      skipped.push(...result.value.skipped);
     }
-    if (!globallyUnsat) {
-      for (const [obligationId, queryId] of this.#vacuityQueries) {
-        const r = results.verdictOf(queryId);
-        if (r.isUnsat()) {
-          const targets = TargetIdentifiers.of([
-            ...coreToTargets([...r.coreLabels()]),
-            obligationId.asTargetId()
-          ]).sortedUniqueCanonically();
-          addConflict(targets, [...r.coreLabels()], `The condition of obligation ${obligationId.asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`);
-        } else if (r.isUndecided()) {
-          skipped.push(...r.skipsFor(TargetIdentifiers.of([obligationId.asTargetId()]), `vacuity check for ${obligationId.asString()}`));
-        }
-      }
+    return ok({
+      findings: VerificationFindings.of(findings).distinctConflicts(),
+      skipped: VerificationSkips.of(skipped)
+    });
+  }
+  *#interpretProbes(model, results) {
+    const consistency = SatisfiabilityModuloTheoriesProbe.consistency(model.obligations().compiledInvariantTargets(this.#compiled), this.#labelToTarget);
+    yield consistency.interpret(model, results);
+    if (consistency.allowsVacuityChecks(results))
+      for (const [subject, query] of this.#vacuityQueries)
+        yield SatisfiabilityModuloTheoriesProbe.vacuity(query, subject, this.#labelToTarget).interpret(model, results);
+    for (const pair of this.#eventPairs)
+      yield pair.interpret(model, results);
+    for (const [trigger, targets] of [...this.#gapTriggers].sort((a, b) => a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0))
+      yield SatisfiabilityModuloTheoriesProbe.completeness(trigger, targets).interpret(model, results);
+    for (const scenario of model.scenarios()) {
+      const query = this.#scenarioQueries.get(scenario.id());
+      if (query !== undefined)
+        yield SatisfiabilityModuloTheoriesProbe.scenario(query, scenario, this.#labelToTarget).interpret(model, results);
     }
-    for (const pair of this.#eventPairs) {
-      const overlap = pair.overlapVerdictIn(results);
-      const joint = pair.jointVerdictIn(results);
-      if (overlap.isSat() && joint.isUnsat()) {
-        addConflict(pair.targets().sortedUniqueCanonically(), [...joint.coreLabels()], `Events ${pair.a().asString()} and ${pair.b().asString()} for trigger "${pair.trigger().asString()}" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.`);
-      } else if (overlap.isUndecided() || joint.isUndecided()) {
-        const pending = [overlap, joint].find((v) => v.isMissing()) ?? (overlap.isUndecided() ? overlap : joint);
-        skipped.push(...pending.skipsFor(pair.targets(), `event-pair check for trigger "${pair.trigger().asString()}"`));
-      }
-    }
-    for (const [triggerName, eventIds] of [...this.#gapTriggers].sort((a, b) => a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0)) {
-      const trigger = triggerName.asString();
-      const r = results.verdictOf(QueryLabel.of(`gap:${trigger}`));
-      if (r.isSat()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.completenessGap(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(eventIds),
-          targets: eventIds,
-          witness: VerificationWitness.model(r.witnessModel()),
-          detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`
-        }));
-      } else if (r.isUndecided()) {
-        skipped.push(...r.skipsFor(eventIds, `completeness check for trigger "${trigger}"`));
-      }
-    }
-    for (const sc of model.scenarios()) {
-      const qid = this.#scenarioQueries.get(sc.id());
-      if (!qid)
-        continue;
-      const r = results.verdictOf(qid);
-      if (r.isUndecided()) {
-        skipped.push(...r.skipsFor(TargetIdentifiers.of([sc.id().asTargetId()]), `scenario check for ${sc.id().asString()}`));
-        continue;
-      }
-      if (sc.isAccept() && r.isUnsat()) {
-        const targets = TargetIdentifiers.of([
-          sc.id().asTargetId(),
-          ...coreToTargets([...r.coreLabels()])
-        ]).sortedUniqueCanonically();
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.scenarioViolation(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
-          targets,
-          witness: VerificationWitness.core(r.sortedCore()),
-          detail: `Accept scenario ${sc.id().asString()} describes a state the obligations in the witness core rule out \u2014 the requirements reject an example that should be accepted.`
-        }));
-      }
-      if (sc.isReject() && r.isSat()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.scenarioViolation(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([sc.id().asTargetId()])),
-          targets: TargetIdentifiers.of([sc.id().asTargetId()]),
-          witness: VerificationWitness.model(r.witnessModel()),
-          detail: `Reject scenario ${sc.id().asString()} is still satisfiable \u2014 the requirements do not exclude an example that should be rejected (witness state attached).`
-        }));
-      }
-    }
-    return { findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) };
   }
 }
 // src/requirements/domain/scenario.ts
 class Scenario {
   #id;
-  #kind;
+  #expectation;
   #functionalRequirementReferences;
   #bindings;
   #eventTrigger;
   #expect;
   constructor(props) {
     this.#id = props.id;
-    this.#kind = props.kind;
+    this.#expectation = props.expectation;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#bindings = props.bindings;
     this.#eventTrigger = props.event?.trigger;
@@ -4136,11 +4595,24 @@ class Scenario {
   static of(props) {
     return new Scenario(props);
   }
+  crossCheckFinding(comparison) {
+    if (!comparison.isFor(this.#id.asTargetId(), null))
+      throw new IllegalArgumentException({ kind: "different-cross-check-subject" });
+    if (!comparison.disagrees())
+      return null;
+    return VerificationFinding.of({
+      kind: FindingKind.crossCheckDisagreement(),
+      functionalRequirementReferences: this.#functionalRequirementReferences.sortedUnique(),
+      targets: FindingTargets.of(this.#id.asTargetId(), []),
+      witness: VerificationWitness.verdicts(comparison.toVerdictTable()),
+      detail: `${comparison.description()} disagree on scenario ${this.#id.asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`
+    });
+  }
   id() {
     return this.#id;
   }
   kind() {
-    return this.#kind;
+    return this.#expectation.asString();
   }
   functionalRequirementReferences() {
     return this.#functionalRequirementReferences;
@@ -4148,20 +4620,89 @@ class Scenario {
   eventTrigger() {
     return this.#eventTrigger;
   }
-  expectation() {
+  expectedExpression() {
     return this.#expect;
   }
   isAccept() {
-    return this.#kind === "accept";
+    return this.#expectation.isAccept();
   }
   isReject() {
-    return this.#kind === "reject";
+    return this.#expectation.isReject();
   }
-  hasEvent() {
+  hasEventRule() {
     return this.#eventTrigger !== undefined;
   }
   isViolatedBySatisfiability(satisfiable) {
-    return this.isAccept() && !satisfiable || this.isReject() && satisfiable;
+    return this.#expectation.isViolatedBySatisfiability(satisfiable);
+  }
+  interpretQuint(model, verdict, hasInitialState, components) {
+    const target = this.#id.asTargetId();
+    let skip = null;
+    if (this.hasEventRule())
+      skip = VerificationSkipped.of({
+        target,
+        reason: SkipReason.capability(),
+        detail: "scenarios with a When-event are not checked by the quint backend in v1"
+      });
+    else if (!hasInitialState)
+      skip = VerificationSkipped.of({
+        target,
+        reason: SkipReason.capability(),
+        detail: "quint scenario evaluation requires bindings for every declared attribute"
+      });
+    else if (verdict === undefined)
+      skip = VerificationSkipped.of({
+        target,
+        reason: SkipReason.unavailable(),
+        detail: "quint returned no run for this scenario"
+      });
+    else
+      skip = verdict.skipFor(target);
+    if (skip !== null)
+      return ok({ findings: VerificationFindings.of([]), skipped: VerificationSkips.of([skip]) });
+    if (verdict === undefined || !this.isViolatedBySatisfiability(!verdict.isViolated()))
+      return ok({ findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) });
+    const accept = this.isAccept();
+    const violated = accept ? components.violatedBy(TraceState.fromBindings(this.#bindings)).ids().toTargetIds() : TargetIdentifiers.of([]);
+    const parsedTargets = FindingTargets.parse(target, [...violated]);
+    if (!parsedTargets.ok)
+      return parsedTargets;
+    const targets = parsedTargets.value.sortedUniqueCanonically();
+    return ok({
+      findings: VerificationFindings.of([
+        VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
+          targets,
+          witness: VerificationWitness.model(this.#bindings.toDocument()),
+          detail: accept ? `Accept scenario ${this.#id.asString()} describes a state the obligations rule out \u2014 the requirements reject an example that should be accepted.` : `Reject scenario ${this.#id.asString()} is accepted by every obligation \u2014 the requirements do not exclude an example that should be rejected.`
+        })
+      ]),
+      skipped: VerificationSkips.of([])
+    });
+  }
+  interpretSatisfiability(model, verdict, coreTargets) {
+    const target = this.#id.asTargetId();
+    if (verdict.isUndecided())
+      return ok({
+        findings: VerificationFindings.of([]),
+        skipped: verdict.skipsFor(TargetIdentifiers.of([target]), `scenario check for ${this.#id.asString()}`)
+      });
+    if (!this.isViolatedBySatisfiability(verdict.isSat()))
+      return ok({ findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) });
+    const accept = this.isAccept();
+    const parsedTargets = FindingTargets.parse(target, accept ? [...coreTargets] : []);
+    if (!parsedTargets.ok)
+      return parsedTargets;
+    const targets = accept ? parsedTargets.value.sortedUniqueCanonically() : parsedTargets.value;
+    const finding = VerificationFinding.of({
+      kind: FindingKind.scenarioViolation(),
+      functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
+      targets,
+      witness: accept ? VerificationWitness.core(verdict.sortedCore()) : VerificationWitness.model(verdict.witnessModel()),
+      detail: accept ? `Accept scenario ${this.#id.asString()} describes a state the obligations in the witness core rule out \u2014 the requirements reject an example that should be accepted.` : `Reject scenario ${this.#id.asString()} is still satisfiable \u2014 the requirements do not exclude an example that should be rejected (witness state attached).`
+    });
+    return ok({ findings: VerificationFindings.of([finding]), skipped: VerificationSkips.of([]) });
   }
   bindings() {
     return this.#bindings;
@@ -4217,6 +4758,9 @@ class Scenarios {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/requirements/domain/trace-states.ts
 class TraceStates {
@@ -4238,6 +4782,9 @@ class TraceStates {
   }
   toArray() {
     return [...this.#values];
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/verification-report-identifier.ts
@@ -4284,49 +4831,34 @@ class VerificationReports {
     return this.#values;
   }
   crossChecked(id, model, irHash) {
-    const docs = this.toArray().filter((s) => s.irHash().equals(irHash) && !s.isUnavailable()).map((s) => ({
-      backend: s.id().backendName().asString(),
-      findings: s.findings().toArray(),
-      skippedTargets: new Set(s.skipped().toArray().map((e) => e.target().asString()))
-    }));
-    const scenarioById = new Map(model.scenarios().toArray().map((s) => [s.id().asString(), s]));
     const findings = [];
-    const comparedByBackend = new Map;
-    for (let i = 0;i < docs.length; i++) {
-      for (let j = i + 1;j < docs.length; j++) {
-        const a = docs[i];
-        const b = docs[j];
-        if (!a || !b)
-          continue;
-        for (const sc of model.scenarios()) {
-          if (a.skippedTargets.has(sc.id().asString()) || b.skippedTargets.has(sc.id().asString()))
-            continue;
-          const va = a.findings.some((f) => f.isKind("scenario-violation") && f.implicates(sc.id().asTargetId()));
-          const vb = b.findings.some((f) => f.isKind("scenario-violation") && f.implicates(sc.id().asTargetId()));
-          (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set).get(a.backend))?.add(sc.id().asString());
-          (comparedByBackend.get(b.backend) ?? comparedByBackend.set(b.backend, new Set).get(b.backend))?.add(sc.id().asString());
-          if (va !== vb) {
-            const verdicts = {};
-            verdicts[a.backend] = va ? "violated" : "clean";
-            verdicts[b.backend] = vb ? "violated" : "clean";
-            findings.push(VerificationFinding.of({
-              kind: FindingKind.crossCheckDisagreement(),
-              functionalRequirementReferences: FunctionalRequirementReferences.of([
-                ...scenarioById.get(sc.id().asString())?.functionalRequirementReferences().toArray() ?? []
-              ]).sortedUnique(),
-              targets: TargetIdentifiers.of([sc.id().asTargetId()]),
-              witness: VerificationWitness.verdicts(verdicts),
-              detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`
-            }));
-          }
+    let compared = KeyedIndex.empty();
+    let failure = null;
+    for (const scenario of model.scenarios()) {
+      const target = scenario.id().asTargetId();
+      const verdicts = ScenarioVerdicts.parse(this.#values.map((report2) => report2.scenarioVerdictFor(target, irHash)));
+      if (!verdicts.ok) {
+        failure = verdicts.error;
+        break;
+      }
+      for (const comparison of verdicts.value.comparisons()) {
+        for (const backend of comparison.backends()) {
+          const targets = compared.get(backend);
+          if (targets === undefined)
+            compared = compared.with(backend, [target]);
+          else
+            targets.push(target);
         }
+        const finding = scenario.crossCheckFinding(comparison);
+        if (finding !== null)
+          findings.push(finding);
       }
     }
-    const crossChecked = [...comparedByBackend.entries()].map(([backend, targets]) => CrossCheckedEntry.of({
-      backend: BackendName.of(backend),
-      targets: TargetIdentifiers.of(Array.from([...targets], (raw) => TargetIdentifier.of(raw))).sortedCanonically()
-    })).sort((x, y) => x.compareByBackend(y));
-    return VerificationReport.compose({
+    const crossChecked = [...compared].map(([backend, targets]) => CrossCheckedEntry.of({
+      backend,
+      targets: TargetIdentifiers.of(targets).sortedUniqueCanonically()
+    })).sort((a, b) => a.compareByBackend(b));
+    const report = VerificationReport.compose({
       id,
       irVersion: model.irVersion(),
       irHash,
@@ -4335,6 +4867,10 @@ class VerificationReports {
       skipped: VerificationSkips.of([]),
       crossChecked: CrossCheckedEntries.of(crossChecked)
     });
+    return failure === null ? report : report.degraded(`scenario cross-check could not be constructed: ${failure.kind}`);
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 
@@ -4591,9 +5127,9 @@ class IntermediateRepresentationValidationMaterialsRepositoryImplementation {
     if (!schema.ok) {
       return corrupt(`IR schema unreadable: ${schema.error.cause}`);
     }
-    const schemaErrors = [];
-    validateSchema(schema.value, schema.value, ir, "", schemaErrors);
-    const messages = flatMapResult(traverseResult(schemaErrors, ErrorMessage.parse), ErrorMessages.parse);
+    const schemaErrors2 = [];
+    validateSchema(schema.value, schema.value, ir, "", schemaErrors2);
+    const messages = flatMapResult(traverseResult(schemaErrors2, ErrorMessage.parse), ErrorMessages.parse);
     if (!messages.ok)
       return corrupt(JSON.stringify(messages.error));
     const recordRoot = ArtifactPath.of(dirname2(dirname2(dirname2(outputPath))));
@@ -4981,7 +5517,7 @@ function compile(model) {
   const scenarioInitActions = new Map;
   const scenariosWithInit = [];
   for (const sc of model.scenarios()) {
-    if (sc.hasEvent())
+    if (sc.hasEventRule())
       continue;
     const bindings = sc.bindings();
     if (!bindings.covers(attrs.map((a) => a.path())))
@@ -5605,7 +6141,7 @@ function buildSmtPlan(model) {
   }
   const scenarioQueries = new Map;
   for (const sc of model.scenarios()) {
-    if (sc.hasEvent()) {
+    if (sc.hasEventRule()) {
       skipped.push(VerificationSkipped.of({
         target: sc.id().asTargetId(),
         reason: SkipReason.of("capability"),
@@ -5743,6 +6279,14 @@ function parseSiblingReportDocument(directory, fileName, raw) {
       detail: entry.detail
     }));
   }
+  const comparisons = doc.crossChecked === undefined ? ok(null) : traverseResult(doc.crossChecked, (entry) => {
+    if (entry.unit !== undefined)
+      return err("requirements cross-check must not carry a unit");
+    const parsed = CrossCheckedEntry.parse(entry);
+    return parsed.ok ? ok(parsed.value) : err(JSON.stringify(parsed.error));
+  });
+  if (!comparisons.ok)
+    return comparisons;
   return ok(VerificationReport.of({
     id: VerificationReportIdentifier.of(directory, doc.backend.asString()),
     irVersion: doc.irVersion,
@@ -5750,7 +6294,7 @@ function parseSiblingReportDocument(directory, fileName, raw) {
     method: doc.method,
     findings: VerificationFindings.of(findings),
     skipped: VerificationSkips.of(doc.skipped.map((entry) => VerificationSkipped.of(entry))),
-    crossChecked: doc.crossChecked === undefined ? null : CrossCheckedEntries.of(doc.crossChecked.map(CrossCheckedEntry.of)),
+    crossChecked: comparisons.value === null ? null : CrossCheckedEntries.of(comparisons.value),
     unavailableReason: doc.unavailable?.reason ?? null
   }));
 }
