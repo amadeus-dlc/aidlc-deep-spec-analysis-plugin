@@ -1,0 +1,158 @@
+{
+  "source": "90874c14037b73824372d2ca2ebb6bfe9beabb22",
+  "command": "bun schema-cost-after.ts <depth>; per-process timeout=3 seconds",
+  "rows": [
+    {
+      "depth": 4,
+      "repetition": 1,
+      "exitCode": 0,
+      "result": [
+        {
+          "depth": 4,
+          "nodes": 5,
+          "bytes": 114,
+          "expressionAccepted": true,
+          "expressionMilliseconds": 0.3514999999999979
+        },
+        {
+          "schemaAccepted": true,
+          "schemaMilliseconds": 0.9946249999999992,
+          "errors": []
+        }
+      ]
+    },
+    {
+      "depth": 4,
+      "repetition": 2,
+      "exitCode": 0,
+      "result": [
+        {
+          "depth": 4,
+          "nodes": 5,
+          "bytes": 114,
+          "expressionAccepted": true,
+          "expressionMilliseconds": 0.2707499999999996
+        },
+        {
+          "schemaAccepted": true,
+          "schemaMilliseconds": 1.0571659999999987,
+          "errors": []
+        }
+      ]
+    },
+    {
+      "depth": 8,
+      "repetition": 1,
+      "exitCode": 0,
+      "result": [
+        {
+          "depth": 8,
+          "nodes": 9,
+          "bytes": 202,
+          "expressionAccepted": true,
+          "expressionMilliseconds": 0.2668330000000019
+        },
+        {
+          "schemaAccepted": true,
+          "schemaMilliseconds": 0.9889159999999997,
+          "errors": []
+        }
+      ]
+    },
+    {
+      "depth": 8,
+      "repetition": 2,
+      "exitCode": 0,
+      "result": [
+        {
+          "depth": 8,
+          "nodes": 9,
+          "bytes": 202,
+          "expressionAccepted": true,
+          "expressionMilliseconds": 0.17454200000000242
+        },
+        {
+          "schemaAccepted": true,
+          "schemaMilliseconds": 0.8690420000000003,
+          "errors": []
+        }
+      ]
+    },
+    {
+      "depth": 12,
+      "repetition": 1,
+      "exitCode": 0,
+      "result": [
+        {
+          "depth": 12,
+          "nodes": 13,
+          "bytes": 290,
+          "expressionAccepted": true,
+          "expressionMilliseconds": 0.3427919999999993
+        },
+        {
+          "schemaAccepted": true,
+          "schemaMilliseconds": 1.066084,
+          "errors": []
+        }
+      ]
+    },
+    {
+      "depth": 12,
+      "repetition": 2,
+      "exitCode": 0,
+      "result": [
+        {
+          "depth": 12,
+          "nodes": 13,
+          "bytes": 290,
+          "expressionAccepted": true,
+          "expressionMilliseconds": 0.20920800000000028
+        },
+        {
+          "schemaAccepted": true,
+          "schemaMilliseconds": 1.062624999999997,
+          "errors": []
+        }
+      ]
+    },
+    {
+      "depth": 16,
+      "repetition": 1,
+      "exitCode": 0,
+      "result": [
+        {
+          "depth": 16,
+          "nodes": 17,
+          "bytes": 378,
+          "expressionAccepted": true,
+          "expressionMilliseconds": 0.20545800000000014
+        },
+        {
+          "schemaAccepted": true,
+          "schemaMilliseconds": 1.1392500000000005,
+          "errors": []
+        }
+      ]
+    },
+    {
+      "depth": 16,
+      "repetition": 2,
+      "exitCode": 0,
+      "result": [
+        {
+          "depth": 16,
+          "nodes": 17,
+          "bytes": 378,
+          "expressionAccepted": true,
+          "expressionMilliseconds": 0.19766699999999915
+        },
+        {
+          "schemaAccepted": true,
+          "schemaMilliseconds": 1.1273330000000001,
+          "errors": []
+        }
+      ]
+    }
+  ]
+}

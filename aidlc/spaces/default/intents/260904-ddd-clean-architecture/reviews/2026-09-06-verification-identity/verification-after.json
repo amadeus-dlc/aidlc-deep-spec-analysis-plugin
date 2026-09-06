@@ -1,0 +1,56 @@
+{
+  "source": "90874c14037b73824372d2ca2ebb6bfe9beabb22",
+  "checks": {
+    "biome": {
+      "exitCode": 0,
+      "files": 621
+    },
+    "typecheck": {
+      "exitCode": 0
+    },
+    "usecaseBoundaryLint": {
+      "exitCode": 0,
+      "files": 60,
+      "violations": 0
+    },
+    "fullSuite": {
+      "exitCode": 0,
+      "pass": 998,
+      "skip": 1,
+      "fail": 0,
+      "files": 56,
+      "note": "この後、同一アプリケーションソースに包摂予算の回帰テスト1件を追加し、lowering関連8テストの成功を確認。最終CI件数は別途確認する。"
+    },
+    "coverage": {
+      "exitCode": 0,
+      "headPercent": 99.89,
+      "basePercent": 99.89,
+      "base": "b33e6878e14652570e111815d8daaf2e4e1bf88b",
+      "tolerance": 0.01
+    },
+    "generatedTools": {
+      "exitCode": 0,
+      "files": 14
+    },
+    "pluginValidation": {
+      "errors": 0,
+      "warning": "compose hook is injected at build (既定動作)"
+    },
+    "harnessBuilds": {
+      "exitCode": 0,
+      "harnesses": [
+        "claude",
+        "codex",
+        "copilot",
+        "cursor",
+        "kiro",
+        "kiro-ide",
+        "opencode"
+      ]
+    },
+    "publicProbe": {
+      "exitCode": 0,
+      "observations": "runtime-after.json"
+    }
+  }
+}

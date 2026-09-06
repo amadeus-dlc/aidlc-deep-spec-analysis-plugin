@@ -1,0 +1,189 @@
+{
+  "source": "b33e6878e14652570e111815d8daaf2e4e1bf88b",
+  "crossCheckedScopeLoss": {
+    "compared": [
+      "u1のみ",
+      "u2のみ",
+      "両方"
+    ],
+    "documentsIdentical": true,
+    "u1Only": {
+      "backend": "cross-check",
+      "irVersion": "1.0.0",
+      "irHash": "4e81c2a606939bcc5abf33d0d28afa350647d34522935e38d7e67bd8951d8fc2",
+      "method": "exhaustive",
+      "findings": [],
+      "skipped": [],
+      "crossChecked": [
+        {
+          "backend": "quint",
+          "targets": [
+            "DSC-1"
+          ]
+        },
+        {
+          "backend": "smt",
+          "targets": [
+            "DSC-1"
+          ]
+        }
+      ]
+    },
+    "u2Only": {
+      "backend": "cross-check",
+      "irVersion": "1.0.0",
+      "irHash": "4e81c2a606939bcc5abf33d0d28afa350647d34522935e38d7e67bd8951d8fc2",
+      "method": "exhaustive",
+      "findings": [],
+      "skipped": [],
+      "crossChecked": [
+        {
+          "backend": "quint",
+          "targets": [
+            "DSC-1"
+          ]
+        },
+        {
+          "backend": "smt",
+          "targets": [
+            "DSC-1"
+          ]
+        }
+      ]
+    },
+    "both": {
+      "backend": "cross-check",
+      "irVersion": "1.0.0",
+      "irHash": "4e81c2a606939bcc5abf33d0d28afa350647d34522935e38d7e67bd8951d8fc2",
+      "method": "exhaustive",
+      "findings": [],
+      "skipped": [],
+      "crossChecked": [
+        {
+          "backend": "quint",
+          "targets": [
+            "DSC-1"
+          ]
+        },
+        {
+          "backend": "smt",
+          "targets": [
+            "DSC-1"
+          ]
+        }
+      ]
+    }
+  },
+  "unissuedTarget": {
+    "known": {
+      "schemaAccepted": true,
+      "readable": true,
+      "unavailable": null,
+      "remappedTargets": [
+        "DSC-1"
+      ],
+      "crossCheckFindings": 1,
+      "crossChecked": [
+        {
+          "backend": "quint",
+          "targets": [
+            "DSC-1"
+          ]
+        },
+        {
+          "backend": "smt",
+          "targets": [
+            "DSC-1"
+          ]
+        }
+      ]
+    },
+    "unknown": {
+      "schemaAccepted": true,
+      "readable": true,
+      "unavailable": null,
+      "remappedTargets": [
+        "SC-999"
+      ],
+      "crossCheckFindings": 0,
+      "crossChecked": [
+        {
+          "backend": "quint",
+          "targets": [
+            "DSC-1"
+          ]
+        },
+        {
+          "backend": "smt",
+          "targets": [
+            "DSC-1"
+          ]
+        }
+      ]
+    }
+  },
+  "loweredIdentityCollision": {
+    "before": "DOB-1",
+    "after": "OB-9",
+    "duplicateIds": [
+      "OB-2",
+      "OB-2"
+    ]
+  },
+  "expressionComposition": [
+    {
+      "inputNodes": 9998,
+      "inputExpressionAccepted": true,
+      "schemaAccepted": true,
+      "ordinaryLoweringAccepted": true,
+      "failure": null
+    },
+    {
+      "inputNodes": 10000,
+      "inputExpressionAccepted": true,
+      "schemaAccepted": true,
+      "ordinaryLoweringAccepted": true,
+      "failure": {
+        "name": "IllegalArgumentException",
+        "message": "Illegal argument: expression-too-large"
+      }
+    }
+  ],
+  "transitionComposition": [
+    {
+      "inputNodes": 9996,
+      "inputExpressionAccepted": true,
+      "schemaAccepted": true,
+      "synthetics": false,
+      "failure": null
+    },
+    {
+      "inputNodes": 10000,
+      "inputExpressionAccepted": true,
+      "schemaAccepted": true,
+      "synthetics": false,
+      "failure": {
+        "name": "IllegalArgumentException",
+        "message": "Illegal argument: expression-too-large"
+      }
+    }
+  ],
+  "comparisonModelScope": {
+    "sameHash": false,
+    "comparisonAccepted": true,
+    "comparisonDisagrees": true,
+    "normalReportPathFindings": 0,
+    "normalReportPathComparisons": 0
+  },
+  "materialModelScope": {
+    "materialsFor": "/records/a/model.md",
+    "requestedModel": "/records/b/model.md",
+    "sameModelId": false,
+    "sameContentHash": true,
+    "plansForCorrectModel": 1,
+    "plansForForeignModel": 1,
+    "foreignInputAnchors": [
+      "/records/a/map.md"
+    ]
+  }
+}

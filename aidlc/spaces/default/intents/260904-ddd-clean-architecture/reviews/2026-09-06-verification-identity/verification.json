@@ -1,0 +1,31 @@
+{
+  "source": "b33e6878e14652570e111815d8daaf2e4e1bf88b",
+  "relatedTests": {
+    "command": "bun test tests/ir-validation.test.ts tests/design-pipeline.test.ts tests/refinement-pipeline.test.ts tests/verify-smt-pipeline.test.ts tests/scenario-comparison.test.ts tests/rule-subsumption.test.ts tests/refcheck-pipeline.test.ts",
+    "exitCode": 0,
+    "pass": 174,
+    "fail": 0,
+    "files": 7,
+    "expectCalls": 809,
+    "elapsedSeconds": 3.37
+  },
+  "probe": {
+    "command": "bun aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-verification-identity/probe.ts",
+    "exitCode": 0,
+    "typeCheckExitCode": 0
+  },
+  "schemaCost": {
+    "command": "python3 run-schema-cost.py",
+    "depths": [
+      4,
+      8,
+      12,
+      16
+    ],
+    "repetitions": 2,
+    "perProcessTimeoutSeconds": 3,
+    "runSerially": true,
+    "scope": "設計IRスキーマのexpr定義を実際のvalidateSchemaへ渡す。スキーマ読込・Bun起動はschemaMillisecondsから除外。タイムアウトはプロセス全体に対するもの。"
+  },
+  "applicationChanges": false
+}
