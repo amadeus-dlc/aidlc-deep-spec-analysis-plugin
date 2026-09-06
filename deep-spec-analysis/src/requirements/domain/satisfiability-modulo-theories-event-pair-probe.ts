@@ -1,6 +1,11 @@
-import { type QueryLabel, TargetIdentifiers, type TriggerName } from "@deep-spec-analysis/kernel-domain";
+import { FindingKind, type QueryLabel, TargetIdentifiers, type TriggerName } from "@deep-spec-analysis/kernel-domain";
 import type { ObligationIdentifier } from "./obligation-identifier.ts";
+import type { RequirementsModel } from "./requirements-model.ts";
 import type { SatisfiabilityModuloTheoriesQueryVerdicts } from "./satisfiability-modulo-theories-query-verdicts.ts";
+import { VerificationFinding } from "./verification-finding.ts";
+import { VerificationFindings } from "./verification-findings.ts";
+import { VerificationSkips } from "./verification-skips.ts";
+import { VerificationWitness } from "./verification-witness.ts";
 
 // 同トリガのイベント対 (a, b) に発行した 2 問——ガードの重なり（overlap）と
 // 効果の両立（joint）。計画の解釈は対自身に判定を引かせ、対象を問う
@@ -33,16 +38,36 @@ export class SatisfiabilityModuloTheoriesEventPairProbe {
     return new SatisfiabilityModuloTheoriesEventPairProbe(props);
   }
 
-  a(): ObligationIdentifier {
-    return this.#a;
-  }
-
-  b(): ObligationIdentifier {
-    return this.#b;
-  }
-
-  trigger(): TriggerName {
-    return this.#trigger;
+  interpret(
+    model: RequirementsModel,
+    results: SatisfiabilityModuloTheoriesQueryVerdicts,
+  ): { findings: VerificationFindings; skipped: VerificationSkips } {
+    const overlap = this.#overlapVerdictIn(results);
+    const joint = this.#jointVerdictIn(results);
+    if (overlap.isSat() && joint.isUnsat()) {
+      const targets = this.targets().sortedUniqueCanonically();
+      return {
+        findings: VerificationFindings.of([
+          VerificationFinding.of({
+            kind: FindingKind.conflict(),
+            functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
+            targets,
+            witness: VerificationWitness.core(joint.sortedCore()),
+            detail: `Events ${this.#a.asString()} and ${this.#b.asString()} for trigger "${this.#trigger.asString()}" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.`,
+          }),
+        ]),
+        skipped: VerificationSkips.of([]),
+      };
+    }
+    const pending =
+      [overlap, joint].find((verdict) => verdict.isMissing()) ?? (overlap.isUndecided() ? overlap : joint);
+    return {
+      findings: VerificationFindings.of([]),
+      skipped:
+        overlap.isUndecided() || joint.isUndecided()
+          ? pending.skipsFor(this.targets(), `event-pair check for trigger "${this.#trigger.asString()}"`)
+          : VerificationSkips.of([]),
+    };
   }
 
   // 対の 2 対象（発行順）。
@@ -50,13 +75,13 @@ export class SatisfiabilityModuloTheoriesEventPairProbe {
     return TargetIdentifiers.of([this.#a.asTargetId(), this.#b.asTargetId()]);
   }
 
-  overlapVerdictIn(
+  #overlapVerdictIn(
     results: SatisfiabilityModuloTheoriesQueryVerdicts,
   ): ReturnType<SatisfiabilityModuloTheoriesQueryVerdicts["verdictOf"]> {
     return results.verdictOf(this.#qOverlap);
   }
 
-  jointVerdictIn(
+  #jointVerdictIn(
     results: SatisfiabilityModuloTheoriesQueryVerdicts,
   ): ReturnType<SatisfiabilityModuloTheoriesQueryVerdicts["verdictOf"]> {
     return results.verdictOf(this.#qJoint);

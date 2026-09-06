@@ -1,11 +1,14 @@
-import type {
-  Expression,
-  FunctionalRequirementReferences,
-  ScenarioBindings,
-  TriggerName,
+import {
+  type Expression,
+  ExpressionTree,
+  type FunctionalRequirementReferences,
+  type ScenarioBindings,
+  type ScenarioExpectation,
+  type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
-import { ExpressionTree } from "@deep-spec-analysis/kernel-domain";
+
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import type { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
 
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 
@@ -14,7 +17,8 @@ import type { LoweredIdentifier } from "./lowered-identifier.ts";
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type LoweredScenarioParam = {
   id: LoweredIdentifier;
-  kind: "accept" | "reject";
+  origin: DesignScenarioIdentifier;
+  expectation: ScenarioExpectation;
   functionalRequirementReferences: FunctionalRequirementReferences;
   bindings: ScenarioBindings;
   event?: { readonly trigger: TriggerName };
@@ -23,7 +27,8 @@ type LoweredScenarioParam = {
 
 export class LoweredScenario {
   readonly #id: LoweredIdentifier;
-  readonly #kind: "accept" | "reject";
+  readonly #origin: DesignScenarioIdentifier;
+  readonly #expectation: ScenarioExpectation;
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #bindings: ScenarioBindings;
   readonly #eventTrigger: TriggerName | undefined;
@@ -31,7 +36,8 @@ export class LoweredScenario {
 
   private constructor(props: LoweredScenarioParam) {
     this.#id = props.id;
-    this.#kind = props.kind;
+    this.#origin = props.origin;
+    this.#expectation = props.expectation;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#bindings = props.bindings;
     this.#eventTrigger = props.event?.trigger;
@@ -46,12 +52,16 @@ export class LoweredScenario {
     return new LoweredScenario(props);
   }
 
+  origin(): DesignScenarioIdentifier {
+    return this.#origin;
+  }
+
   id(): LoweredIdentifier {
     return this.#id;
   }
 
   kind(): "accept" | "reject" {
-    return this.#kind;
+    return this.#expectation.asString();
   }
 
   functionalRequirementReferences(): FunctionalRequirementReferences {
@@ -66,11 +76,11 @@ export class LoweredScenario {
     return this.#eventTrigger === undefined ? undefined : { trigger: this.#eventTrigger.asString() };
   }
 
-  expectation(): Expression | undefined {
+  expectedExpression(): Expression | undefined {
     return this.#expect;
   }
 
   isAccept(): boolean {
-    return this.#kind === "accept";
+    return this.#expectation.isAccept();
   }
 }

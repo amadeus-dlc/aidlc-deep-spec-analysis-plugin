@@ -1,0 +1,207 @@
+{
+  "beforeHead": "87f151776ef13dd2f564c2a60ff0d4f5968eab65",
+  "afterHead": "a42fa8b7700e1112f6cabeaaecdd08d056b57d9d",
+  "beforeDomainFiles": 351,
+  "afterDomainFiles": 359,
+  "beforeCallableMembers": 2388,
+  "afterCallableMembers": 2499,
+  "beforeAtLeastFiveLines": 246,
+  "afterAtLeastFiveLines": 320,
+  "largestDomainMethod": {
+    "path": "deep-spec-analysis/src/refcheck/domain/rule-declarations.ts",
+    "className": "RuleDeclarations",
+    "name": "check",
+    "kind": "method",
+    "static": false,
+    "start": 35,
+    "end": 131,
+    "bodyStart": 40,
+    "codeLines": 86,
+    "spanLines": 97
+  },
+  "comparison": [
+    {
+      "method": "UnitRefinementPlan construction",
+      "before": 251,
+      "after": 38,
+      "note": "constructor plus of and parse; the two one-line factories are included",
+      "location": "deep-spec-analysis/src/design/domain/unit-refinement-plan.ts:44"
+    },
+    {
+      "method": "DesignUnitDeclaration.diagnostics",
+      "before": 200,
+      "after": 76,
+      "location": "deep-spec-analysis/src/design/domain/design-unit-declaration.ts:93"
+    },
+    {
+      "method": "QuintMachinePlan.interpret",
+      "before": 161,
+      "after": 21,
+      "location": "deep-spec-analysis/src/requirements/domain/quint-machine-plan.ts:57"
+    },
+    {
+      "method": "Components.check",
+      "before": 160,
+      "after": 9,
+      "location": "deep-spec-analysis/src/refcheck/domain/components.ts:137"
+    },
+    {
+      "method": "DeclaredEntities.check",
+      "before": 146,
+      "after": 5,
+      "location": "deep-spec-analysis/src/refcheck/domain/declared-entities.ts:44"
+    },
+    {
+      "method": "SatisfiabilityModuloTheoriesVerificationPlan.interpret",
+      "before": 142,
+      "after": 29,
+      "location": "deep-spec-analysis/src/requirements/domain/satisfiability-modulo-theories-verification-plan.ts:63"
+    },
+    {
+      "method": "SiblingVerdictDocument.#remapReadable",
+      "before": 131,
+      "after": 54,
+      "location": "deep-spec-analysis/src/design/domain/sibling-verdict-document.ts:132"
+    },
+    {
+      "method": "DesignUnit.lowered",
+      "before": 129,
+      "after": 45,
+      "location": "deep-spec-analysis/src/design/domain/design-unit.ts:134"
+    },
+    {
+      "method": "RefinementSolverPlan.interpret",
+      "before": 103,
+      "after": 8,
+      "location": "deep-spec-analysis/src/design/domain/refinement-solver-plan.ts:75"
+    },
+    {
+      "method": "IntermediateRepresentationModelDeclaration.diagnostics",
+      "before": 87,
+      "after": 35,
+      "location": "deep-spec-analysis/src/requirements/domain/intermediate-representation-model-declaration.ts:48"
+    }
+  ],
+  "afterTop10": [
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/rule-declarations.ts",
+      "className": "RuleDeclarations",
+      "name": "check",
+      "kind": "method",
+      "static": false,
+      "start": 35,
+      "end": 131,
+      "bodyStart": 40,
+      "codeLines": 86,
+      "spanLines": 97
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-reports.ts",
+      "className": "DesignReports",
+      "name": "crossChecked",
+      "kind": "method",
+      "static": false,
+      "start": 49,
+      "end": 131,
+      "bodyStart": 49,
+      "codeLines": 78,
+      "spanLines": 83
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-unit-declaration.ts",
+      "className": "DesignUnitDeclaration",
+      "name": "diagnostics",
+      "kind": "method",
+      "static": false,
+      "start": 93,
+      "end": 181,
+      "bodyStart": 93,
+      "codeLines": 76,
+      "spanLines": 89
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/domain/verification-reports.ts",
+      "className": "VerificationReports",
+      "name": "crossChecked",
+      "kind": "method",
+      "static": false,
+      "start": 49,
+      "end": 126,
+      "bodyStart": 49,
+      "codeLines": 73,
+      "spanLines": 78
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-materials.ts",
+      "className": "RefinementMaterials",
+      "name": "prepare",
+      "kind": "method",
+      "static": false,
+      "start": 42,
+      "end": 106,
+      "bodyStart": 42,
+      "codeLines": 63,
+      "spanLines": 65
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/sibling-verdict-finding.ts",
+      "className": "SiblingVerdictFinding",
+      "name": "remap",
+      "kind": "method",
+      "static": false,
+      "start": 49,
+      "end": 115,
+      "bodyStart": 57,
+      "codeLines": 57,
+      "spanLines": 67
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/state-machine-sketch.ts",
+      "className": "StateMachineSketch",
+      "name": "check",
+      "kind": "method",
+      "static": false,
+      "start": 56,
+      "end": 120,
+      "bodyStart": 61,
+      "codeLines": 57,
+      "spanLines": 65
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/sibling-verdict-document.ts",
+      "className": "SiblingVerdictDocument",
+      "name": "#remapReadable",
+      "kind": "method",
+      "static": false,
+      "start": 132,
+      "end": 196,
+      "bodyStart": 138,
+      "codeLines": 54,
+      "spanLines": 65
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/domain/satisfiability-modulo-theories-probe.ts",
+      "className": "SatisfiabilityModuloTheoriesProbe",
+      "name": "interpret",
+      "kind": "method",
+      "static": false,
+      "start": 70,
+      "end": 125,
+      "bodyStart": 73,
+      "codeLines": 51,
+      "spanLines": 56
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/domain-entity-sketches.ts",
+      "className": "DomainEntitySketches",
+      "name": "check",
+      "kind": "method",
+      "static": false,
+      "start": 52,
+      "end": 110,
+      "bodyStart": 57,
+      "codeLines": 49,
+      "spanLines": 59
+    }
+  ]
+}

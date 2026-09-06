@@ -8,12 +8,15 @@ import {
   FindingsSchema,
   IntermediateRepresentationVersion,
   KeyedIndex,
+  ObligationNature,
   RequirementIdentifier,
+  ScenarioExpectation,
   SkipReason,
   TargetIdentifier,
   TriggerName,
   VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
+
 import { scenarioBindings } from "./binding-fixtures.ts";
 
 // レイヤード verify-quint パイプラインの in-process 検証（PR4、#17）。
@@ -58,7 +61,6 @@ import {
   Obligation,
   ObligationIdentifier,
   ObligationIdentifiers,
-  ObligationNature,
   Obligations,
   QuintCheckResult,
   QuintMachineComponent,
@@ -122,7 +124,10 @@ type RawObligation = Omit<Parameters<typeof Obligation.of>[0], "functionalRequir
   frRefs: string[];
   trigger?: string;
 };
-type RawScenario = Omit<Parameters<typeof Scenario.of>[0], "functionalRequirementReferences"> & { frRefs: string[] };
+type RawScenario = Omit<Parameters<typeof Scenario.of>[0], "functionalRequirementReferences" | "expectation"> & {
+  kind: "accept" | "reject";
+  frRefs: string[];
+};
 function model(seed: {
   irVersion?: IntermediateRepresentationVersion;
   attributes?: RawAttributeDeclaration[];
@@ -161,6 +166,7 @@ function model(seed: {
       (seed.scenarios ?? []).map((s) =>
         Scenario.of({
           ...s,
+          expectation: ScenarioExpectation.of(s.kind),
           functionalRequirementReferences: FunctionalRequirementReferences.of(
             Array.from(s.frRefs, (raw) => RequirementIdentifier.of(raw)),
           ),
@@ -583,7 +589,7 @@ describe("quint verdict interpretation", () => {
           VerificationSkipped.of({ target: TargetIdentifier.of(k.target), reason: SkipReason.of(k.reason) }),
         ),
       ),
-      method,
+      VerificationMethod.of(method),
       QuintRuns.of({ ...EMPTY_RUNS, ...runs }),
     );
 
@@ -735,7 +741,7 @@ describe("quint verdict interpretation", () => {
     const unbound = unboundFacts.interpret(
       machineModel,
       VerificationSkips.of([]),
-      "simulation",
+      VerificationMethod.of("simulation"),
       QuintRuns.of(EMPTY_RUNS),
     );
     expect(

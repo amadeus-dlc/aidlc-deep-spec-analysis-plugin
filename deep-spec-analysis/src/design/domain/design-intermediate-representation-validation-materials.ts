@@ -63,7 +63,7 @@ export class DesignIntermediateRepresentationValidationMaterials {
     }
     for (const error of this.#schemaErrors) yield ok(error);
     if (supported && this.#schemaErrors.isEmpty()) {
-      for (const error of this.#units.wellFormednessErrors()) yield ErrorMessage.parse(error);
+      for (const error of this.#units.diagnostics()) yield ok(error);
     }
   }
 

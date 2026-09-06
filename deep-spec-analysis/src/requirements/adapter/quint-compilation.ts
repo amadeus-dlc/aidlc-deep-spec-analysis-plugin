@@ -332,7 +332,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   const scenarioInitActions = new Map<string, string>();
   const scenariosWithInit: ScenarioIdentifier[] = [];
   for (const sc of model.scenarios()) {
-    if (sc.hasEvent()) continue;
+    if (sc.hasEventRule()) continue;
     const bindings = sc.bindings();
     if (!bindings.covers(attrs.map((a) => a.path()))) continue;
     const parts: string[] = [];

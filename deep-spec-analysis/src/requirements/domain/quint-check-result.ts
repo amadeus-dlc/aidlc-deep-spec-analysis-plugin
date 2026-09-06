@@ -37,7 +37,7 @@ export class QuintCheckResult {
       case "machine-uncompilable":
         return VerificationReport.machineUncompilable(id, model, result.method.asString(), result.error.asString());
       case "checked": {
-        const interpreted = result.plan.interpret(model, result.compileSkips, result.method.asString(), result.runs);
+        const interpreted = result.plan.interpret(model, result.compileSkips, result.method, result.runs);
         return VerificationReport.compose({
           id,
           irVersion: model.irVersion(),

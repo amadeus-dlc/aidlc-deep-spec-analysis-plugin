@@ -76,7 +76,18 @@ export class RefinementMaterials {
         for (const unit of model) {
           const unitMap = map.unitMapOf(unit.id());
           if (unitMap !== undefined && unitMap !== null) {
-            plans.push(UnitRefinementPlan.of(unit, unitMap, requirements, artifact));
+            const plan = UnitRefinementPlan.parse(unit, unitMap, requirements, artifact);
+            if (plan.ok) plans.push(plan.value);
+            else
+              for (const target of requirements.allTargetIds())
+                skipped = skipped.add(
+                  DesignSkipped.of({
+                    target,
+                    reason: SkipReason.compileError(),
+                    unit: UnitName.of(unit.name()),
+                    detail: `refinement plan could not be constructed: ${plan.error.kind}`,
+                  }),
+                );
             continue;
           }
           for (const target of requirements.allTargetIds())

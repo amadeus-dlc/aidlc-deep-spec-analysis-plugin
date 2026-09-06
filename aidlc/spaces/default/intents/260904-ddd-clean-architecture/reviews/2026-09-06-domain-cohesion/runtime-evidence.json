@@ -1,0 +1,66 @@
+{
+  "baseline": "87f151776ef13dd2f564c2a60ff0d4f5968eab65",
+  "sourceCheckout": "01b87b6662ccf6bd83801dd871fc47824667e2b1",
+  "sourceDiffAgainstBaseline": "none",
+  "enumPolicy": {
+    "requirementErrors": [],
+    "designErrors": [
+      "unit u1: obligation DOB-1: enum literal \"email\" is not a value of \"ticket.status\""
+    ],
+    "status": "intentional difference documented at docs/decisions.ja.md:221"
+  },
+  "duplicateEntity": {
+    "coordinate": "ticket.status",
+    "declarationValues": [
+      [
+        "open"
+      ],
+      [
+        "closed"
+      ]
+    ],
+    "assertionValue": "closed",
+    "errors": [],
+    "refinementLookup": [
+      "open"
+    ]
+  },
+  "duplicateEntitySensor": [
+    {
+      "case": "canonical-fixture",
+      "exit": 0,
+      "verdict": {
+        "pass": true,
+        "findings_count": 0,
+        "errors": []
+      }
+    },
+    {
+      "case": "duplicated-entity",
+      "duplicatedName": "ticket",
+      "exit": 0,
+      "verdict": {
+        "pass": true,
+        "findings_count": 0,
+        "errors": []
+      }
+    }
+  ],
+  "missingShadowPair": {
+    "input": {
+      "kind": "vac-shadow",
+      "design": "DOB-1",
+      "pair": "omitted"
+    },
+    "constructedPair": [
+      "DOB-1",
+      "DOB-1"
+    ],
+    "findings": [
+      {
+        "kind": "redundancy",
+        "detail": "DOB-1 is subsumed by DOB-1: same trigger, a provably narrower guard, and an identical effect — it can never apply where DOB-1 does not."
+      }
+    ]
+  }
+}

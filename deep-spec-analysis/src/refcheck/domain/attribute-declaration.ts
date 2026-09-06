@@ -1,11 +1,18 @@
+import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import type { AllowedValues } from "./allowed-values.ts";
 import type { AttributeDefault } from "./attribute-default.ts";
 import type { AttributeName } from "./attribute-name.ts";
+import type { CheckFamily } from "./check-family.ts";
 import type { ElementPath } from "./element-path.ts";
+import type { EntityDeclarations } from "./entity-declarations.ts";
+import type { EntityName } from "./entity-name.ts";
+import { FD_E2, FD_E3, FD_E6 } from "./functional-check-families.ts";
 import type { NumericBound } from "./numeric-bound.ts";
+import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { ReferenceTarget } from "./reference-target.ts";
 import type { StateNames } from "./state-names.ts";
 import type { TypeName } from "./type-name.ts";
+import { WitnessReference } from "./witness-reference.ts";
 
 // 属性宣言。型区分との整合・範囲と既定値の整合・ライフサイクル候補性という
 // ドメイン知識を自分で判定する（旧 FD-E2/E3 の条件式の移設）。
@@ -55,28 +62,121 @@ export class AttributeDeclaration {
     return new AttributeDeclaration(seed);
   }
 
+  #record(
+    report: ReferenceCheckReport,
+    family: CheckFamily,
+    entity: EntityName,
+    artifact: ArtifactPath,
+    value: string | undefined,
+    detail: string,
+    kind = FindingKind.structureInvalid(),
+  ): void {
+    const label = `${entity.asString()}.${this.#name.asString()}`;
+    report.finding(
+      family,
+      kind,
+      [TargetIdentifiers.safe("attr", label)],
+      [WitnessReference.at(artifact.asString(), this.#element.asString(), value)],
+      detail,
+    );
+  }
+
+  checkType(report: ReferenceCheckReport, entity: EntityName, artifact: ArtifactPath): void {
+    const label = `${entity.asString()}.${this.#name.asString()}`;
+    if (this.declaresAllowedValuesOnNonEnumerableType())
+      this.#record(
+        report,
+        FD_E2,
+        entity,
+        artifact,
+        this.typeToken(),
+        `"${label}" declares allowed values but its type "${this.typeText()}" is not an enumerable type`,
+      );
+    if (this.declaresBoundsOnNonNumericType())
+      this.#record(
+        report,
+        FD_E2,
+        entity,
+        artifact,
+        this.typeToken(),
+        `"${label}" declares min/max but its type "${this.typeText()}" is not numeric or date-like`,
+      );
+    if (this.declaresUniqueOnCollectionType())
+      this.#record(
+        report,
+        FD_E2,
+        entity,
+        artifact,
+        this.typeToken(),
+        `"${label}" declares unique but its type "${this.typeText()}" is not scalar`,
+      );
+  }
+
+  checkBounds(report: ReferenceCheckReport, entity: EntityName, artifact: ArtifactPath): void {
+    const label = `${entity.asString()}.${this.#name.asString()}`;
+    if (this.boundsInverted())
+      this.#record(
+        report,
+        FD_E3,
+        entity,
+        artifact,
+        `min ${this.#min?.asNumber()} > max ${this.#max?.asNumber()}`,
+        `"${label}": min ${this.#min?.asNumber()} exceeds max ${this.#max?.asNumber()}`,
+      );
+    if (this.defaultBelowMin())
+      this.#record(
+        report,
+        FD_E3,
+        entity,
+        artifact,
+        this.#def?.render(),
+        `"${label}": default ${this.#def?.render()} is below min ${this.#min?.asNumber()}`,
+      );
+    if (this.defaultAboveMax())
+      this.#record(
+        report,
+        FD_E3,
+        entity,
+        artifact,
+        this.#def?.render(),
+        `"${label}": default ${this.#def?.render()} is above max ${this.#max?.asNumber()}`,
+      );
+    if (this.defaultOutsideAllowed())
+      this.#record(
+        report,
+        FD_E3,
+        entity,
+        artifact,
+        this.#def?.render(),
+        `"${label}": default "${this.#def?.render()}" is not one of the allowed values`,
+      );
+  }
+
+  checkReference(
+    entities: EntityDeclarations,
+    report: ReferenceCheckReport,
+    entity: EntityName,
+    artifact: ArtifactPath,
+  ): void {
+    const reference = this.#references;
+    if (reference !== null && !entities.resolvesReference(reference))
+      this.#record(
+        report,
+        FD_E6,
+        entity,
+        artifact,
+        reference.asString(),
+        `"${entity.asString()}.${this.#name.asString()}" references "${reference.asString()}" which is not a declared entity`,
+        FindingKind.referenceBroken(),
+      );
+  }
+
   name(): AttributeName {
     return this.#name;
   }
 
   element(): ElementPath {
     return this.#element;
-  }
-
-  references(): ReferenceTarget | null {
-    return this.#references;
-  }
-
-  def(): AttributeDefault | null {
-    return this.#def;
-  }
-
-  min(): NumericBound | null {
-    return this.#min;
-  }
-
-  max(): NumericBound | null {
-    return this.#max;
   }
 
   hasAllowedValues(): boolean {

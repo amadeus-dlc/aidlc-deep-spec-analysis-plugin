@@ -1,9 +1,17 @@
-import type { NormalizedName } from "@deep-spec-analysis/kernel-domain";
-import { KeySet } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  FindingKind,
+  KeySet,
+  type NormalizedName,
+  TargetIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
 import type { AppliesTo } from "./applies-to.ts";
 import type { EntityDeclaration } from "./entity-declaration.ts";
 import { EntityName } from "./entity-name.ts";
+import { FD_E1 } from "./functional-check-families.ts";
+import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { ReferenceTarget } from "./reference-target.ts";
+import { WitnessReference } from "./witness-reference.ts";
 
 // エンティティ宣言のコレクション。重複・所属・正規化名解決・ライフサイクル
 // 対象の選定・あいまい照合という集合の知識を所有する。
@@ -36,6 +44,23 @@ export class EntityDeclarations {
       seen.add(e.name().asString());
     }
     return dups;
+  }
+
+  checkDuplicates(report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const duplicate of this.duplicatesByName())
+      report.finding(
+        FD_E1,
+        FindingKind.structureInvalid(),
+        [TargetIdentifiers.safe("entity", duplicate.name().asString())],
+        [
+          WitnessReference.at(
+            artifact.asString(),
+            `${duplicate.element().asString()}.name`,
+            duplicate.name().asString(),
+          ),
+        ],
+        `entity "${duplicate.name().asString()}" is declared more than once`,
+      );
   }
 
   containsNamed(name: EntityName): boolean {

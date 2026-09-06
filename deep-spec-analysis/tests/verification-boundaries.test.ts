@@ -30,6 +30,7 @@ import {
   RefinementCheck,
   RefinementMaterials,
   RefinementMaterialsIdentifier,
+  RefinementObligation,
   RefinementPreparation,
   RefinementProbe,
   RefinementSolverPlan,
@@ -909,7 +910,13 @@ describe("設計検証の構築契約と診断予算", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe("reachability-observation-outside-plan");
     const pending = KeyedIndex.of([
-      [QueryLabel.of("rv:OB-1"), RefinementProbe.invariant(ObligationIdentifier.of("OB-1"))] as const,
+      [
+        QueryLabel.of("rv:OB-1"),
+        RefinementProbe.invariant(
+          fixtureSubject(preparation.requirements().obligationById("OB-1")),
+          UnitName.of(preparation.unit().name()),
+        ),
+      ] as const,
     ]);
     const wrongSkips = DesignSkips.of([
       DesignSkipped.of({
@@ -929,7 +936,18 @@ describe("設計検証の構築契約と診断予算", () => {
     const unknown = {
       preparation,
       pending: KeyedIndex.of([
-        [QueryLabel.of("rv:OB-999"), RefinementProbe.invariant(ObligationIdentifier.of("OB-999"))] as const,
+        [
+          QueryLabel.of("rv:OB-999"),
+          RefinementProbe.invariant(
+            RefinementObligation.of({
+              id: ObligationIdentifier.of("OB-999"),
+              nature: ObligationNature.of("invariant"),
+              functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+              assert: { op: "bool", value: true },
+            }),
+            UnitName.of(preparation.unit().name()),
+          ),
+        ] as const,
       ]),
       compileSkips: DesignSkips.of([]),
     };
@@ -953,7 +971,10 @@ describe("設計検証の構築契約と診断予算", () => {
       ...value(ws.materials.findById(RefinementMaterialsIdentifier.of(ws.modelId))).prepare(ws.model),
     ][0];
     if (preparation === undefined) throw new Error("fixture has no plan");
-    const probe = RefinementProbe.invariant(ObligationIdentifier.of("OB-1"));
+    const probe = RefinementProbe.invariant(
+      fixtureSubject(preparation.requirements().obligationById("OB-1")),
+      UnitName.of(preparation.unit().name()),
+    );
     const entries = Array.from({ length: 65_536 }, (_, index) => [QueryLabel.of(`rv:OB-1:${index}`), probe] as const);
     const maximum = { preparation, pending: KeyedIndex.of(entries), compileSkips: DesignSkips.of([]) };
     expect([...RefinementSolverPlan.of(maximum)]).toHaveLength(65_536);
@@ -969,3 +990,8 @@ describe("設計検証の構築契約と診断予算", () => {
     }
   });
 });
+
+function fixtureSubject<T>(subject: T | undefined): T {
+  if (subject === undefined) throw new Error("fixture subject is absent");
+  return subject;
+}

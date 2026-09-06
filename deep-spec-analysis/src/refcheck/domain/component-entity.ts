@@ -1,7 +1,12 @@
+import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import type { AttributeName } from "./attribute-name.ts";
+import { DD_2, DD_5, DD_6 } from "./component-check-families.ts";
+import type { Components } from "./components.ts";
 import type { ElementPath } from "./element-path.ts";
 import type { EntityName } from "./entity-name.ts";
 import type { EntityReferences } from "./entity-references.ts";
+import type { ReferenceCheckReport } from "./reference-check-report.ts";
+import { WitnessReference } from "./witness-reference.ts";
 
 // コンポーネントが所有するエンティティ宣言。所有の要件たる識別子の有無
 // （DD-5）はエンティティ自身が判定する（#71 波6）。
@@ -28,6 +33,54 @@ export class ComponentEntity {
 
   static of(props: ComponentEntityParam): ComponentEntity {
     return new ComponentEntity(props);
+  }
+
+  checkIdentifier(report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    if (!this.hasIdentifier())
+      report.finding(
+        DD_5,
+        FindingKind.structureInvalid(),
+        [TargetIdentifiers.safe("entity", this.#name.asString())],
+        [WitnessReference.at(artifact.asString(), `${this.#element.asString()}.identifier`)],
+        `entity "${this.#name.asString()}" has no identifier`,
+      );
+  }
+  checkReferenceOwners(components: Components, report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const reference of this.#references) {
+      if (!components.declares(reference.ownedBy()))
+        report.finding(
+          DD_2,
+          FindingKind.referenceBroken(),
+          [TargetIdentifiers.safe("component", reference.ownedBy().asString())],
+          [
+            WitnessReference.at(
+              artifact.asString(),
+              `${reference.element().asString()}.owned_by`,
+              reference.ownedBy().asString(),
+            ),
+          ],
+          `entity "${this.#name.asString()}" references owner component "${reference.ownedBy().asString()}" which is not declared`,
+        );
+    }
+  }
+  checkReferenceTargets(components: Components, report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const reference of this.#references) {
+      const owner = components.byName(reference.ownedBy());
+      if (owner !== null && !owner.declaresEntity(reference.entity()))
+        report.finding(
+          DD_6,
+          FindingKind.referenceBroken(),
+          [TargetIdentifiers.safe("entity", reference.entity().asString())],
+          [
+            WitnessReference.at(
+              artifact.asString(),
+              `${reference.element().asString()}.entity`,
+              reference.entity().asString(),
+            ),
+          ],
+          `entity "${this.#name.asString()}" references "${reference.entity().asString()}" as owned by "${reference.ownedBy().asString()}", but "${reference.ownedBy().asString()}" declares no such entity`,
+        );
+    }
   }
 
   name(): EntityName {

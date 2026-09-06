@@ -2,7 +2,9 @@ import {
   AttributeKind,
   type Expression,
   FunctionalRequirementReferences,
+  ObligationNature,
   RequirementIdentifier,
+  ScenarioExpectation,
   TargetIdentifier,
   TargetIdentifiers,
   TriggerName,
@@ -25,7 +27,6 @@ import {
   IntermediateRepresentationTemporalDeclaration,
   Obligation,
   ObligationIdentifier,
-  ObligationNature,
   QuintMachineRunVerdict,
   QuintScenarioVerdict,
   QuintTemporalVerdict,
@@ -156,7 +157,7 @@ describe("scenario", () => {
   const scenario = (kind: "accept" | "reject") =>
     Scenario.of({
       id: ScenarioIdentifier.of("SC-1"),
-      kind,
+      expectation: ScenarioExpectation.of(kind),
       functionalRequirementReferences: FunctionalRequirementReferences.of(
         Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw)),
       ),
@@ -166,7 +167,7 @@ describe("scenario", () => {
   test("of round-trips every field through the accessors", () => {
     const withEvent = Scenario.of({
       id: ScenarioIdentifier.of("SC-2"),
-      kind: "accept",
+      expectation: ScenarioExpectation.of("accept"),
       functionalRequirementReferences: FunctionalRequirementReferences.of(
         Array.from(["FR-1", "FR-2"], (raw) => RequirementIdentifier.of(raw)),
       ),
@@ -178,15 +179,15 @@ describe("scenario", () => {
     expect(withEvent.kind()).toBe("accept");
     expect(withEvent.functionalRequirementReferences().toStrings()).toEqual(["FR-1", "FR-2"]);
     expect(withEvent.eventTrigger()?.asString()).toBe("submit");
-    expect(withEvent.expectation()).toEqual(lit(true));
+    expect(withEvent.expectedExpression()).toEqual(lit(true));
     expect(withEvent.isAccept()).toBe(true);
     expect(withEvent.isReject()).toBe(false);
-    expect(withEvent.hasEvent()).toBe(true);
+    expect(withEvent.hasEventRule()).toBe(true);
     expect(scenario("reject").isAccept()).toBe(false);
     expect(scenario("reject").isReject()).toBe(true);
-    expect(scenario("reject").hasEvent()).toBe(false);
+    expect(scenario("reject").hasEventRule()).toBe(false);
     expect(scenario("reject").eventTrigger()).toBeUndefined();
-    expect(scenario("reject").expectation()).toBeUndefined();
+    expect(scenario("reject").expectedExpression()).toBeUndefined();
   });
 
   test("isViolatedBySatisfiability is the accept/reject truth table", () => {

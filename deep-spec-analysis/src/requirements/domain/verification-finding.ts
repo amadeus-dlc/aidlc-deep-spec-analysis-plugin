@@ -42,6 +42,10 @@ export class VerificationFinding {
     return new VerificationFinding(props);
   }
 
+  isConflict(): boolean {
+    return this.#kind.asString() === "conflict";
+  }
+
   kind(): string {
     return this.#kind.asString();
   }

@@ -1,11 +1,6 @@
 import type { VerificationFinding } from "./verification-finding.ts";
 
-// v1 バックエンドの kind 順位表（4 kind・未知は 9）と正準ソート。
-// 拡張 11-kind 表とは意図的に別実装のまま保つ（統一しない——バイト安全優先。
-// 順序互換は tests/kind-rank.test.ts が機械証明）。旧
-// verification-finding-order.ts から吸収し、コレクションだけが使う。
-// 正準ソートは要素の `compareTo` に問う（kind 順位は kernel の FindingKind——
-// v1 の 4 種の相対順序は 11 種の表と一致する、裁定 3-2）。
+// 診断の正準順とconflictの重複排除はコレクションが所有する。
 function sortVerificationFindings(findings: readonly VerificationFinding[]): VerificationFinding[] {
   return [...findings].sort((a, b) => a.compareTo(b));
 }
@@ -39,6 +34,19 @@ export class VerificationFindings {
 
   isEmpty(): boolean {
     return this.#values.length === 0;
+  }
+
+  distinctConflicts(): VerificationFindings {
+    const seen = new Set<string>();
+    return new VerificationFindings(
+      this.#values.filter((finding) => {
+        if (!finding.isConflict()) return true;
+        const key = finding.targets().joined(",");
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }),
+    );
   }
 
   toArray(): readonly VerificationFinding[] {

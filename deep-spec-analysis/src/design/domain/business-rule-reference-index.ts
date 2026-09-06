@@ -1,8 +1,10 @@
+import { ErrorMessage, ErrorMessages, KeySet, TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
+import type { BusinessRuleReferences } from "./business-rule-references.ts";
+import type { UnformalizedTargets } from "./unformalized-targets.ts";
 // BusinessRuleReferenceIndex — rules.md が宣言する業務規則 id の集合（brRef の逆引き
 // 検証の材料）。要素は BusinessRuleReference、内側は KeySet（裁定 3-1、2026-09-03）。
 
-import { KeySet } from "@deep-spec-analysis/kernel-domain";
-import { BusinessRuleReference } from "./business-rule-reference.ts";
+import type { BusinessRuleReference } from "./business-rule-reference.ts";
 
 export class BusinessRuleReferenceIndex {
   readonly #ids: KeySet<BusinessRuleReference>;
@@ -11,10 +13,26 @@ export class BusinessRuleReferenceIndex {
     this.#ids = ids;
   }
 
-  static fromRules(rulesMarkdown: string): BusinessRuleReferenceIndex {
-    const ids: BusinessRuleReference[] = [];
-    for (const m of rulesMarkdown.matchAll(/\bBR[0-9]+\.[0-9]+\b/g)) ids.push(BusinessRuleReference.of(m[0]));
+  static of(ids: BusinessRuleReferences): BusinessRuleReferenceIndex {
     return new BusinessRuleReferenceIndex(KeySet.of(ids));
+  }
+
+  diagnostics(used: KeySet<BusinessRuleReference>, unformalized: UnformalizedTargets): ErrorMessages {
+    const errors: string[] = [];
+    for (const reference of [...used].sort((a, b) =>
+      a.asString() < b.asString() ? -1 : a.asString() > b.asString() ? 1 : 0,
+    )) {
+      if (!this.has(reference)) errors.push(`brRef "${reference.asString()}" does not exist in rules.md`);
+    }
+    for (const reference of [...this.#ids].sort((a, b) =>
+      a.asString() < b.asString() ? -1 : a.asString() > b.asString() ? 1 : 0,
+    )) {
+      if (!used.has(reference) && !unformalized.covers(TargetIdentifier.of(reference.asString())))
+        errors.push(
+          `BR coverage: rule ${reference.asString()} in rules.md is neither referenced by any obligation/transition/scenario nor listed in unformalized[] — silence is a contract violation`,
+        );
+    }
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
 
   has(br: BusinessRuleReference): boolean {

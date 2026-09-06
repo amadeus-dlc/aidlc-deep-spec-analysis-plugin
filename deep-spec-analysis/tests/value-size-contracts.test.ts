@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import * as Design from "@deep-spec-analysis/design-domain";
 import * as Doctor from "@deep-spec-analysis/doctor-domain";
 import * as Kernel from "@deep-spec-analysis/kernel-domain";
+import { ObligationNature } from "@deep-spec-analysis/kernel-domain";
 import { IllegalArgumentException } from "@deep-spec-analysis/kernel-infrastructure";
 import * as Refcheck from "@deep-spec-analysis/refcheck-domain";
 import * as Requirements from "@deep-spec-analysis/requirements-domain";
@@ -62,7 +63,7 @@ const cases = [
   ["DeclaredRuleIdentifier", Refcheck.DeclaredRuleIdentifier, 128],
   ["ContractParty", Refcheck.ContractParty, 4096],
   ["AttributeDefault", Refcheck.AttributeDefault, 4096],
-  ["DesignObligationNature", Design.DesignObligationNature, 128],
+  ["ObligationNature", ObligationNature, 128],
   ["DesignObligationOrigin", Design.DesignObligationOrigin, 128],
   ["EnumerationMember", Kernel.EnumerationMember, 4096],
   ["ErrorMessage", Kernel.ErrorMessage, 65_536],

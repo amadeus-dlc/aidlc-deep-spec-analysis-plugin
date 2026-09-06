@@ -11,6 +11,7 @@ export { FormalModelIdentifier } from "./formal-model-identifier.ts";
 export { FunctionalRequirementReferenceClaim } from "./functional-requirement-reference-claim.ts";
 export { FunctionalRequirementReferenceClaims } from "./functional-requirement-reference-claims.ts";
 export { FunctionalRequirementReferenceIndex } from "./functional-requirement-reference-index.ts";
+export { IntermediateRepresentationAttributeCatalog } from "./intermediate-representation-attribute-catalog.ts";
 export { IntermediateRepresentationAttributeDeclaration } from "./intermediate-representation-attribute-declaration.ts";
 export { IntermediateRepresentationAttributeDeclarations } from "./intermediate-representation-attribute-declarations.ts";
 export { IntermediateRepresentationAttributeName } from "./intermediate-representation-attribute-name.ts";
