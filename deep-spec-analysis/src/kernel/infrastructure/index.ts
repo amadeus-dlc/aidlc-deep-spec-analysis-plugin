@@ -8,6 +8,13 @@ export { boundedCollectionSnapshot } from "./bounded-collection-snapshot.ts";
 export { boundedValueSnapshot } from "./bounded-value-snapshot.ts";
 export { canonicalStringify, jsonEquals } from "./canonical-json.ts";
 export { compareCanonically, sortedUniqueCanonically } from "./canonical-order.ts";
+export {
+  combinedHash,
+  hashOfBoolean,
+  hashOfNullable,
+  hashOfNumber,
+  hashOfString,
+} from "./hash-code.ts";
 export { IllegalArgumentException } from "./illegal-argument-exception.ts";
 export { isObject, type Json, strArr } from "./json.ts";
 export { parseConstruction } from "./parse-construction.ts";
