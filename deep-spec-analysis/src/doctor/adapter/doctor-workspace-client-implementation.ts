@@ -234,7 +234,7 @@ export class DoctorWorkspaceClientImplementation implements DoctorWorkspaceClien
       if (!units.ok) return units;
       for (const unit of [...units.value]
         .filter((entry) => entry.isDirectory())
-        .sort((a, b) => a.name.localeCompare(b.name))) {
+        .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
         const directory = join(construction, unit.name, "functional-design");
         for (const name of ["entities.md", "rules.md", "functional-spec.md"]) {
           const path = join(directory, name);
@@ -272,7 +272,7 @@ export class DoctorWorkspaceClientImplementation implements DoctorWorkspaceClien
       const units: FunctionalUnitObservation[] = [];
       for (const unit of [...listed.value]
         .filter((entry) => entry.isDirectory())
-        .sort((a, b) => a.name.localeCompare(b.name))) {
+        .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
         const directory = join(construction, unit.name, "functional-design");
         const present = optionalStat(directory);
         if (!present.ok) return present;

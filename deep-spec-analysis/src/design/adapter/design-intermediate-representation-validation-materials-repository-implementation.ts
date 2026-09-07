@@ -367,10 +367,12 @@ export class DesignIntermediateRepresentationValidationMaterialsRepositoryImplem
     const unitDirectory = join(recordRoot, "construction", unitName);
     const directory = readArtifactStat(unitDirectory);
     if (!directory.ok && directory.error.kind !== "not-found") return repoErr(directory.error);
+    const directoryExists = directory.ok && directory.value.isDirectory();
+    if (!directoryExists) return ok({ directoryExists, rulesMarkdown: null });
     const rules = readArtifactText(join(unitDirectory, "functional-design", "rules.md"));
     if (!rules.ok && rules.error.kind !== "not-found") return repoErr(rules.error);
     return ok({
-      directoryExists: directory.ok && directory.value.isDirectory(),
+      directoryExists,
       rulesMarkdown: rules.ok ? rules.value : null,
     });
   }

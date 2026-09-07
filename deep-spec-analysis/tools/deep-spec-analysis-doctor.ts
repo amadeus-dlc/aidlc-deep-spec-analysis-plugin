@@ -3599,7 +3599,11 @@ class DoctorPresenter {
         partial: (findings, reason) => `has ${findings.asNumber()} reference-integrity finding(s); inspection incomplete (${reason.asString()})`,
         unavailable: (reason) => `could not be inspected (${reason.asString()})`
       })}`,
-      fix: "Open the artifact and fix (or record as an accepted risk) each finding; " + "the deep-spec-refcheck sensors re-check on every write and write the detail next to the artifact under deep-spec-refcheck/.",
+      fix: row.match({
+        complete: () => "Open the artifact and fix (or record as an accepted risk) each finding; " + "the deep-spec-refcheck sensors re-check on every write and write the detail next to the artifact under deep-spec-refcheck/.",
+        partial: () => "Run the deep-spec-refcheck sensor in write mode and inspect deep-spec-refcheck/*.json for skipped inputs; restore the required inputs, run the sensor again, then fix or record each finding.",
+        unavailable: (reason) => `Resolve the deep-spec-refcheck backend error (${reason.asString()}), run the sensor in write mode, then run the doctor again.`
+      }),
       severity: CheckSeverity.advisory()
     }));
     if (debt.hasScans()) {
@@ -3879,7 +3883,7 @@ class DoctorWorkspaceClientImplementation {
       const units = optionalDirectory(construction);
       if (!units.ok)
         return units;
-      for (const unit of [...units.value].filter((entry) => entry.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
+      for (const unit of [...units.value].filter((entry) => entry.isDirectory()).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
         const directory = join3(construction, unit.name, "functional-design");
         for (const name of ["entities.md", "rules.md", "functional-spec.md"]) {
           const path = join3(directory, name);
@@ -3918,7 +3922,7 @@ class DoctorWorkspaceClientImplementation {
       if (!listed.ok)
         return listed;
       const units = [];
-      for (const unit of [...listed.value].filter((entry) => entry.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
+      for (const unit of [...listed.value].filter((entry) => entry.isDirectory()).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
         const directory = join3(construction, unit.name, "functional-design");
         const present = optionalStat(directory);
         if (!present.ok)
