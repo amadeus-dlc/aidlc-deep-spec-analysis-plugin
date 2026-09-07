@@ -18,11 +18,11 @@ import {
 import { IllegalArgumentException, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import * as Reference from "@deep-spec-analysis/refcheck-domain";
 
-function operations<E extends Equatable<E>>(
+function operations<E extends Equatable<E>, C extends FirstClassCollection<E>>(
   name: string,
   factory: {
-    of(elements: readonly E[]): FirstClassCollection<E>;
-    parse(elements: readonly E[]): Result<FirstClassCollection<E>, ParseError>;
+    of(elements: readonly E[]): C;
+    parse(elements: readonly E[]): Result<C, ParseError>;
   },
   element: (index: number) => E,
   maximum = 65_536,
@@ -50,6 +50,7 @@ function operations<E extends Equatable<E>>(
     const input = [first, second];
     const collection = create(input);
     input.length = 0;
+    const before = [...collection];
 
     expect(collection.head().equals(firstCopy)).toBe(true);
     expect(collection.at(1).equals(element(2))).toBe(true);
@@ -73,12 +74,25 @@ function operations<E extends Equatable<E>>(
     expect([...filtered]).toHaveLength(1);
     expect(filtered.head().equals(firstCopy)).toBe(true);
     expect(collection.filter(() => false).isEmpty()).toBe(true);
-    expect([...collection]).toHaveLength(2);
-    expect(
-      [...collection.map((item) => ErrorMessage.of(item.equals(firstCopy) ? "first" : "second"))].map((item) =>
-        item.asString(),
-      ),
-    ).toEqual(["first", "second"]);
+    expect(collection.foldLeft(0, (accumulator) => accumulator + 1)).toBe(2);
+    const mapped = collection.map((item) => item);
+    expect(mapped).not.toBe(collection);
+    expect([...mapped].map((item, index) => item.equals(before[index] ?? first))).toEqual([true, true]);
+    const empty = create([]);
+    const combined = collection.combine(collection);
+    expect(combined).not.toBe(collection);
+    expect([...combined].map((item) => item.equals(firstCopy))).toEqual([true, false, true, false]);
+    expect(empty.combine(collection)).not.toBe(collection);
+    expect(collection.combine(empty)).not.toBe(collection);
+    expect([...empty.combine(collection)].map((item, index) => item.equals(before[index] ?? first))).toEqual([
+      true,
+      true,
+    ]);
+    expect([...collection.combine(empty)].map((item, index) => item.equals(before[index] ?? first))).toEqual([
+      true,
+      true,
+    ]);
+    expect([...collection].map((item, index) => item.equals(before[index] ?? first))).toEqual([true, true]);
     expect(create([]).isEmpty()).toBe(true);
     expect(
       create([]).exists(() => {

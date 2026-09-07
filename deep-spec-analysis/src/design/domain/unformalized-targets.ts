@@ -22,6 +22,14 @@ export class UnformalizedTargets extends FirstClassCollectionBase<TargetIdentifi
     return new UnformalizedTargets(values);
   }
 
+  override map(transform: (element: TargetIdentifier) => TargetIdentifier): UnformalizedTargets {
+    return this.mapTo(transform, UnformalizedTargets.of);
+  }
+
+  override combine(other: UnformalizedTargets): UnformalizedTargets {
+    return this.combineTo(other, UnformalizedTargets.of);
+  }
+
   static parse(values: readonly TargetIdentifier[]): Result<UnformalizedTargets, ParseError> {
     return parseConstruction(() => new UnformalizedTargets(values));
   }

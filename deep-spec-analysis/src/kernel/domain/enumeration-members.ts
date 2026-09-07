@@ -27,6 +27,14 @@ export class EnumerationMembers
     return new EnumerationMembers(values);
   }
 
+  override map(transform: (element: EnumerationMember) => EnumerationMember): EnumerationMembers {
+    return this.mapTo(transform, EnumerationMembers.of);
+  }
+
+  override combine(other: EnumerationMembers): EnumerationMembers {
+    return this.combineTo(other, EnumerationMembers.of);
+  }
+
   static parse(values: readonly EnumerationMember[]): Result<EnumerationMembers, ParseError> {
     return parseConstruction(() => new EnumerationMembers(values));
   }
@@ -60,7 +68,7 @@ export class EnumerationMembers
     return this.#values[index];
   }
 
-  count(): number {
+  override count(): number {
     return this.#values.length;
   }
 

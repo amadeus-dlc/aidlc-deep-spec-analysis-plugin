@@ -35,6 +35,14 @@ export class DesignReports extends FirstClassCollectionBase<DesignReport, Design
     return new DesignReports(values);
   }
 
+  override map(transform: (element: DesignReport) => DesignReport): DesignReports {
+    return this.mapTo(transform, DesignReports.of);
+  }
+
+  override combine(other: DesignReports): DesignReports {
+    return this.combineTo(other, DesignReports.of);
+  }
+
   static parse(values: readonly DesignReport[]): Result<DesignReports, ParseError> {
     return parseConstruction(() => new DesignReports(values));
   }

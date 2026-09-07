@@ -597,7 +597,7 @@ describe("設計検証の判断は取得した材料と判定値が所有する"
         ),
       );
       const expected = variant.includes("stale") ? "stale-input" : "absent-input";
-      expect(report.skippedCount()).toBe(materials.requirements().allTargetIds().toArray().length);
+      expect(report.skippedCount()).toBe(materials.requirements().allTargetIds().count());
       expect([...report.skipped()].every((skip) => skip.reason() === expected)).toBe(true);
       expect(report.inputs() !== null).toBe(variant === "unit-absent");
     },
@@ -630,7 +630,7 @@ describe("設計検証の判断は取得した材料と判定値が所有する"
     expect([...noQueries.skipped()].some((skip) => skip.reason() === "compile-error")).toBe(true);
     const unavailable = RefinementCheck.unavailable(solver, ErrorMessage.of("solver unavailable")).recordedIn(base);
     expect(unavailable.findingsCount()).toBe(0);
-    expect(unavailable.skippedCount()).toBe(plan.requirements().allTargetIds().toArray().length);
+    expect(unavailable.skippedCount()).toBe(plan.requirements().allTargetIds().count());
     expect(
       [...unavailable.skipped()].every(
         (skip) => skip.reason() === "unavailable" && skip.detail() === "solver unavailable",
@@ -699,7 +699,7 @@ describe("設計検証の判断は取得した材料と判定値が所有する"
         VerificationMethod.of(backend === "smt" ? "exhaustive" : "simulation"),
       );
       const unitReport = base.unitTimedOut(plan.unit());
-      expect(unitReport.skippedCount()).toBe(plan.unit().allTargets().toArray().length);
+      expect(unitReport.skippedCount()).toBe(plan.unit().allTargets().count());
       expect([...unitReport.skipped()].every((skip) => skip.reason() === "timeout")).toBe(true);
       const refinement = backend === "smt" ? plan.smtTimedOut(base) : plan.quintTimedOut(base);
       expect(refinement.skippedCount()).toBeGreaterThan(0);

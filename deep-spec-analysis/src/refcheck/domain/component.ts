@@ -5,7 +5,8 @@ import {
   TargetIdentifier,
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
-import { DD_1, DD_2, DD_3 } from "./component-check-families.ts";
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
+import { DD_1, DD_3 } from "./component-check-families.ts";
 import type { ComponentEntities } from "./component-entities.ts";
 import type { ComponentName } from "./component-name.ts";
 import type { ComponentReference } from "./component-reference.ts";
@@ -58,20 +59,8 @@ export class Component {
       );
   }
   checkReferences(components: Components, report: ReferenceCheckReport, artifact: ArtifactPath): void {
-    for (const reference of [...this.#dependsOn, ...this.#dependents]) {
-      if (!components.declares(reference.component()))
-        report.finding(
-          DD_2,
-          FindingKind.referenceBroken(),
-          FindingTargets.of(
-            TargetIdentifier.of(TargetIdentifiers.safe("component", reference.component().asString())),
-            [],
-          ),
-          [WitnessReference.at(artifact.asString(), reference.element().asString(), reference.component().asString())],
-          `"${this.#name.asString()}" references undeclared component "${reference.component().asString()}"`,
-        );
-    }
-    for (const entity of this.#entities) entity.checkReferenceOwners(components, report, artifact);
+    this.#allReferences().checkDeclared(this.#name, components, report, artifact);
+    this.#entities.checkReferenceOwners(components, report, artifact);
   }
   checkSelfReferences(report: ReferenceCheckReport, artifact: ArtifactPath): void {
     for (const reference of this.selfReferences())
@@ -84,10 +73,10 @@ export class Component {
       );
   }
   checkIdentifiers(report: ReferenceCheckReport, artifact: ArtifactPath): void {
-    for (const entity of this.#entities) entity.checkIdentifier(report, artifact);
+    this.#entities.checkIdentifiers(report, artifact);
   }
   checkEntityReferences(components: Components, report: ReferenceCheckReport, artifact: ArtifactPath): void {
-    for (const entity of this.#entities) entity.checkReferenceTargets(components, report, artifact);
+    this.#entities.checkReferenceTargets(components, report, artifact);
   }
   declaresEntity(name: EntityName): boolean {
     return this.#entities.declaresEntity(name);
@@ -102,29 +91,23 @@ export class Component {
   }
 
   equals(other: Component): boolean {
-    const sameReferences = (left: ComponentReferences, right: ComponentReferences): boolean => {
-      const leftValues = left.toArray();
-      const rightValues = right.toArray();
-      return (
-        leftValues.length === rightValues.length &&
-        leftValues.every((value, index) => value.equals(rightValues[index] as (typeof leftValues)[number]))
-      );
-    };
-    const sameEntities = (left: ComponentEntities, right: ComponentEntities): boolean => {
-      const leftValues = left.toArray();
-      const rightValues = right.toArray();
-      return (
-        leftValues.length === rightValues.length &&
-        leftValues.every((value, index) => value.equals(rightValues[index] as (typeof leftValues)[number]))
-      );
-    };
     return (
       this.#name.equals(other.#name) &&
       this.#element.equals(other.#element) &&
-      sameReferences(this.#dependsOn, other.#dependsOn) &&
-      sameReferences(this.#dependents, other.#dependents) &&
-      sameEntities(this.#entities, other.#entities)
+      this.#dependsOn.equals(other.#dependsOn) &&
+      this.#dependents.equals(other.#dependents) &&
+      this.#entities.equals(other.#entities)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#name.hashCode(),
+      this.#element.hashCode(),
+      this.#dependsOn.hashCode(),
+      this.#dependents.hashCode(),
+      this.#entities.hashCode(),
+    ]);
   }
 
   dependsOn(): ComponentReferences {
@@ -145,7 +128,12 @@ export class Component {
   }
 
   // DD-3: 自分自身を指す依存参照（depends_on → dependents の走査順——凍結）。
-  selfReferences(): ComponentReference[] {
-    return [...this.#dependsOn, ...this.#dependents].filter((r) => r.pointsAt(this.#name));
+  selfReferences(): readonly ComponentReference[] {
+    return this.#allReferences().pointingAt(this.#name);
+  }
+
+  // DD-2・DD-3 が見る参照面（depends_on → dependents の走査順——凍結）。
+  #allReferences(): ComponentReferences {
+    return this.#dependsOn.combine(this.#dependents);
   }
 }

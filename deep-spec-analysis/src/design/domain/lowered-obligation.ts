@@ -6,7 +6,16 @@ import {
   type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
 
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combinedHash,
+  hashOfBoolean,
+  hashOfNullable,
+  hashOfString,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import type { LoweredOrigin } from "./lowered-origin.ts";
 import { sameExpression, sameIterable, sameOptional } from "./value-equality.ts";
@@ -102,6 +111,30 @@ export class LoweredObligation {
           sameExpression(left.to, right.to),
       )
     );
+  }
+
+  hashCode(): number {
+    const kinds = ["passthrough", "ignore", "vac-dead", "vac-shadow", "transition"] as const;
+    const hashOfExpression = (value: Expression): number => hashOfString(canonicalStringify(value));
+    return combinedHash([
+      this.#id.hashCode(),
+      this.#origin.design().hashCode(),
+      ...kinds.map((kind) => hashOfBoolean(this.#origin.isKind(kind))),
+      this.#nature.hashCode(),
+      this.#functionalRequirementReferences.hashCode(),
+      hashOfNullable(this.#assert, hashOfExpression),
+      hashOfNullable(this.#trigger, (value) => value.hashCode()),
+      hashOfNullable(this.#guard, hashOfExpression),
+      hashOfNullable(this.#effect, hashOfExpression),
+      hashOfNullable(this.#temporal, (value) =>
+        combinedHash([
+          hashOfString(value.pattern),
+          hashOfNullable(value.assert, hashOfExpression),
+          hashOfNullable(value.from, hashOfExpression),
+          hashOfNullable(value.to, hashOfExpression),
+        ]),
+      ),
+    ]);
   }
 
   origin(): LoweredOrigin {

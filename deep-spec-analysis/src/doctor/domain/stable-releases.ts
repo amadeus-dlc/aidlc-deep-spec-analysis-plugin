@@ -28,6 +28,14 @@ export class StableReleases extends FirstClassCollectionBase<PluginVersion, Stab
   static of(versions: readonly PluginVersion[]): StableReleases {
     return new StableReleases(versions);
   }
+  override map(transform: (element: PluginVersion) => PluginVersion): StableReleases {
+    return this.mapTo(transform, StableReleases.of);
+  }
+
+  override combine(other: StableReleases): StableReleases {
+    return this.combineTo(other, StableReleases.of);
+  }
+
   static parse(versions: readonly PluginVersion[]): Result<StableReleases, ParseError> {
     return parseConstruction(() => new StableReleases(versions));
   }

@@ -1,4 +1,4 @@
-import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
   type ParseError,
@@ -25,6 +25,14 @@ export class RefinementObligations extends FirstClassCollectionBase<RefinementOb
     return new RefinementObligations(values);
   }
 
+  override map(transform: (element: RefinementObligation) => RefinementObligation): RefinementObligations {
+    return this.mapTo(transform, RefinementObligations.of);
+  }
+
+  override combine(other: RefinementObligations): RefinementObligations {
+    return this.combineTo(other, RefinementObligations.of);
+  }
+
   static parse(values: readonly RefinementObligation[]): Result<RefinementObligations, ParseError> {
     return parseConstruction(() => new RefinementObligations(values));
   }
@@ -47,6 +55,11 @@ export class RefinementObligations extends FirstClassCollectionBase<RefinementOb
 
   sortedCanonically(): RefinementObligations {
     return new RefinementObligations([...this.#values].sort((a, b) => a.id().compareTo(b.id())));
+  }
+
+  // 義務 id を検査対象 id として読む（宣言順のまま）。
+  targetIds(): TargetIdentifiers {
+    return TargetIdentifiers.of(this.#values.map((obligation) => obligation.id().asTargetId()));
   }
 
   toArray(): readonly RefinementObligation[] {

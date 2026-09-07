@@ -536,7 +536,7 @@ describe("smt verdict interpretation", () => {
       ["global", { status: "unsat", core: [] }],
       ["vac:OB-1", { status: "unsat", core: ["ob_OB_2"] }],
     ]);
-    expect(findings.toArray().length).toBe(1);
+    expect(findings.count()).toBe(1);
     expect(findings.toArray()[0]?.targets().toStrings()).toEqual(["OB-1", "OB-2"]);
   });
 
@@ -573,7 +573,7 @@ describe("smt verdict interpretation", () => {
       ["vac:OB-1", { status: "unsat", core: ["ob_OB_2"] }],
       ["vac:OB-2", { status: "unsat", core: ["ob_OB_1"] }],
     ]);
-    expect(findings.toArray().length).toBe(1);
+    expect(findings.count()).toBe(1);
     expect(findings.toArray()[0]?.targets().toStrings()).toEqual(["OB-1", "OB-2"]);
     expect(findings.toArray()[0]?.detail()).toStartWith("The condition of obligation OB-1 can never hold");
   });
@@ -1065,9 +1065,9 @@ describe("degradation reports and ordering", () => {
     expect(m.attributeAt("Ticket.priority")?.isInt()).toBe(true);
     expect(m.attributeAt("Ticket.priority")?.isAt("Ticket.priority")).toBe(true);
     expect(m.attributeAt("nope")).toBe(undefined);
-    expect(m.attributes().toArray().length).toBe(1);
-    expect(m.obligations().toArray().length).toBe(2);
-    expect(m.scenarios().toArray().length).toBe(1);
+    expect(m.attributes().count()).toBe(1);
+    expect(m.obligations().count()).toBe(2);
+    expect(m.scenarios().count()).toBe(1);
     expect(m.background().toArray()[0]?.id().asString()).toBe("BG-1");
     expect(m.irVersion().asString()).toBe("1.0.0");
     expect(m.supportsMajor(1)).toBe(true);

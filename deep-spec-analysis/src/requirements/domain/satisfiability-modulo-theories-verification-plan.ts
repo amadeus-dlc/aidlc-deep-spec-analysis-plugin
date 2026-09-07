@@ -17,10 +17,8 @@ import type { RequirementsModel } from "./requirements-model.ts";
 import type { SatisfiabilityModuloTheoriesEventPairProbes } from "./satisfiability-modulo-theories-event-pair-probes.ts";
 import type { SatisfiabilityModuloTheoriesQueryVerdicts } from "./satisfiability-modulo-theories-query-verdicts.ts";
 import type { ScenarioIdentifier } from "./scenario-identifier.ts";
-import type { VerificationFinding } from "./verification-finding.ts";
 import { VerificationFindings } from "./verification-findings.ts";
-import type { VerificationSkipped } from "./verification-skipped.ts";
-import { VerificationSkips } from "./verification-skips.ts";
+import type { VerificationSkips } from "./verification-skips.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type SatisfiabilityModuloTheoriesVerificationPlanParam = {
@@ -65,17 +63,14 @@ export class SatisfiabilityModuloTheoriesVerificationPlan {
     model: RequirementsModel,
     results: SatisfiabilityModuloTheoriesQueryVerdicts,
   ): Result<{ findings: VerificationFindings; skipped: VerificationSkips }, ParseError> {
-    const findings: VerificationFinding[] = [];
-    const skipped: VerificationSkipped[] = [...this.#skipped];
+    let findings = VerificationFindings.of([]);
+    let skipped = this.#skipped;
     for (const result of this.#interpretProbes(model, results)) {
       if (!result.ok) return result;
-      findings.push(...result.value.findings);
-      skipped.push(...result.value.skipped);
+      findings = findings.combine(result.value.findings);
+      skipped = skipped.combine(result.value.skipped);
     }
-    return ok({
-      findings: VerificationFindings.of(findings).distinctConflicts(),
-      skipped: VerificationSkips.of(skipped),
-    });
+    return ok({ findings: findings.distinctConflicts(), skipped });
   }
 
   *#interpretProbes(
@@ -90,18 +85,11 @@ export class SatisfiabilityModuloTheoriesVerificationPlan {
     if (consistency.allowsVacuityChecks(results))
       for (const [subject, query] of this.#vacuityQueries)
         yield SatisfiabilityModuloTheoriesProbe.vacuity(query, subject, this.#labelToTarget).interpret(model, results);
-    for (const pair of this.#eventPairs) yield pair.interpret(model, results);
+    yield* this.#eventPairs.interpretations(model, results);
     for (const [trigger, targets] of [...this.#gapTriggers].sort((a, b) =>
       a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0,
     ))
       yield SatisfiabilityModuloTheoriesProbe.completeness(trigger, targets).interpret(model, results);
-    for (const scenario of model.scenarios()) {
-      const query = this.#scenarioQueries.get(scenario.id());
-      if (query !== undefined)
-        yield SatisfiabilityModuloTheoriesProbe.scenario(query, scenario, this.#labelToTarget).interpret(
-          model,
-          results,
-        );
-    }
+    yield* model.scenarios().interpretSatisfiability(model, results, this.#scenarioQueries, this.#labelToTarget);
   }
 }

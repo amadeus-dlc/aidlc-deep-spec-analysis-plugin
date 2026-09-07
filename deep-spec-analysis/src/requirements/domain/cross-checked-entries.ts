@@ -1,6 +1,7 @@
 import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
+  type Json,
   type ParseError,
   parseConstruction,
   type Result,
@@ -23,6 +24,14 @@ export class CrossCheckedEntries
     return new CrossCheckedEntries(values);
   }
 
+  override map(transform: (element: CrossCheckedEntry) => CrossCheckedEntry): CrossCheckedEntries {
+    return this.mapTo(transform, CrossCheckedEntries.of);
+  }
+
+  override combine(other: CrossCheckedEntries): CrossCheckedEntries {
+    return this.combineTo(other, CrossCheckedEntries.of);
+  }
+
   static parse(values: readonly CrossCheckedEntry[]): Result<CrossCheckedEntries, ParseError> {
     return parseConstruction(() => new CrossCheckedEntries(values));
   }
@@ -37,6 +46,14 @@ export class CrossCheckedEntries
 
   override *[Symbol.iterator](): Iterator<CrossCheckedEntry> {
     yield* this.#values;
+  }
+
+  // 境界: 描画専用。契約2 の crossChecked キー順（backend, targets）は
+  // 旧構築サイトの挿入順そのもの（golden バイト凍結）。
+  toDocuments(): Json[] {
+    return this.#values.map(
+      (entry) => ({ backend: entry.backend().asString(), targets: entry.targets().toStrings() }) as unknown as Json,
+    );
   }
 
   toArray(): readonly CrossCheckedEntry[] {

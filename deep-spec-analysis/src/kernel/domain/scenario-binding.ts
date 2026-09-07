@@ -1,3 +1,4 @@
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
 import type { AttributePath } from "./attribute-path.ts";
 import type { BindingValue } from "./binding-value.ts";
 
@@ -24,5 +25,9 @@ export class ScenarioBinding {
 
   equals(other: ScenarioBinding): boolean {
     return this.#path.equals(other.#path) && this.#value.equals(other.#value);
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#path.hashCode(), this.#value.hashCode()]);
   }
 }

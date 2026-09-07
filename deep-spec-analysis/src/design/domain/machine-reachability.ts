@@ -1,6 +1,10 @@
 import { SkipReason, UnitName } from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
+  combinedHash,
+  hashOfBoolean,
+  hashOfNullable,
+  hashOfString,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -92,6 +96,22 @@ export class MachineReachability {
       const right = otherProbe === undefined ? undefined : other.#observations.get(otherProbe);
       return left === undefined ? right === undefined : right !== undefined && left.equals(right);
     });
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#unit.hashCode(),
+      this.#machine.hashCode(),
+      hashOfBoolean(this.#bounded),
+      ...this.#probes.map((probe) =>
+        combinedHash([
+          hashOfString(probe.unit().name()),
+          hashOfString(probe.attributePath()),
+          hashOfString(probe.state()),
+          hashOfNullable(this.#observations.get(probe), (verdict) => verdict.hashCode()),
+        ]),
+      ),
+    ]);
   }
 
   static parse(input: MachineReachabilityParam): Result<MachineReachability, ParseError> {

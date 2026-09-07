@@ -1,11 +1,13 @@
 import { QueryLabel, SkipReason, type TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import {
   boundedValueSnapshot,
+  canonicalStringify,
+  combinedHash,
+  hashOfString,
   type ParseError,
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
-import { VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationSkips } from "./verification-skips.ts";
 
 // SMT クエリ 1 件の判定。主従の裁定（#71 波2）: 判定は命令できる抽象データ型
@@ -59,7 +61,7 @@ export class SatisfiabilityModuloTheoriesQueryVerdict {
     if (!this.isUndecided()) return VerificationSkips.of([]);
     const reason = this.isMissing() ? SkipReason.unrecognizedFormat() : SkipReason.timeout();
     const detail = this.isMissing() ? `${what} returned no solver result` : `${what} exceeded the solver budget`;
-    return VerificationSkips.of([...targets].map((target) => VerificationSkipped.of({ target, reason, detail })));
+    return VerificationSkips.coveringAll(targets, reason, detail);
   }
 
   isSat(): boolean {
@@ -106,5 +108,13 @@ export class SatisfiabilityModuloTheoriesQueryVerdict {
       leftCore.length === rightCore.length &&
       leftCore.every((label, index) => label.equals(rightCore[index] as (typeof leftCore)[number]))
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      hashOfString(this.#status),
+      hashOfString(canonicalStringify(this.#decodedModel ?? {})),
+      combinedHash((this.#core ?? []).map((label) => label.hashCode())),
+    ]);
   }
 }

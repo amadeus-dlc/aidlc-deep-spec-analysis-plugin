@@ -1,5 +1,12 @@
 import { type SkipReason, TargetIdentifier, type UnitName } from "@deep-spec-analysis/kernel-domain";
-import { ok, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
+  ok,
+  type ParseError,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import { DesignSkipped } from "./design-skipped.ts";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import type { LoweringIndex } from "./lowering-index.ts";
@@ -29,6 +36,14 @@ export class SiblingVerdictSkip {
       this.#reason.asString() === other.#reason.asString() &&
       this.#detail === other.#detail
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#target.hashCode(),
+      hashOfString(this.#reason.asString()),
+      hashOfNullable(this.#detail, hashOfString),
+    ]);
   }
 
   remap(unit: UnitName, index: LoweringIndex): Result<DesignSkipped | null, ParseError> {

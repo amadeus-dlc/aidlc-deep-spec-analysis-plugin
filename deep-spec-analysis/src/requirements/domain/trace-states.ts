@@ -24,6 +24,14 @@ export class TraceStates
     return new TraceStates(values);
   }
 
+  override map(transform: (element: TraceState) => TraceState): TraceStates {
+    return this.mapTo(transform, TraceStates.of);
+  }
+
+  override combine(other: TraceStates): TraceStates {
+    return this.combineTo(other, TraceStates.of);
+  }
+
   static parse(values: readonly TraceState[]): Result<TraceStates, ParseError> {
     return parseConstruction(() => new TraceStates(values));
   }
@@ -38,6 +46,11 @@ export class TraceStates
 
   override *[Symbol.iterator](): Iterator<TraceState> {
     yield* this.#values;
+  }
+
+  // 境界: 描画専用。witness の trace ペイロードへステップ順のまま落とす。
+  toDocuments(): ReturnType<TraceState["toDocument"]>[] {
+    return this.#values.map((state) => state.toDocument());
   }
 
   // 最終状態（不変量の帰属評価に使う）。空トレースは空状態。

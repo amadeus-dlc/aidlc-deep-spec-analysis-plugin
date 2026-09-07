@@ -1,4 +1,5 @@
 import type { ErrorMessage } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfNumber, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignArtifactReference } from "./design-artifact-reference.ts";
 import type { FindingCount } from "./finding-count.ts";
 
@@ -69,5 +70,22 @@ export class StructuralObservation {
         this.#state.reason.equals(other.#state.reason)
       );
     return false;
+  }
+
+  hashCode(): number {
+    if (this.#state.kind === "complete")
+      return combinedHash([
+        this.#artifact.hashCode(),
+        hashOfString(this.#state.kind),
+        hashOfNumber(this.#state.findings.asNumber()),
+      ]);
+    if (this.#state.kind === "partial")
+      return combinedHash([
+        this.#artifact.hashCode(),
+        hashOfString(this.#state.kind),
+        hashOfNumber(this.#state.findings.asNumber()),
+        this.#state.reason.hashCode(),
+      ]);
+    return combinedHash([this.#artifact.hashCode(), hashOfString(this.#state.kind), this.#state.reason.hashCode()]);
   }
 }

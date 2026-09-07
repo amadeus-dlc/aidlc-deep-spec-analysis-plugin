@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 // BackendName — 検証バックエンド名（smt / quint / cross-check / components …）
 // のドメインプリミティブ。レポート id の派生名・crossChecked 判定表・比較表の
 // キーとして全コンテキストが話す共有語彙。
@@ -24,6 +29,10 @@ export class BackendName {
 
   equals(other: BackendName): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   asString(): string {

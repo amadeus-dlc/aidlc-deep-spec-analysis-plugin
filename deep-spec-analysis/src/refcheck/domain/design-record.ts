@@ -178,7 +178,7 @@ export class DesignRecord {
     if (fd.requirements !== null) report.input(fd.requirements.input);
     if (fd.spec !== null) report.input(fd.spec.input);
     if (fd.components !== null) report.input(fd.components.input);
-    for (const anchor of fd.siblingInputs) report.input(anchor);
+    fd.siblingInputs.recordIn(report);
     return ok(report);
   }
 }

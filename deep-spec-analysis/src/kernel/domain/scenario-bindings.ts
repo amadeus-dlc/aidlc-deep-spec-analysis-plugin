@@ -35,6 +35,14 @@ export class ScenarioBindings extends FirstClassCollectionBase<ScenarioBinding, 
     yield* this.#values;
   }
 
+  override map(transform: (element: ScenarioBinding) => ScenarioBinding): ScenarioBindings {
+    return this.mapTo(transform, ScenarioBindings.of);
+  }
+
+  override combine(other: ScenarioBindings): ScenarioBindings {
+    return this.combineTo(other, ScenarioBindings.of);
+  }
+
   static parse(values: readonly ScenarioBinding[]): Result<ScenarioBindings, ParseError> {
     return parseConstruction(() => new ScenarioBindings(values));
   }

@@ -30,6 +30,14 @@ export class IssuedLoweredIdentifiers extends FirstClassCollectionBase<LoweredId
   static of(values: readonly LoweredIdentifier[]): IssuedLoweredIdentifiers {
     return new IssuedLoweredIdentifiers(values);
   }
+  override map(transform: (element: LoweredIdentifier) => LoweredIdentifier): IssuedLoweredIdentifiers {
+    return this.mapTo(transform, IssuedLoweredIdentifiers.of);
+  }
+
+  override combine(other: IssuedLoweredIdentifiers): IssuedLoweredIdentifiers {
+    return this.combineTo(other, IssuedLoweredIdentifiers.of);
+  }
+
   static parse(values: readonly LoweredIdentifier[]): Result<IssuedLoweredIdentifiers, ParseError> {
     return parseConstruction(() => new IssuedLoweredIdentifiers(values));
   }

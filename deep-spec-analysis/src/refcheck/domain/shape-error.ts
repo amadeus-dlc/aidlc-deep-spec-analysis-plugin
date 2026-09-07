@@ -1,4 +1,5 @@
 import { type ArtifactPath, FindingKind, FindingTargets, TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 import type { CheckFamily } from "./check-family.ts";
 import type { ElementPath } from "./element-path.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
@@ -21,6 +22,10 @@ export class ShapeError {
 
   equals(other: ShapeError): boolean {
     return this.#element.equals(other.#element) && this.#detail === other.#detail;
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#element.hashCode(), hashOfString(this.#detail)]);
   }
 
   recordIn(family: CheckFamily, report: ReferenceCheckReport, artifact: ArtifactPath): void {

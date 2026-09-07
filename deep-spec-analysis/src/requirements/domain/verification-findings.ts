@@ -1,6 +1,7 @@
 import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
+  type Json,
   type ParseError,
   parseConstruction,
   type Result,
@@ -27,6 +28,14 @@ export class VerificationFindings
     return new VerificationFindings(values);
   }
 
+  override map(transform: (element: VerificationFinding) => VerificationFinding): VerificationFindings {
+    return this.mapTo(transform, VerificationFindings.of);
+  }
+
+  override combine(other: VerificationFindings): VerificationFindings {
+    return this.combineTo(other, VerificationFindings.of);
+  }
+
   static parse(values: readonly VerificationFinding[]): Result<VerificationFindings, ParseError> {
     return parseConstruction(() => new VerificationFindings(values));
   }
@@ -47,7 +56,7 @@ export class VerificationFindings
     return new VerificationFindings(sortVerificationFindings(this.#values));
   }
 
-  count(): number {
+  override count(): number {
     return this.#values.length;
   }
 
@@ -62,6 +71,22 @@ export class VerificationFindings
         return true;
       }),
     );
+  }
+
+  // 境界: 描画専用。契約2 の finding キー順（kind, frRefs, targets, witness,
+  // detail）は旧構築サイトの挿入順そのもの（golden バイト凍結）。witness
+  // ユニオンの内側は素通し値（材料）で逐語描画する。
+  toDocuments(): Json[] {
+    return this.#values.map((finding) => {
+      const out: { [k: string]: Json } = {
+        kind: finding.kind(),
+        frRefs: finding.functionalRequirementReferences().toStrings() as unknown as Json,
+        targets: finding.targets().toStrings() as unknown as Json,
+        witness: finding.witness().toDocument() as unknown as Json,
+        detail: finding.detail(),
+      };
+      return out as Json;
+    });
   }
 
   toArray(): readonly VerificationFinding[] {

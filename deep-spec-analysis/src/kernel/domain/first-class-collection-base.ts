@@ -11,6 +11,10 @@ export abstract class FirstClassCollectionBase<E extends Equatable<E>, Self exte
     super();
   }
 
+  abstract override map(transform: (element: E) => E): Self;
+
+  abstract override combine(other: Self): Self;
+
   isEmpty(): boolean {
     for (const _element of this) return false;
     return true;

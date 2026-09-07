@@ -309,7 +309,7 @@ describe("ir entity and temporal decls (well-formedness materials own their judg
       ["order.paid=paid", false],
     ]);
     expect(entity.name().asString()).toBe("order");
-    expect(entity.attributes().toArray().length).toBe(3);
+    expect(entity.attributes().count()).toBe(3);
   });
 
   test("temporal decl visits assert, from and to in that order with primes forbidden, and silence when absent", () => {

@@ -1,4 +1,5 @@
 import type { EnumerationMembers } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfNullable, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 
 export { AttributeBound } from "@deep-spec-analysis/kernel-domain";
 
@@ -69,14 +70,10 @@ export class RequirementAttributeDeclaration {
   }
 
   equals(other: RequirementAttributeDeclaration): boolean {
-    const values = this.#values?.toArray();
-    const otherValues = other.#values?.toArray();
     const valuesEqual =
-      values === undefined
-        ? otherValues === undefined
-        : otherValues !== undefined &&
-          values.length === otherValues.length &&
-          values.every((value, index) => value.equals(otherValues[index] as (typeof values)[number]));
+      this.#values === undefined
+        ? other.#values === undefined
+        : other.#values !== undefined && this.#values.equals(other.#values);
     const boundsEqual = (left: AttributeBound | undefined, right: AttributeBound | undefined): boolean =>
       left === undefined ? right === undefined : right !== undefined && left.equals(right);
     return (
@@ -86,6 +83,16 @@ export class RequirementAttributeDeclaration {
       boundsEqual(this.#max, other.#max) &&
       valuesEqual
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#path.hashCode(),
+      hashOfString(this.#kind),
+      hashOfNullable(this.#min, (bound) => bound.hashCode()),
+      hashOfNullable(this.#max, (bound) => bound.hashCode()),
+      hashOfNullable(this.#values, (values) => values.hashCode()),
+    ]);
   }
 
   // 種類ごとの解釈へ命じる。int には上下限（宣言がなければ undefined）、

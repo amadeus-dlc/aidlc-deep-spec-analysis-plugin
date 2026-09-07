@@ -6,7 +6,6 @@ import { IllegalArgumentException } from "@deep-spec-analysis/kernel-infrastruct
 
 import { SkipReason, UnitName } from "@deep-spec-analysis/kernel-domain";
 import type { DesignModel } from "./design-model.ts";
-import { DesignSkipped } from "./design-skipped.ts";
 import { DesignSkips } from "./design-skips.ts";
 import type { RefinementMapAcquisition } from "./refinement-map-acquisition.ts";
 import type { RefinementMaterialsIdentifier } from "./refinement-materials-identifier.ts";
@@ -46,13 +45,13 @@ export class RefinementMaterials {
     const skipAll = (reason: SkipReason, detail: string): RefinementPreparation =>
       RefinementPreparation.of(
         [],
-        DesignSkips.of(
-          [...model].flatMap((unit) =>
-            [...requirements.allTargetIds()].map((target) =>
-              DesignSkipped.of({ target, reason, detail, unit: UnitName.of(unit.name()) }),
+        model
+          .units()
+          .foldLeft(DesignSkips.of([]), (skips, unit) =>
+            skips.combine(
+              DesignSkips.forTargets(requirements.allTargetIds(), UnitName.of(unit.name()), reason, detail),
             ),
           ),
-        ),
         null,
       );
     return this.#state.map.match({
@@ -80,26 +79,24 @@ export class RefinementMaterials {
             const plan = UnitRefinementPlan.parse(unit, unitMap, requirements, artifact);
             if (plan.ok) plans.push(plan.value);
             else
-              for (const target of requirements.allTargetIds())
-                skipped = skipped.add(
-                  DesignSkipped.of({
-                    target,
-                    reason: SkipReason.compileError(),
-                    unit: UnitName.of(unit.name()),
-                    detail: `refinement plan could not be constructed: ${plan.error.kind}`,
-                  }),
-                );
+              skipped = skipped.combine(
+                DesignSkips.forTargets(
+                  requirements.allTargetIds(),
+                  UnitName.of(unit.name()),
+                  SkipReason.compileError(),
+                  `refinement plan could not be constructed: ${plan.error.kind}`,
+                ),
+              );
             continue;
           }
-          for (const target of requirements.allTargetIds())
-            skipped = skipped.add(
-              DesignSkipped.of({
-                target,
-                reason: SkipReason.absentInput(),
-                unit: UnitName.of(unit.name()),
-                detail: `the refinement map has no entry for unit ${unit.name()}`,
-              }),
-            );
+          skipped = skipped.combine(
+            DesignSkips.forTargets(
+              requirements.allTargetIds(),
+              UnitName.of(unit.name()),
+              SkipReason.absentInput(),
+              `the refinement map has no entry for unit ${unit.name()}`,
+            ),
+          );
         }
         return RefinementPreparation.of(plans, skipped, inputs);
       },

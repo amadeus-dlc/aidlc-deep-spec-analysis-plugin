@@ -1,5 +1,7 @@
 import {
   boundedValueSnapshot,
+  canonicalStringify,
+  hashOfString,
   IllegalArgumentException,
   type Json,
   jsonEquals,
@@ -49,6 +51,13 @@ export class Declaration {
   equals(other: Declaration): boolean {
     return jsonEquals(this.#value, other.#value);
   }
+
+  // jsonEquals はオブジェクトのキー順を無視するため、canonicalStringify で正準化
+  // してからハッシュ化する。等しい値は必ず同じハッシュになる。
+  hashCode(): number {
+    return hashOfString(canonicalStringify(this.#value));
+  }
+
   describe(): string {
     return JSON.stringify(this.#value);
   }

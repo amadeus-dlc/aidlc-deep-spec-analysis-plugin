@@ -4,6 +4,7 @@ import {
   type FunctionalRequirementReferences,
   type TargetIdentifier,
 } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 import type { VerificationWitness } from "./verification-witness.ts";
 
 // v1 検証 finding（契約2）——kind・要件参照・対象・witness・説明。契約2 の
@@ -67,15 +68,23 @@ export class VerificationFinding {
   }
 
   equals(other: VerificationFinding): boolean {
-    const sameValues = <T extends { equals(value: T): boolean }>(left: readonly T[], right: readonly T[]): boolean =>
-      left.length === right.length && left.every((value, index) => value.equals(right[index] as T));
     return (
       this.#kind.equals(other.#kind) &&
-      sameValues(this.#functionalRequirementReferences.toArray(), other.#functionalRequirementReferences.toArray()) &&
-      sameValues(this.#targets.toArray(), other.#targets.toArray()) &&
+      this.#functionalRequirementReferences.equals(other.#functionalRequirementReferences) &&
+      this.#targets.equals(other.#targets) &&
       this.#witness.equals(other.#witness) &&
       this.#detail === other.#detail
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#kind.hashCode(),
+      this.#functionalRequirementReferences.hashCode(),
+      this.#targets.hashCode(),
+      this.#witness.hashCode(),
+      hashOfString(this.#detail),
+    ]);
   }
 
   // 呼び手はすべて domain 判定ロジックが持つ既知の閉集合リテラル

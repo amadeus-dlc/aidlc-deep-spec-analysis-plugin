@@ -26,6 +26,14 @@ export class StructuralDebt extends FirstClassCollectionBase<StructuralObservati
   static of(observations: readonly StructuralObservation[]): StructuralDebt {
     return new StructuralDebt(observations);
   }
+  override map(transform: (element: StructuralObservation) => StructuralObservation): StructuralDebt {
+    return this.mapTo(transform, StructuralDebt.of);
+  }
+
+  override combine(other: StructuralDebt): StructuralDebt {
+    return this.combineTo(other, StructuralDebt.of);
+  }
+
   static parse(observations: readonly StructuralObservation[]): Result<StructuralDebt, ParseError> {
     return parseConstruction(() => new StructuralDebt(observations));
   }

@@ -20,7 +20,7 @@ import { err, IllegalArgumentException, ok, type Result } from "@deep-spec-analy
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { VerificationReport } from "./verification-report.ts";
 import { VerificationReportIdentifier } from "./verification-report-identifier.ts";
-import { VerificationReports } from "./verification-reports.ts";
+import type { VerificationReports } from "./verification-reports.ts";
 
 const CROSS_CHECK_BACKEND = "cross-check";
 
@@ -78,23 +78,9 @@ export class VerificationDirectory {
     if (!candidate.id().directory().equals(this.#directory)) {
       throw new IllegalArgumentException({ kind: "verification-report-directory-mismatch" });
     }
-    const fileName = candidate.id().fileName();
-    const merged: VerificationReport[] = [];
-    let replaced = false;
-    for (const sibling of this.#reports.toArray()) {
-      if (sibling.id().fileName() === fileName) {
-        merged.push(candidate);
-        replaced = true;
-      } else {
-        merged.push(sibling);
-      }
-    }
-    if (!replaced) {
-      const at = merged.findIndex((s) => s.id().fileName() > fileName);
-      if (at < 0) merged.push(candidate);
-      else merged.splice(at, 0, candidate);
-    }
-    return new VerificationDirectory(this.#directory, VerificationReports.of(merged), candidate, { kind: "absent" });
+    return new VerificationDirectory(this.#directory, this.#reports.replacingByFileName(candidate), candidate, {
+      kind: "absent",
+    });
   }
 
   // 公開する候補の適合と、それに基づく cross-check の導出を一つの操作で行う。
@@ -153,10 +139,8 @@ export class VerificationDirectory {
     const reports =
       conformedCandidate === null
         ? this.#reports
-        : VerificationReports.of(
-            this.#reports
-              .toArray()
-              .map((r) => (r.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : r)),
+        : this.#reports.map((report) =>
+            report.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : report,
           );
     return new VerificationDirectory(this.#directory, reports, conformedCandidate, conformedCrossCheck);
   }

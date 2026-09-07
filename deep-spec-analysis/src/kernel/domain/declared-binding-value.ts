@@ -34,4 +34,8 @@ export class DeclaredBindingValue {
   equals(other: DeclaredBindingValue): boolean {
     return this.#value.equals(other.#value);
   }
+
+  hashCode(): number {
+    return this.#value.hashCode();
+  }
 }

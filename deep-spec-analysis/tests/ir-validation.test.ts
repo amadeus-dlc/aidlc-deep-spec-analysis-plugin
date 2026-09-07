@@ -1302,7 +1302,7 @@ describe("design decl collections (first-class operations)", () => {
         ["t.n", 1],
       ],
     );
-    expect(bindings.toArray().length).toBe(2);
+    expect(bindings.count()).toBe(2);
 
     const attr = DesignAttributeDeclaration.of({
       name: DesignAttributeName.of("state"),
@@ -1409,7 +1409,7 @@ describe("contract-1 decl collections (first-class operations)", () => {
       ["t.x", true],
       ["t.y", 1],
     ]);
-    expect(pairs.toArray().length).toBe(2);
+    expect(pairs.count()).toBe(2);
 
     const sc = IntermediateRepresentationScenarioDeclaration.of({
       id: ScenarioIdentifier.of("SC-1"),
@@ -1532,7 +1532,7 @@ describe("materials aggregates and the persistence round-trip (repository ruling
         FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw))),
       ),
     );
-    expect([...claims].length).toBe(1);
+    expect(claims.count()).toBe(1);
     const owners = new Map<string, FunctionalRequirementReferenceClaim[]>();
     claims.toArray()[0]?.claimInto(owners);
     expect([...owners].map(([id, list]) => [id, list.map((claim) => claim.ownerDescription())])).toEqual([

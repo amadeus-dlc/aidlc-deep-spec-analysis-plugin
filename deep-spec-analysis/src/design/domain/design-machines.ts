@@ -24,6 +24,14 @@ export class DesignMachines extends FirstClassCollectionBase<DesignMachine, Desi
     return new DesignMachines(values);
   }
 
+  override map(transform: (element: DesignMachine) => DesignMachine): DesignMachines {
+    return this.mapTo(transform, DesignMachines.of);
+  }
+
+  override combine(other: DesignMachines): DesignMachines {
+    return this.combineTo(other, DesignMachines.of);
+  }
+
   static parse(values: readonly DesignMachine[]): Result<DesignMachines, ParseError> {
     return parseConstruction(() => new DesignMachines(values));
   }
@@ -34,6 +42,11 @@ export class DesignMachines extends FirstClassCollectionBase<DesignMachine, Desi
 
   override *[Symbol.iterator](): Iterator<DesignMachine> {
     yield* this.#values;
+  }
+
+  // 機械 id の列（ユニット内 id 一意性検査の材料）。
+  ids(): readonly string[] {
+    return this.#values.map((m) => m.id().asString());
   }
 
   transitionIds(): readonly string[] {

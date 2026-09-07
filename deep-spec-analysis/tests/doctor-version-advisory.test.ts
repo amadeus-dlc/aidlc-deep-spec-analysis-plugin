@@ -15,6 +15,7 @@ import {
   InstallationSource,
   InstalledRelease,
   InstalledStatus,
+  InstalledStatuses,
   ManifestEntry,
   PluginVersion,
   ReleaseCatalog,
@@ -187,7 +188,11 @@ describe("doctor version advisory", () => {
     ).execute();
     const verdict = HealthVerdict.of([
       ...presenter.installation(
-        ok([InstalledStatus.of(ManifestEntry.error(ArtifactPath.of("tools/deep-spec-analysis-doctor.ts")), true)]),
+        ok(
+          InstalledStatuses.of([
+            InstalledStatus.of(ManifestEntry.error(ArtifactPath.of("tools/deep-spec-analysis-doctor.ts")), true),
+          ]),
+        ),
       ),
       presenter.version(version),
       ...presenter.solvers(

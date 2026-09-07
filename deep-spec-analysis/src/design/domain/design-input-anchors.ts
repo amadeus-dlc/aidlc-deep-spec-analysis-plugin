@@ -1,6 +1,7 @@
 import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
+  type Json,
   type ParseError,
   parseConstruction,
   type Result,
@@ -25,6 +26,14 @@ export class DesignInputAnchors extends FirstClassCollectionBase<DesignInputAnch
     return new DesignInputAnchors(values);
   }
 
+  override map(transform: (element: DesignInputAnchor) => DesignInputAnchor): DesignInputAnchors {
+    return this.mapTo(transform, DesignInputAnchors.of);
+  }
+
+  override combine(other: DesignInputAnchors): DesignInputAnchors {
+    return this.combineTo(other, DesignInputAnchors.of);
+  }
+
   static parse(values: readonly DesignInputAnchor[]): Result<DesignInputAnchors, ParseError> {
     return parseConstruction(() => new DesignInputAnchors(values));
   }
@@ -39,6 +48,11 @@ export class DesignInputAnchors extends FirstClassCollectionBase<DesignInputAnch
 
   sortedByArtifact(): DesignInputAnchors {
     return new DesignInputAnchors([...this.#values].sort((a, b) => a.compareByArtifact(b)));
+  }
+
+  // 境界: 描画専用。ContentHash はここで asString() へ落ちる（キー順は旧挿入順）。
+  toDocuments(): Json[] {
+    return this.#values.map((anchor) => ({ artifact: anchor.artifact(), sha256: anchor.sha256().asString() }));
   }
 
   toArray(): readonly DesignInputAnchor[] {

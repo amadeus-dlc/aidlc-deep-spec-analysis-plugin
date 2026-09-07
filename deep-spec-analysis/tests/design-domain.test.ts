@@ -521,7 +521,7 @@ describe("design decls (well-formedness materials own their judgements)", () => 
       ["ticket.owner=owner", false],
     ]);
     expect(entity.name().asString()).toBe("ticket");
-    expect(entity.attributes().toArray().length).toBe(3);
+    expect(entity.attributes().count()).toBe(3);
   });
 
   test("ignore decl knows whether its state belongs to the machine's state set and its transition cell key", () => {
@@ -747,8 +747,7 @@ describe("sibling verdict document and finding (the backend's answer owns its in
       doc.match({
         unreadable: () => "unreadable",
         unavailable: (reason, method) => `unavailable:${reason}:${method}`,
-        readable: (method, findings, skipped) =>
-          `readable:${method}:${findings.toArray().length}:${skipped.toArray().length}`,
+        readable: (method, findings, skipped) => `readable:${method}:${findings.count()}:${skipped.count()}`,
       });
     expect(describeDoc(SiblingVerdictDocument.unreadable())).toBe("unreadable");
     expect(describeDoc(SiblingVerdictDocument.unavailable("boom", VerificationMethod.of("simulation")))).toBe(
@@ -829,7 +828,7 @@ describe("the design-side primitives of ruling 3-1 (BusinessRuleReference, Busin
   test("CheckedUnits and UnformalizedTargets take primitives through of() and iterate them", () => {
     const units = CheckedUnits.of([UnitName.of("unit:u2")]).add(UnitName.of("unit:u1"));
     expect([...units].map((u) => u.asString())).toEqual(["unit:u2", "unit:u1"]);
-    expect(units.toArray().length).toBe(2);
+    expect(units.count()).toBe(2);
     expect(units.sortedUniqueCanonically().toStrings()).toEqual(["unit:u1", "unit:u2"]);
     const targets = UnformalizedTargets.of([TargetIdentifier.of("BR1.1")]);
     expect(targets.covers(TargetIdentifier.of("BR1.1"))).toBe(true);

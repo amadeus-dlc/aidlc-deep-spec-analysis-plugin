@@ -54,10 +54,27 @@ export class FunctionalRequirementReferenceIndex
     return new FunctionalRequirementReferenceIndex(claims);
   }
 
+  override map(
+    transform: (element: FunctionalRequirementReferenceClaim) => FunctionalRequirementReferenceClaim,
+  ): FunctionalRequirementReferenceIndex {
+    return this.mapTo(transform, FunctionalRequirementReferenceIndex.of);
+  }
+
+  override combine(other: FunctionalRequirementReferenceIndex): FunctionalRequirementReferenceIndex {
+    return this.combineTo(other, FunctionalRequirementReferenceIndex.of);
+  }
+
   static parse(
     claims: readonly FunctionalRequirementReferenceClaim[],
   ): Result<FunctionalRequirementReferenceIndex, ParseError> {
     return parseConstruction(() => new FunctionalRequirementReferenceIndex(claims));
+  }
+
+  // 主張のコレクションから宣言順のまま索引を組む口。
+  static parseClaims(
+    claims: FunctionalRequirementReferenceClaims,
+  ): Result<FunctionalRequirementReferenceIndex, ParseError> {
+    return parseConstruction(() => new FunctionalRequirementReferenceIndex([...claims]));
   }
 
   protected override rebuild(

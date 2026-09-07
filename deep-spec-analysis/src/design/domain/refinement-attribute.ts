@@ -1,4 +1,5 @@
 import type { EnumerationMembers } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfNullable, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 import type { AttributePath } from "@deep-spec-analysis/requirements-domain";
 
 // 要件 IR の属性宣言の refinement 面——パス・種類・enum の宣言値。計画は
@@ -23,15 +24,21 @@ export class RefinementAttribute {
   }
 
   equals(other: RefinementAttribute): boolean {
-    const left = this.#values?.toArray().map((value) => value.asString()) ?? null;
-    const right = other.#values?.toArray().map((value) => value.asString()) ?? null;
+    const left = this.#values;
+    const right = other.#values;
     return (
       this.#path.asString() === other.#path.asString() &&
       this.#kind === other.#kind &&
-      (left === null || right === null
-        ? left === right
-        : left.length === right.length && left.every((value, index) => value === right[index]))
+      (left === undefined || right === undefined ? left === right : left.equals(right))
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      hashOfString(this.#path.asString()),
+      hashOfString(this.#kind),
+      hashOfNullable(this.#values, (values) => values.hashCode()),
+    ]);
   }
 
   path(): AttributePath {

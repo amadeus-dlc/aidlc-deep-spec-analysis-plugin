@@ -88,3 +88,10 @@ An equation connecting an attribute's next-state reference with the right-hand s
 
 **Assignment to a design attribute**:
 The pair consisting of the attribute updated by a design event and the right-hand side assigned to it. It is distinct from the full assignment equation.
+
+
+**Installation manifest**:
+The nonempty list of artifacts whose presence is checked for the verification tools.
+
+**Manifest entry**:
+One artifact listed for installation checks and the severity of the diagnostic when it is missing. A selection of entries may be empty.

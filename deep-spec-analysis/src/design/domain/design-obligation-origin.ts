@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 // 義務の起源（"" は未宣言・"rules" は BR 由来——decl 側の要求検査が使う語彙と
 // 同じ閉集合。未知値は素通し）。
 export class DesignObligationOrigin {
@@ -23,6 +28,10 @@ export class DesignObligationOrigin {
 
   equals(other: DesignObligationOrigin): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   asString(): string {

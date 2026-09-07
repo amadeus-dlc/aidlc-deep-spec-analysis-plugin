@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfNumber,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 export class BlockIndex {
   readonly #value: number;
@@ -20,6 +25,10 @@ export class BlockIndex {
 
   equals(other: BlockIndex): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfNumber(this.#value);
   }
 
   asNumber(): number {

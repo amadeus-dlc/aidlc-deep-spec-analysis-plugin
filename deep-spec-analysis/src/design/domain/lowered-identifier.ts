@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 // lowered 採番 id(OB-n / SC-n / BG-n)——v1 子文書のバイト面に載る識別。
 export class LoweredIdentifier {
@@ -28,6 +33,10 @@ export class LoweredIdentifier {
 
   equals(other: LoweredIdentifier): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   asString(): string {

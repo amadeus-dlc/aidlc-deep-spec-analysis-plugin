@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 export class IntermediateRepresentationAttributeName {
   readonly #value: string;
@@ -21,6 +26,10 @@ export class IntermediateRepresentationAttributeName {
 
   equals(other: IntermediateRepresentationAttributeName): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   asString(): string {

@@ -28,6 +28,14 @@ export class BusinessRuleReferenceIndex extends FirstClassCollectionBase<
     return new BusinessRuleReferenceIndex(KeySet.of(values));
   }
 
+  override map(transform: (element: BusinessRuleReference) => BusinessRuleReference): BusinessRuleReferenceIndex {
+    return this.mapTo(transform, (values) => this.rebuild(values));
+  }
+
+  override combine(other: BusinessRuleReferenceIndex): BusinessRuleReferenceIndex {
+    return this.combineTo(other, (values) => this.rebuild(values));
+  }
+
   override *[Symbol.iterator](): Iterator<BusinessRuleReference> {
     yield* this.#ids;
   }

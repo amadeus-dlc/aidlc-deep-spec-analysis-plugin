@@ -4,6 +4,7 @@ import type {
   ScenarioExpectation,
   TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfNullable, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 import type { ScenarioIdentifier } from "@deep-spec-analysis/requirements-domain";
 import { AttributePaths } from "./attribute-paths.ts";
 import { RefinementStatus } from "./refinement-status.ts";
@@ -48,6 +49,16 @@ export class RefinementScenario {
       sameIterable(this.#bindings, other.#bindings, (left, right) => left.equals(right)) &&
       sameOptional(this.#eventTrigger, other.#eventTrigger, (left, right) => left.equals(right))
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#id.hashCode(),
+      hashOfString(this.#expectation.asString()),
+      this.#functionalRequirementReferences.hashCode(),
+      this.#bindings.hashCode(),
+      hashOfNullable(this.#eventTrigger, (value) => value.hashCode()),
+    ]);
   }
 
   coverageIn(map: RefinementUnitMap): RefinementStatus {

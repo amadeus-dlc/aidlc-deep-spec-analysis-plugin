@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 // ArtifactPath — 記録ワークスペース内の成果物・配置先を指すパスの語彙。
 // 全コンテキストが「成果物パス（識別）」として話すため kernel が所有する。
 // 通常の入力は境界（entry の flags）でparseし、再構成にはofを使う。
@@ -26,6 +31,10 @@ export class ArtifactPath {
 
   equals(other: ArtifactPath): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   // 境界: adapter が fs 操作（join / read / mkdir）に使う生の値。

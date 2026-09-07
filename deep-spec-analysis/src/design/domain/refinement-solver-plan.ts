@@ -9,9 +9,7 @@ import {
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
-import type { DesignFinding } from "./design-finding.ts";
 import { DesignFindings } from "./design-findings.ts";
-import type { DesignSkipped } from "./design-skipped.ts";
 import { DesignSkips } from "./design-skips.ts";
 import type { RefinementProbe } from "./refinement-probe.ts";
 import type { RefinementQueryVerdicts } from "./refinement-query-verdicts.ts";
@@ -42,9 +40,8 @@ export class RefinementSolverPlan {
       if (!probe.belongsTo(UnitName.of(unit)))
         throw new IllegalArgumentException({ kind: "refinement-probe-unit-mismatch" });
     }
-    for (const skipped of props.compileSkips) {
-      if (skipped.unit() !== unit) throw new IllegalArgumentException({ kind: "refinement-solver-unit-mismatch" });
-    }
+    if (props.compileSkips.exists((skipped) => skipped.unit() !== unit))
+      throw new IllegalArgumentException({ kind: "refinement-solver-unit-mismatch" });
     this.#preparation = props.preparation;
     this.#pending = props.pending;
     this.#compileSkips = props.compileSkips;
@@ -73,13 +70,13 @@ export class RefinementSolverPlan {
   }
 
   interpret(results: RefinementQueryVerdicts): { findings: DesignFindings; skipped: DesignSkips } {
-    const findings: DesignFinding[] = [];
-    const skipped: DesignSkipped[] = [];
+    let findings = DesignFindings.of([]);
+    let skipped = DesignSkips.of([]);
     for (const [query, probe] of this.#pending) {
       const interpreted = probe.interpret(query, results.verdictOf(query));
-      findings.push(...interpreted.findings);
-      skipped.push(...interpreted.skipped);
+      findings = findings.combine(interpreted.findings);
+      skipped = skipped.combine(interpreted.skipped);
     }
-    return { findings: DesignFindings.of(findings), skipped: DesignSkips.of(skipped) };
+    return { findings, skipped };
   }
 }

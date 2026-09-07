@@ -24,6 +24,14 @@ export class LoweredScenarios extends FirstClassCollectionBase<LoweredScenario, 
     return new LoweredScenarios(values);
   }
 
+  override map(transform: (element: LoweredScenario) => LoweredScenario): LoweredScenarios {
+    return this.mapTo(transform, LoweredScenarios.of);
+  }
+
+  override combine(other: LoweredScenarios): LoweredScenarios {
+    return this.combineTo(other, LoweredScenarios.of);
+  }
+
   static parse(values: readonly LoweredScenario[]): Result<LoweredScenarios, ParseError> {
     return parseConstruction(() => new LoweredScenarios(values));
   }
@@ -36,7 +44,7 @@ export class LoweredScenarios extends FirstClassCollectionBase<LoweredScenario, 
     yield* this.#values;
   }
 
-  count(): number {
+  override count(): number {
     return this.#values.length;
   }
 

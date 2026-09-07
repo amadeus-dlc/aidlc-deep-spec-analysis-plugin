@@ -7,7 +7,15 @@ import {
   type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
 
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
 
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
@@ -65,6 +73,18 @@ export class LoweredScenario {
       sameOptional(this.#eventTrigger, other.#eventTrigger, (left, right) => left.equals(right)) &&
       sameExpression(this.#expect, other.#expect)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#id.hashCode(),
+      this.#origin.hashCode(),
+      hashOfString(this.#expectation.asString()),
+      this.#functionalRequirementReferences.hashCode(),
+      this.#bindings.hashCode(),
+      hashOfNullable(this.#eventTrigger, (value) => value.hashCode()),
+      hashOfNullable(this.#expect, (value) => hashOfString(canonicalStringify(value))),
+    ]);
   }
 
   origin(): DesignScenarioIdentifier {

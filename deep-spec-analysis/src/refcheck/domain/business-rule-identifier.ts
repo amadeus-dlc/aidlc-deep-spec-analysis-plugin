@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 export class BusinessRuleIdentifier {
   readonly #value: string;
@@ -18,6 +23,9 @@ export class BusinessRuleIdentifier {
   }
   equals(other: BusinessRuleIdentifier): boolean {
     return this.#value === other.#value;
+  }
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
   asString(): string {
     return this.#value;

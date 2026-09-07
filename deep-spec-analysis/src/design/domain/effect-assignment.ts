@@ -1,5 +1,6 @@
 import { AttributePath, type Expression, ExpressionTree } from "@deep-spec-analysis/kernel-domain";
 import {
+  combinedHash,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -38,6 +39,10 @@ export class EffectAssignment {
 
   equals(other: EffectAssignment): boolean {
     return this.#target.equals(other.#target) && this.#equation.equals(other.#equation);
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#target.hashCode(), this.#equation.hashCode()]);
   }
 
   static parse(target: AttributePath, equation: ExpressionTree): Result<EffectAssignment, ParseError> {

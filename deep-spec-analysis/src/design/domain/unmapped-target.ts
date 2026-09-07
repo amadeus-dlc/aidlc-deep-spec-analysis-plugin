@@ -1,3 +1,4 @@
+import { combinedHash, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 import type { UnmappedTargetReference } from "./unmapped-target-reference.ts";
 
 // unmapped[] の 1 宣言——写像しないと宣言した要件側の対象とその理由。
@@ -17,6 +18,10 @@ export class UnmappedTarget {
 
   equals(other: UnmappedTarget): boolean {
     return this.#target.equals(other.#target) && this.#reason === other.#reason;
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#target.hashCode(), hashOfString(this.#reason)]);
   }
 
   isFor(token: string): boolean {

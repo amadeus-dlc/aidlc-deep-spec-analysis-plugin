@@ -1,6 +1,7 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
 import {
   compareCanonically,
+  hashOfString,
   IllegalArgumentException,
   parseConstruction,
   type Result,
@@ -27,6 +28,9 @@ export class EnumerationMember {
   }
   equals(other: EnumerationMember): boolean {
     return this.#value === other.#value;
+  }
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
   compareTo(other: EnumerationMember): number {
     return compareCanonically(this.#value, other.#value);

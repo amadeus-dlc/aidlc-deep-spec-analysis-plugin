@@ -1,5 +1,5 @@
-import { InstallationManifest, InstalledStatus } from "@deep-spec-analysis/doctor-domain";
-import { flatMapResult, ok, type Result, traverseResult } from "@deep-spec-analysis/kernel-infrastructure";
+import { InstallationManifest, type InstalledStatuses } from "@deep-spec-analysis/doctor-domain";
+import type { Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
 import type { HarnessFileClient } from "./port/harness-file-client.ts";
 
@@ -11,9 +11,7 @@ export class CheckInstallationUseCase {
     this.#files = files;
   }
 
-  execute(): Result<readonly InstalledStatus[], RepositoryError> {
-    return traverseResult([...InstallationManifest.standard()], (entry) =>
-      flatMapResult(this.#files.isInstalled(entry), (present) => ok(InstalledStatus.of(entry, present))),
-    );
+  execute(): Result<InstalledStatuses, RepositoryError> {
+    return InstallationManifest.standard().checkedBy((entry) => this.#files.isInstalled(entry));
   }
 }

@@ -31,6 +31,14 @@ export class CheckedUnits extends FirstClassCollectionBase<UnitName, CheckedUnit
     return new CheckedUnits(values);
   }
 
+  override map(transform: (element: UnitName) => UnitName): CheckedUnits {
+    return this.mapTo(transform, CheckedUnits.of);
+  }
+
+  override combine(other: CheckedUnits): CheckedUnits {
+    return this.combineTo(other, CheckedUnits.of);
+  }
+
   static parse(values: readonly UnitName[]): Result<CheckedUnits, ParseError> {
     return parseConstruction(() => new CheckedUnits(values));
   }

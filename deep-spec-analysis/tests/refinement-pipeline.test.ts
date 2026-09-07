@@ -281,7 +281,7 @@ describe("SMT script characterization (the PR8 safety net)", () => {
         throw new Error(`expected a loaded refinement map: ${error}`);
       },
       loaded: (map, mapArtifact) => {
-        expect(map.units().toArray().length).toBeGreaterThan(0);
+        expect(map.units().count()).toBeGreaterThan(0);
         expect(map.unitMapOf(DesignUnitIdentifier.of("no-such-unit"))).toBe(undefined);
         expect(map.id().artifactPath().asString().endsWith("deep-spec-analysis-refinement-map.md")).toBe(true);
         expect(mapArtifact.asString().endsWith("deep-spec-analysis-refinement-map.md")).toBe(true);
@@ -1218,7 +1218,7 @@ describe("refinement verdict interpretation", () => {
 describe("refinement collections (first-class operations)", () => {
   test("of/add/iterator/toArray and the map-side set knowledge", () => {
     const am = AttributeMappings.of([]).add(wrapMapping(exprMapping("R.a", "D.a")));
-    expect([...am].length).toBe(1);
+    expect(am.count()).toBe(1);
     expect(am.toArray()[0]?.req().asString()).toBe("R.a");
 
     const tref = (raw: string): TransitionReference => TransitionReference.of(raw);
@@ -1243,7 +1243,7 @@ describe("refinement collections (first-class operations)", () => {
           waived: { reason: "later" },
         }),
       );
-    expect([...em].length).toBe(2);
+    expect(em.count()).toBe(2);
     // 重複トリガは最後の宣言が勝つ（旧 new Map の凍結挙動）。
     expect(
       [...(em.ofTrigger(trig("go"))?.transitions() ?? TransitionReferences.of([]))].map((t) => t.asString()),
@@ -1251,29 +1251,26 @@ describe("refinement collections (first-class operations)", () => {
     expect(em.ofTrigger(trig("go"))?.waiverReason()).toBe("later");
     expect(em.toArray()[0]?.waiverReason()).toBe(null);
     expect(em.ofTrigger(trig("ghost"))).toBe(undefined);
-    expect(em.toArray().length).toBe(2);
 
     const uref = (raw: string): UnmappedTargetReference => UnmappedTargetReference.of(raw);
     const un = UnmappedDeclarations.of([UnmappedTarget.of({ target: uref("R.x"), reason: "first" })]).add(
       UnmappedTarget.of({ target: uref("R.x"), reason: "last" }),
     );
-    expect([...un].length).toBe(2);
+    expect(un.count()).toBe(2);
     expect(un.covers(AttributePath.of("R.x"))).toBe(true);
     expect(un.covers(AttributePath.of("R.y"))).toBe(false);
     // 理由の索引も最後の宣言が勝つ。
     expect(un.reasonOf(AttributePath.of("R.x"))).toBe("last");
     expect(un.reasonOf(AttributePath.of("R.y"))).toBe(undefined);
-    expect(un.toArray().length).toBe(2);
 
     const m1 = refUnitMap({ unit: "u1" });
     const maps = RefinementUnitMaps.of([])
       .add(m1)
       .add(refUnitMap({ unit: "u1", attrMap: [exprMapping("R.b", "D.b")] }));
-    expect([...maps].length).toBe(2);
+    expect(maps.count()).toBe(2);
     // 重複ユニットは最初の宣言が勝つ（旧 find の凍結挙動）。
     expect(maps.mapOf(DesignUnitIdentifier.of("u1"))).toBe(m1);
     expect(maps.mapOf(DesignUnitIdentifier.of("zz"))).toBe(undefined);
-    expect(maps.toArray().length).toBe(2);
   });
 
   test("requirements-view collections own their index knowledge", () => {
@@ -1295,7 +1292,7 @@ describe("refinement collections (first-class operations)", () => {
           values: EnumerationMembers.of(["x"].map((value) => EnumerationMember.of(value))),
         }),
       );
-    expect([...attrs].length).toBe(3);
+    expect(attrs.count()).toBe(3);
     expect(attrs.covers("R.a")).toBe(true);
     expect(attrs.covers("R.z")).toBe(false);
     // path 索引は最後の宣言が勝つ。
@@ -1326,7 +1323,7 @@ describe("refinement collections (first-class operations)", () => {
     const obs = RefinementObligations.of([rob("OB-2", "invariant")])
       .add(rob("OB-1", "event"))
       .add(rob("OB-1", "numeric"));
-    expect([...obs].length).toBe(3);
+    expect(obs.count()).toBe(3);
     expect(obs.byId("OB-1")?.isInvariantLike()).toBe(true);
     expect(obs.byId("OB-9")).toBe(undefined);
     expect(
@@ -1346,10 +1343,9 @@ describe("refinement collections (first-class operations)", () => {
     const scs = RefinementScenarios.of([rsc("SC-2", "accept")])
       .add(rsc("SC-1", "reject"))
       .add(rsc("SC-1", "accept"));
-    expect([...scs].length).toBe(3);
+    expect(scs.count()).toBe(3);
     expect(scs.byId("SC-1")?.kind()).toBe("accept");
     expect(scs.byId("SC-9")).toBe(undefined);
-    expect(scs.toArray().length).toBe(3);
   });
 
   test("quint invariant collection knows its req ids", () => {
@@ -1361,7 +1357,7 @@ describe("refinement collections (first-class operations)", () => {
       ),
     );
     expect(inv.isEmpty()).toBe(false);
-    expect([...inv].length).toBe(1);
+    expect(inv.count()).toBe(1);
     expect([...inv.reqIds()]).toEqual(["OB-1"]);
     expect(inv.toArray()[0]?.reqId().asString()).toBe("OB-1");
     expect(inv.toArray()[0]?.reqTarget().asString()).toBe("OB-1");
@@ -1456,7 +1452,7 @@ describe("RefinementMapRepository (owner ruling: writable where writing is defin
       expect(found.ok).toBe(true);
       if (!found.ok) return;
       expect(Buffer.from(found.value.sourceDocument()).toString("utf-8")).toBe(mapDoc);
-      expect(found.value.units().toArray().length).toBeGreaterThan(0);
+      expect(found.value.units().count()).toBeGreaterThan(0);
       rmSync(path);
       expect(repo.store(found.value).ok).toBe(true);
       expect(readFileSync(path, "utf-8")).toBe(mapDoc);

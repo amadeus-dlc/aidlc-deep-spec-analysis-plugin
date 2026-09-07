@@ -1,4 +1,5 @@
 import {
+  hashOfString,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -28,6 +29,10 @@ export class NormalizedName {
 
   equals(other: NormalizedName): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   // 索引のキーに使う正規化済みトークン。

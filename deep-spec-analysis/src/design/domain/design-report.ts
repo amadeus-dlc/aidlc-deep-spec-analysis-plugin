@@ -24,7 +24,6 @@ import { DesignFindings } from "./design-findings.ts";
 import type { DesignInputAnchors } from "./design-input-anchors.ts";
 import type { DesignModel } from "./design-model.ts";
 import type { DesignReportIdentifier } from "./design-report-identifier.ts";
-import { DesignSkipped } from "./design-skipped.ts";
 import { DesignSkips } from "./design-skips.ts";
 import type { DesignUnit } from "./design-unit.ts";
 import type { LoweredUnit } from "./lowered-unit.ts";
@@ -90,6 +89,10 @@ export class DesignReport {
     return this.#id.equals(other.#id);
   }
 
+  hashCode(): number {
+    return this.#id.hashCode();
+  }
+
   #revised(changes: Partial<DesignReportParam>): DesignReport {
     return new DesignReport({
       id: this.#id,
@@ -108,7 +111,7 @@ export class DesignReport {
 
   withEvidence(findings: DesignFindings, skipped: DesignSkips): DesignReport {
     return this.#revised({
-      findings: DesignFindings.of([...this.#findings, ...findings]).sortedCanonically(),
+      findings: this.#findings.combine(findings).sortedCanonically(),
       skipped: this.#skipped.concat(skipped).sortedCanonically(),
     });
   }
@@ -133,11 +136,7 @@ export class DesignReport {
   unitUnverified(unit: DesignUnit, reason: SkipReason, detail: string): DesignReport {
     return this.withEvidence(
       DesignFindings.of([]),
-      DesignSkips.of(
-        [...unit.allTargets()].map((target) =>
-          DesignSkipped.of({ target, reason, detail, unit: UnitName.of(unit.name()) }),
-        ),
-      ),
+      DesignSkips.forTargets(unit.allTargets(), UnitName.of(unit.name()), reason, detail),
     );
   }
 
@@ -191,21 +190,12 @@ export class DesignReport {
       irHash,
       method,
       findings: DesignFindings.of([]),
-      skipped: DesignSkips.of(
-        model
-          .units()
-          .toArray()
-          .flatMap((u) =>
-            [...u.allTargets()].map((t) =>
-              DesignSkipped.of({
-                target: t,
-                reason: SkipReason.irVersionMismatch(),
-                unit: UnitName.of(u.name()),
-                detail: `design IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`,
-              }),
-            ),
-          ),
-      ),
+      skipped: model
+        .units()
+        .allTargetsSkipped(
+          SkipReason.irVersionMismatch(),
+          `design IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`,
+        ),
     });
   }
 
@@ -226,21 +216,7 @@ export class DesignReport {
       irHash,
       method,
       findings: DesignFindings.of([]),
-      skipped: DesignSkips.of(
-        model
-          .units()
-          .toArray()
-          .flatMap((u) =>
-            [...u.allTargets()].map((t) =>
-              DesignSkipped.of({
-                target: t,
-                reason: SkipReason.unavailable(),
-                unit: UnitName.of(u.name()),
-                detail: skipDetail,
-              }),
-            ),
-          ),
-      ),
+      skipped: model.units().allTargetsSkipped(SkipReason.unavailable(), skipDetail),
       unavailableReason: reason,
     });
   }
@@ -298,10 +274,10 @@ export class DesignReport {
     const backend = this.#id.backendName();
     if (!this.#irHash.equals(irHash) || this.isUnavailable())
       return ScenarioVerdict.unavailable(backend, this.#irHash, target, unit);
-    for (const skip of this.#skipped)
-      if (skip.appliesTo(unit, target)) return ScenarioVerdict.skipped(backend, this.#irHash, target, unit);
-    for (const finding of this.#findings)
-      if (finding.violatesScenario(unit, target)) return ScenarioVerdict.violated(backend, this.#irHash, target, unit);
+    if (this.#skipped.exists((skip) => skip.appliesTo(unit, target)))
+      return ScenarioVerdict.skipped(backend, this.#irHash, target, unit);
+    if (this.#findings.exists((finding) => finding.violatesScenario(unit, target)))
+      return ScenarioVerdict.violated(backend, this.#irHash, target, unit);
     return ScenarioVerdict.clean(backend, this.#irHash, target, unit);
   }
 
@@ -376,40 +352,16 @@ export class DesignReport {
     if (reason !== null) ordered.unavailable = { reason };
     const inputs = this.#inputs;
     // ContentHash は境界（描画）で asString() へ落とす（キー順は旧挿入順）。
-    if (inputs !== null)
-      ordered.inputs = inputs
-        .toArray()
-        .map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() })) as unknown as Json;
+    if (inputs !== null) ordered.inputs = inputs.toDocuments();
     const checked = this.#checked;
     if (checked !== null) ordered.checked = checked.toStrings() as unknown as Json;
-    // ペイロードのコレクションはこの描画点でだけ toArray() に降りる。キー順は
-    // 旧構築サイトの挿入順そのもの（golden バイト凍結）：finding は (kind,
-    // frRefs, targets, witness, unit, detail)、skip は (target, reason, unit,
-    // detail?)。witness は DesignWitness が逐語で降りる。
-    ordered.findings = this.#findings.toArray().map((f) => {
-      const out: { [k: string]: Json } = {
-        kind: f.kind(),
-        frRefs: f.functionalRequirementReferences().toStrings() as unknown as Json,
-        targets: f.targets().toStrings() as unknown as Json,
-        witness: f.witness().toDocument() as unknown as Json,
-        unit: f.unit(),
-        detail: f.detail(),
-      };
-      return out as Json;
-    });
-    ordered.skipped = this.#skipped.toArray().map((sk) => {
-      const out: { [k: string]: Json } = { target: sk.target().asString(), reason: sk.reason(), unit: sk.unit() };
-      const detail = sk.detail();
-      if (detail !== undefined) out.detail = detail;
-      return out as Json;
-    });
+    // ペイロードのコレクションは自分の文書像を自分で知っている。キー順は旧構築
+    // サイトの挿入順そのもの（golden バイト凍結）：finding は (kind, frRefs,
+    // targets, witness, unit, detail)、skip は (target, reason, unit, detail?)。
+    ordered.findings = this.#findings.toDocuments();
+    ordered.skipped = this.#skipped.toDocuments();
     const crossChecked = this.#crossChecked;
-    if (crossChecked !== null)
-      ordered.crossChecked = [...crossChecked].map((entry) => ({
-        backend: entry.backend().asString(),
-        unit: entry.unit().asString(),
-        targets: [...entry.targets().toStrings()],
-      }));
+    if (crossChecked !== null) ordered.crossChecked = crossChecked.toDocuments();
     return ordered;
   }
 

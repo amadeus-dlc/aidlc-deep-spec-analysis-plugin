@@ -1,5 +1,6 @@
 import {
   boundedCollectionSnapshot,
+  ok,
   type ParseError,
   parseConstruction,
   type Result,
@@ -25,6 +26,14 @@ export class ErrorMessages
 
   protected override rebuild(values: readonly ErrorMessage[]): ErrorMessages {
     return new ErrorMessages(values);
+  }
+
+  override map(transform: (element: ErrorMessage) => ErrorMessage): ErrorMessages {
+    return this.mapTo(transform, ErrorMessages.of);
+  }
+
+  override combine(other: ErrorMessages): ErrorMessages {
+    return this.combineTo(other, ErrorMessages.of);
   }
 
   static parse(values: readonly ErrorMessage[]): Result<ErrorMessages, ParseError> {
@@ -53,6 +62,12 @@ export class ErrorMessages
       );
     }
     return new ErrorMessages(values);
+  }
+
+  // collect へそのまま流せる形。既に表現できている診断なので ok で包む。
+  // 呼出側が保持値を走査して包み直さずに済み、collect の切り詰め契約も変わらない。
+  asDiagnostics(): readonly Result<ErrorMessage, ParseError>[] {
+    return [...this.#values].map((message) => ok(message));
   }
 
   add(value: ErrorMessage): ErrorMessages {

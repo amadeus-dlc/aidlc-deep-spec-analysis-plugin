@@ -5,7 +5,12 @@ import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
 // 値自身の知識で、評価器（QuintMachineComponent）はこれを問うだけ。中身の形
 // は ITF が決める JSON 値で、文書へは `toDocument` で逐語に降りる。
 
-import { boundedValueSnapshot, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  boundedValueSnapshot,
+  hashOfString,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 type TraceValueParam =
   | null
@@ -50,6 +55,10 @@ export class TraceValue {
   // 等価: JSON 描画の逐語一致（凍結挙動——ネストした値もこの一致で比べる）。
   equals(other: TraceValue): boolean {
     return JSON.stringify(this.#value) === JSON.stringify(other.#value);
+  }
+
+  hashCode(): number {
+    return hashOfString(JSON.stringify(this.#value));
   }
 
   // 境界: 文書（witness の trace／model）へ逐語で降りる。

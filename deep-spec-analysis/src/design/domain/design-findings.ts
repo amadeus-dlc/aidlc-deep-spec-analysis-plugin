@@ -1,6 +1,7 @@
 import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
+  type Json,
   type ParseError,
   parseConstruction,
   type Result,
@@ -40,6 +41,14 @@ export class DesignFindings extends FirstClassCollectionBase<DesignFinding, Desi
     return new DesignFindings(values);
   }
 
+  override map(transform: (element: DesignFinding) => DesignFinding): DesignFindings {
+    return this.mapTo(transform, DesignFindings.of);
+  }
+
+  override combine(other: DesignFindings): DesignFindings {
+    return this.combineTo(other, DesignFindings.of);
+  }
+
   static parse(values: readonly DesignFinding[]): Result<DesignFindings, ParseError> {
     return parseConstruction(() => new DesignFindings(values));
   }
@@ -56,8 +65,24 @@ export class DesignFindings extends FirstClassCollectionBase<DesignFinding, Desi
     return new DesignFindings(sortDesignFindings(this.#values));
   }
 
-  count(): number {
+  override count(): number {
     return this.#values.length;
+  }
+
+  // 境界: 描画専用。契約2 の finding キー順（kind, frRefs, targets, witness,
+  // unit, detail）は旧構築サイトの挿入順そのもの（golden バイト凍結）。
+  toDocuments(): Json[] {
+    return this.#values.map((finding) => {
+      const out: { [k: string]: Json } = {
+        kind: finding.kind(),
+        frRefs: finding.functionalRequirementReferences().toStrings() as unknown as Json,
+        targets: finding.targets().toStrings() as unknown as Json,
+        witness: finding.witness().toDocument() as unknown as Json,
+        unit: finding.unit(),
+        detail: finding.detail(),
+      };
+      return out as Json;
+    });
   }
 
   toArray(): readonly DesignFinding[] {

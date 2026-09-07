@@ -26,6 +26,16 @@ export class DesignScenarioDeclarations extends FirstClassCollectionBase<
     return new DesignScenarioDeclarations(values);
   }
 
+  override map(
+    transform: (element: DesignScenarioDeclaration) => DesignScenarioDeclaration,
+  ): DesignScenarioDeclarations {
+    return this.mapTo(transform, DesignScenarioDeclarations.of);
+  }
+
+  override combine(other: DesignScenarioDeclarations): DesignScenarioDeclarations {
+    return this.combineTo(other, DesignScenarioDeclarations.of);
+  }
+
   static parse(values: readonly DesignScenarioDeclaration[]): Result<DesignScenarioDeclarations, ParseError> {
     return parseConstruction(() => new DesignScenarioDeclarations(values));
   }

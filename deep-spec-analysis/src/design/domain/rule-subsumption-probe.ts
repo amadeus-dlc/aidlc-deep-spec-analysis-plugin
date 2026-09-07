@@ -51,7 +51,7 @@ export class RuleSubsumptionProbe {
   }
   mentionsAny(targets: TargetIdentifiers): boolean {
     return this.references().some((reference) =>
-      [...targets].some((target) => target.asString() === reference.asString()),
+      targets.exists((target) => target.asString() === reference.asString()),
     );
   }
   description(): string {

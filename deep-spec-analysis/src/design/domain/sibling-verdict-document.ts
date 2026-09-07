@@ -74,9 +74,8 @@ export class SiblingVerdictDocument {
       unreadable: () => ReachabilityVerdict.unverified(),
       unavailable: () => ReachabilityVerdict.unverified(),
       readable: (method, findings, skipped) => {
-        for (const finding of findings) {
-          if (finding.provesReachabilityOf(attrPath, state)) return ReachabilityVerdict.reached();
-        }
+        if (findings.exists((finding) => finding.provesReachabilityOf(attrPath, state)))
+          return ReachabilityVerdict.reached();
         if (method !== "bounded" || !skipped.isEmpty() || !findings.isEmpty()) return ReachabilityVerdict.unverified();
         return ReachabilityVerdict.notReachedWithinBound();
       },
@@ -164,13 +163,14 @@ export class SiblingVerdictDocument {
           relations.push(result.relation);
           break;
         case "waived":
-          for (const skip of result.skipped) {
+          result.skipped.foldLeft(skipped, (acc, skip) => {
             const target = skip.target().asString();
             if (!waived.has(target)) {
               waived.add(target);
-              skipped.push(skip);
+              acc.push(skip);
             }
-          }
+            return acc;
+          });
           break;
         case "ignored":
           break;
@@ -185,9 +185,12 @@ export class SiblingVerdictDocument {
         unavailable: `subsumption analysis failed: ${subsumptions.error.kind}`,
         method,
       };
-    findings.push(
-      ...subsumptions.value.findingsExcept(TargetIdentifiers.of([...deadDesignIds].map(TargetIdentifier.of))),
-    );
+    subsumptions.value
+      .findingsExcept(TargetIdentifiers.of([...deadDesignIds].map(TargetIdentifier.of)))
+      .foldLeft(findings, (acc, finding) => {
+        acc.push(finding);
+        return acc;
+      });
 
     const seenSkip = new Set<string>();
     for (const source of docSkipped) {

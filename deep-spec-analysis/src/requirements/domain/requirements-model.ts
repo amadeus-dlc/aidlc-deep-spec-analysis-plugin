@@ -4,7 +4,6 @@ import {
   FunctionalRequirementReferences,
   type IntermediateRepresentationVersion,
   type NonEmptyFirstClassCollection,
-  type RequirementIdentifier,
   TargetIdentifier,
   TargetIdentifiers,
   type VerificationMethod,
@@ -135,13 +134,13 @@ export class RequirementsModel {
   functionalRequirementReferencesOf(
     targets: NonEmptyFirstClassCollection<TargetIdentifier>,
   ): FunctionalRequirementReferences {
-    const refs: RequirementIdentifier[] = [];
-    for (const t of targets) {
-      const ob = this.#obligations.byId(t.asString());
-      if (ob) refs.push(...ob.functionalRequirementReferences());
-      const sc = this.#scenarios.byId(t.asString());
-      if (sc) refs.push(...sc.functionalRequirementReferences());
-    }
-    return FunctionalRequirementReferences.of(refs).sortedUnique();
+    return targets
+      .foldLeft(FunctionalRequirementReferences.of([]), (refs, target) => {
+        const obligation = this.#obligations.byId(target.asString());
+        const withObligation = obligation ? refs.combine(obligation.functionalRequirementReferences()) : refs;
+        const scenario = this.#scenarios.byId(target.asString());
+        return scenario ? withObligation.combine(scenario.functionalRequirementReferences()) : withObligation;
+      })
+      .sortedUnique();
   }
 }

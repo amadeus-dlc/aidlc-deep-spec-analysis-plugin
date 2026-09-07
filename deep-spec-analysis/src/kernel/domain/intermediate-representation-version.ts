@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 // 契約 IR のバージョン。major.minor.patch の形式を生成時に保証する。
 // 既存 IR の互換性のため先行ゼロを許す。major の解釈もこの値が所有する。
 
@@ -23,6 +28,10 @@ export class IntermediateRepresentationVersion {
 
   equals(other: IntermediateRepresentationVersion): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   // 境界: 旧実装の major 抽出と同じ計算（verdict 文言に載る）。

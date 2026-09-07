@@ -15,6 +15,10 @@ export class IntermediateRepresentationValidationMaterialsIdentifier {
     return this.#model.equals(other.#model);
   }
 
+  hashCode(): number {
+    return this.#model.hashCode();
+  }
+
   modelId(): FormalModelIdentifier {
     return this.#model;
   }

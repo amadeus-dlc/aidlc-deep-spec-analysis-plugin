@@ -12,7 +12,7 @@ import {
   type IntermediateRepresentationVersion,
   ValidationAssessment,
 } from "@deep-spec-analysis/kernel-domain";
-import { ok, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import type { ParseError, Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { FunctionalRequirementReferenceClaims } from "./functional-requirement-reference-claims.ts";
 import { FunctionalRequirementReferenceIndex } from "./functional-requirement-reference-index.ts";
 import type { IntermediateRepresentationModelDeclaration } from "./intermediate-representation-model-declaration.ts";
@@ -68,7 +68,7 @@ export class IntermediateRepresentationValidationMaterials {
   }): T {
     const errors = ErrorMessages.collect(this.#initialDiagnostics());
     if (!errors.isEmpty()) return cases.complete(ValidationAssessment.of(errors));
-    const references = FunctionalRequirementReferenceIndex.parse(this.#functionalRequirementReferenceClaims.toArray());
+    const references = FunctionalRequirementReferenceIndex.parseClaims(this.#functionalRequirementReferenceClaims);
     if (!references.ok)
       return cases.complete(
         ValidationAssessment.of(
@@ -89,7 +89,7 @@ export class IntermediateRepresentationValidationMaterials {
         `irVersion ${this.#irVersion.asString()}: unsupported major version (this validator supports ${SUPPORTED_IR_MAJOR}.x.x)`,
       );
     }
-    for (const error of this.#schemaErrors) yield ok(error);
+    yield* this.#schemaErrors.asDiagnostics();
   }
 
   id(): IntermediateRepresentationValidationMaterialsIdentifier {

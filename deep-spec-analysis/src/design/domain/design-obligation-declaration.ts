@@ -1,6 +1,14 @@
 import type { Expression } from "@deep-spec-analysis/kernel-domain";
 import { ErrorMessage, ErrorMessages, ExpressionTree } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { BusinessRuleReferences } from "./business-rule-references.ts";
 import type { DesignAttributeCatalog } from "./design-attribute-catalog.ts";
 import type { DesignObligationIdentifier } from "./design-obligation-identifier.ts";
@@ -80,6 +88,22 @@ export class DesignObligationDeclaration {
     );
   }
 
+  hashCode(): number {
+    const hashExpression = (expression: Expression | undefined): number =>
+      hashOfNullable(expression, (value) => hashOfString(canonicalStringify(value)));
+    return combinedHash([
+      this.#id.hashCode(),
+      hashOfNullable(this.#origin, (origin) => origin.hashCode()),
+      hashOfNullable(this.#businessRuleReferences, (references) => references.hashCode()),
+      hashExpression(this.#assert),
+      hashExpression(this.#guard),
+      hashExpression(this.#effect),
+      hashOfNullable(this.#temporal, (temporal) =>
+        combinedHash([hashExpression(temporal.assert), hashExpression(temporal.from), hashExpression(temporal.to)]),
+      ),
+    ]);
+  }
+
   diagnostics(catalog: DesignAttributeCatalog | null): ErrorMessages {
     const context = `obligation ${this.#id.asString()}`;
     const errors: string[] = [];
@@ -87,8 +111,10 @@ export class DesignObligationDeclaration {
       errors.push(`${context}: origin "rules" requires brRefs`);
     if (catalog !== null)
       this.#inspectExpressions((expression, primesAllowed) => {
-        for (const message of catalog.expressionDiagnostics(expression, context, primesAllowed))
-          errors.push(message.asString());
+        catalog.expressionDiagnostics(expression, context, primesAllowed).foldLeft(errors, (acc, message) => {
+          acc.push(message.asString());
+          return acc;
+        });
       });
     return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }

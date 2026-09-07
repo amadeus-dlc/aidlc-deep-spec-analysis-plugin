@@ -86,3 +86,67 @@ export function collectionMap<E, U>(source: Iterable<E>, transform: (element: E)
   }
   return values;
 }
+
+/**
+ * 反復順に要素を突き合わせる。長さが違えば等しくない。
+ * 要素の等価関係はドメイン型自身の `equals` に委ねる。
+ */
+export function collectionEquals<E extends Equatable<E>>(left: Iterable<E>, right: Iterable<E>): boolean {
+  const leftIterator = left[Symbol.iterator]();
+  const rightIterator = right[Symbol.iterator]();
+  let inspected = 0;
+  for (;;) {
+    checkReadBudget("collection-equals", inspected);
+    inspected++;
+    const leftStep = leftIterator.next();
+    const rightStep = rightIterator.next();
+    if (leftStep.done === true || rightStep.done === true) return leftStep.done === rightStep.done;
+    if (!leftStep.value.equals(rightStep.value)) return false;
+  }
+}
+
+/** `collectionEquals` と対。反復順に要素のハッシュを畳み込む。 */
+export function collectionHashCode<E extends Equatable<E>>(source: Iterable<E>): number {
+  let hash = 1;
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-hash-code", inspected);
+    inspected++;
+    hash = (31 * hash + element.hashCode()) | 0;
+  }
+  return hash;
+}
+
+export function collectionCount<E>(source: Iterable<E>): number {
+  let inspected = 0;
+  for (const _element of source) {
+    checkReadBudget("collection-count", inspected);
+    inspected++;
+  }
+  return inspected;
+}
+
+export function collectionCombine<E>(left: Iterable<E>, right: Iterable<E>): E[] {
+  const values: E[] = [];
+  for (const source of [left, right])
+    for (const element of source) {
+      checkReadBudget("collection-combine", values.length);
+      values.push(element);
+    }
+  return values;
+}
+
+export function collectionFoldLeft<E, A>(
+  source: Iterable<E>,
+  initial: A,
+  accumulate: (accumulator: A, element: E) => A,
+): A {
+  let accumulator = initial;
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-fold-left", inspected);
+    inspected++;
+    accumulator = accumulate(accumulator, element);
+  }
+  return accumulator;
+}

@@ -9,7 +9,16 @@ import {
   type TriggerName,
   type VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
-import { ok, type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
+  ok,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { QuintTemporalVerdict } from "./quint-temporal-verdict.ts";
 import { VerificationFinding } from "./verification-finding.ts";
 import { VerificationFindings } from "./verification-findings.ts";
@@ -130,8 +139,6 @@ export class Obligation {
       left === undefined
         ? right === undefined
         : right !== undefined && ExpressionTree.of(left).isCanonicallyEqual(ExpressionTree.of(right));
-    const refs = this.#functionalRequirementReferences.toArray();
-    const otherRefs = other.#functionalRequirementReferences.toArray();
     const temporalEqual = (left: TemporalExpressions | undefined, right: TemporalExpressions | undefined): boolean => {
       if (left === undefined || right === undefined) return left === right;
       return (
@@ -144,8 +151,7 @@ export class Obligation {
     return (
       this.#id.equals(other.#id) &&
       this.#nature.equals(other.#nature) &&
-      refs.length === otherRefs.length &&
-      refs.every((ref, index) => ref.equals(otherRefs[index] as (typeof refs)[number])) &&
+      this.#functionalRequirementReferences.equals(other.#functionalRequirementReferences) &&
       this.#ears === other.#ears &&
       expressionEqual(this.#assert, other.#assert) &&
       (this.#trigger === undefined
@@ -155,6 +161,30 @@ export class Obligation {
       expressionEqual(this.#effect, other.#effect) &&
       temporalEqual(this.#temporal, other.#temporal)
     );
+  }
+
+  hashCode(): number {
+    const expressionHash = (expression: Expression | undefined): number =>
+      hashOfNullable(expression, (value) => hashOfString(canonicalStringify(value)));
+    const temporalHash = hashOfNullable(this.#temporal, (temporal) =>
+      combinedHash([
+        hashOfString(temporal.pattern),
+        expressionHash(temporal.assert),
+        expressionHash(temporal.from),
+        expressionHash(temporal.to),
+      ]),
+    );
+    return combinedHash([
+      this.#id.hashCode(),
+      this.#nature.hashCode(),
+      this.#functionalRequirementReferences.hashCode(),
+      hashOfNullable(this.#ears, hashOfString),
+      expressionHash(this.#assert),
+      hashOfNullable(this.#trigger, (trigger) => trigger.hashCode()),
+      expressionHash(this.#guard),
+      expressionHash(this.#effect),
+      temporalHash,
+    ]);
   }
   nature(): ObligationNature {
     return this.#nature;

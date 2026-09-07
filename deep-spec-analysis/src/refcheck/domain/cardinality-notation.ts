@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 const CARDINALITIES = new Set(["1:1", "1:N", "N:1", "N:M"]);
 
@@ -21,6 +26,9 @@ export class CardinalityNotation {
   }
   equals(other: CardinalityNotation): boolean {
     return this.#value === other.#value;
+  }
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
   asString(): string {
     return this.#value;

@@ -54,17 +54,28 @@ export class DesignIntermediateRepresentationValidationMaterials {
     return ValidationAssessment.of(ErrorMessages.collect(this.#diagnostics()));
   }
 
-  *#diagnostics(): IterableIterator<Result<ErrorMessage, ParseError>> {
+  // 診断の発生順：版の不支持 → schema 誤り → ユニット診断（schema が通ったときだけ）。
+  #diagnostics(): Result<ErrorMessage, ParseError>[] {
     const supported = this.#irVersion.supportsMajor(SUPPORTED_DESIGN_IR_MAJOR);
+    const diagnostics: Result<ErrorMessage, ParseError>[] = [];
     if (!supported) {
-      yield ErrorMessage.parse(
-        `irVersion ${this.#irVersion.asString()}: unsupported major version (this validator supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`,
+      diagnostics.push(
+        ErrorMessage.parse(
+          `irVersion ${this.#irVersion.asString()}: unsupported major version (this validator supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`,
+        ),
       );
     }
-    for (const error of this.#schemaErrors) yield ok(error);
+    this.#schemaErrors.foldLeft(diagnostics, (acc, error) => {
+      acc.push(ok(error));
+      return acc;
+    });
     if (supported && this.#schemaErrors.isEmpty()) {
-      for (const error of this.#units.diagnostics()) yield ok(error);
+      this.#units.diagnostics().foldLeft(diagnostics, (acc, error) => {
+        acc.push(ok(error));
+        return acc;
+      });
     }
+    return diagnostics;
   }
 
   // 境界: store が書く原文（バイト逐語——UTF-8 復号で非可逆にならないよう生

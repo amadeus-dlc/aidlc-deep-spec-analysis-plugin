@@ -18,6 +18,14 @@ export class InitialStates extends FirstClassCollectionBase<InitialState, Initia
     return new InitialStates(values);
   }
 
+  override map(transform: (element: InitialState) => InitialState): InitialStates {
+    return this.mapTo(transform, InitialStates.of);
+  }
+
+  override combine(other: InitialStates): InitialStates {
+    return this.combineTo(other, InitialStates.of);
+  }
+
   static parse(values: readonly InitialState[]): Result<InitialStates, ParseError> {
     return parseConstruction(() => new InitialStates(values));
   }
@@ -32,6 +40,11 @@ export class InitialStates extends FirstClassCollectionBase<InitialState, Initia
 
   override *[Symbol.iterator](): Iterator<InitialState> {
     yield* this.#values;
+  }
+
+  // 境界: 描画・文言専用。宣言順のまま状態名の文字列へ落とす。
+  toStrings(): string[] {
+    return this.#values.map((state) => state.asString());
   }
 
   toArray(): readonly InitialState[] {

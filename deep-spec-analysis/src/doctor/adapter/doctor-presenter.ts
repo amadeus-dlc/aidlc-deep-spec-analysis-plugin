@@ -1,6 +1,6 @@
 import type {
   CoverageAssessment,
-  InstalledStatus,
+  InstalledStatuses,
   SolverAvailability,
   StructuralDebt,
   UnitCoverage,
@@ -22,9 +22,9 @@ export class DoctorPresenter {
     this.#harnessDir = config.harnessDir;
   }
 
-  installation(result: Result<readonly InstalledStatus[], RepositoryError>): Check[] {
+  installation(result: Result<InstalledStatuses, RepositoryError>): Check[] {
     if (!result.ok) return [this.#acquisitionFailure("installation manifest", result.error, CheckSeverity.error())];
-    return result.value.map((s) =>
+    return result.value.toArray().map((s) =>
       Check.of({
         pass: s.isPresent(),
         label: `deep-spec-analysis: ${s.entry().rel()} installed`,

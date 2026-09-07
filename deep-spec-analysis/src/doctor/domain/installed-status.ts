@@ -1,3 +1,4 @@
+import { combinedHash, hashOfBoolean } from "@deep-spec-analysis/kernel-infrastructure";
 import type { ManifestEntry } from "./manifest-entry.ts";
 
 // 台帳エントリの設置状態——presenter は在否と、エントリのパス・深刻度を問う。
@@ -21,5 +22,13 @@ export class InstalledStatus {
 
   isPresent(): boolean {
     return this.#present;
+  }
+
+  equals(other: InstalledStatus): boolean {
+    return this.#entry.equals(other.#entry) && this.#present === other.#present;
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#entry.hashCode(), hashOfBoolean(this.#present)]);
   }
 }

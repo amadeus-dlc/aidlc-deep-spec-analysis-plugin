@@ -1,4 +1,4 @@
-import { type ContentHash, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import type { ContentHash, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 
 // refinement が見る要件形式モデル（契約1）のビュー。requirements コンテキスト
 // とは別の寛容プロファイル（background / temporal / ears を運ばない・不在や
@@ -75,9 +75,6 @@ export class RefinementRequirements {
   // 旧 entry の reqTargets（義務 → シナリオの宣言順・未ソート——最終文書は
   // compose が正準ソートする）。
   allTargetIds(): TargetIdentifiers {
-    return TargetIdentifiers.of([
-      ...this.#obligations.toArray().map((o) => o.id().asTargetId()),
-      ...this.#scenarios.toArray().map((s) => s.id().asTargetId()),
-    ]);
+    return this.#obligations.targetIds().combine(this.#scenarios.targetIds());
   }
 }

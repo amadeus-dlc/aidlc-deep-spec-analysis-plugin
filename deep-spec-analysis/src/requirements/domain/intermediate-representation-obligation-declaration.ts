@@ -1,6 +1,14 @@
 import type { Expression } from "@deep-spec-analysis/kernel-domain";
 import { ErrorMessage, ErrorMessages, ExpressionTree } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { IntermediateRepresentationAttributeCatalog } from "./intermediate-representation-attribute-catalog.ts";
 
 import type { IntermediateRepresentationTemporalDeclaration } from "./intermediate-representation-temporal-declaration.ts";
@@ -43,13 +51,18 @@ export class IntermediateRepresentationObligationDeclaration {
   }
 
   diagnostics(catalog: IntermediateRepresentationAttributeCatalog): ErrorMessages {
+    return ErrorMessages.collect(this.diagnosticStrings(catalog).map(ErrorMessage.parse));
+  }
+
+  // 境界: 診断の表現予算は呼び手の ErrorMessages.collect が守るので、
+  // ここは文字列のまま返す。
+  diagnosticStrings(catalog: IntermediateRepresentationAttributeCatalog): string[] {
     const context = `obligation ${this.#id.asString()}`;
     const errors: string[] = [];
     this.#inspectExpressions((expression, primesAllowed) => {
-      for (const message of catalog.expressionDiagnostics(expression, context, primesAllowed))
-        errors.push(message.asString());
+      errors.push(...catalog.expressionDiagnosticStrings(expression, context, primesAllowed));
     });
-    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+    return errors;
   }
 
   id(): ObligationIdentifier {
@@ -70,6 +83,18 @@ export class IntermediateRepresentationObligationDeclaration {
         ? other.#temporal === undefined
         : other.#temporal !== undefined && this.#temporal.equals(other.#temporal))
     );
+  }
+
+  hashCode(): number {
+    const expressionHash = (expression: Expression | undefined): number =>
+      hashOfNullable(expression, (value) => hashOfString(canonicalStringify(value)));
+    return combinedHash([
+      this.#id.hashCode(),
+      expressionHash(this.#assert),
+      expressionHash(this.#guard),
+      expressionHash(this.#effect),
+      hashOfNullable(this.#temporal, (temporal) => temporal.hashCode()),
+    ]);
   }
 
   #inspectExpressions(visitor: (expression: Expression, primesAllowed: boolean) => void): void {

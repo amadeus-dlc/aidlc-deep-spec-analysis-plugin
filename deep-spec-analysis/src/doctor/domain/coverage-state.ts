@@ -1,3 +1,5 @@
+import { hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
+
 // カバレッジ行の状態——検証が無い（unverified）か、検証後に材料が変わった
 // （stale）か。要件行と設計行が共有するドメインプリミティブ（種別規律の
 // 裁定 19、2026-09-02——旧型別名を吸収）。presenter は `match` で解釈する。
@@ -22,5 +24,9 @@ export class CoverageState {
 
   equals(other: CoverageState): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 }

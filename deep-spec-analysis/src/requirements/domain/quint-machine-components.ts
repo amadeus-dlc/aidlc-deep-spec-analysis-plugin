@@ -26,6 +26,14 @@ export class QuintMachineComponents
     return new QuintMachineComponents(values);
   }
 
+  override map(transform: (element: QuintMachineComponent) => QuintMachineComponent): QuintMachineComponents {
+    return this.mapTo(transform, QuintMachineComponents.of);
+  }
+
+  override combine(other: QuintMachineComponents): QuintMachineComponents {
+    return this.combineTo(other, QuintMachineComponents.of);
+  }
+
   static parse(values: readonly QuintMachineComponent[]): Result<QuintMachineComponents, ParseError> {
     return parseConstruction(() => new QuintMachineComponents(values));
   }

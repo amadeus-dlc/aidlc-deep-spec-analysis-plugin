@@ -1,5 +1,11 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  combinedHash,
+  hashOfNumber,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 // 配布プラグインの stable Semantic Version。Git tag の任意の `v` 接頭辞を
 // 入口で正規化し、比較判断を値オブジェクト自身に閉じる。
@@ -39,6 +45,14 @@ export class PluginVersion {
 
   equals(other: PluginVersion): boolean {
     return this.#major === other.#major && this.#minor === other.#minor && this.#patch === other.#patch;
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      hashOfNumber(Number(this.#major)),
+      hashOfNumber(Number(this.#minor)),
+      hashOfNumber(Number(this.#patch)),
+    ]);
   }
 
   asString(): string {

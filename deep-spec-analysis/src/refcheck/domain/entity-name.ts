@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 // 設計文書のエンティティ名。コンストラクタが非空条件を保証する。
 
 import { NormalizedName } from "@deep-spec-analysis/kernel-domain";
@@ -21,6 +26,9 @@ export class EntityName {
   }
   equals(other: EntityName): boolean {
     return this.#value === other.#value;
+  }
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
   // 境界: 文言・witness 位置に逐語で載る宣言名。
   asString(): string {

@@ -3,6 +3,7 @@
 
 import type { ArtifactPath } from "@deep-spec-analysis/kernel-domain";
 import { BackendName } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
 
 export class ReferenceCheckReportIdentifier {
   readonly #directory: ArtifactPath;
@@ -20,6 +21,10 @@ export class ReferenceCheckReportIdentifier {
 
   equals(other: ReferenceCheckReportIdentifier): boolean {
     return this.#directory.equals(other.#directory) && this.#backend.equals(other.#backend);
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#directory.hashCode(), this.#backend.hashCode()]);
   }
 
   backendName(): BackendName {

@@ -1,6 +1,7 @@
 import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
+  type Json,
   type ParseError,
   parseConstruction,
   type Result,
@@ -22,6 +23,14 @@ export class WitnessReferences
     return new WitnessReferences(values);
   }
 
+  override map(transform: (element: WitnessReference) => WitnessReference): WitnessReferences {
+    return this.mapTo(transform, WitnessReferences.of);
+  }
+
+  override combine(other: WitnessReferences): WitnessReferences {
+    return this.combineTo(other, WitnessReferences.of);
+  }
+
   static parse(values: readonly WitnessReference[]): Result<WitnessReferences, ParseError> {
     return parseConstruction(() => new WitnessReferences(values));
   }
@@ -36,6 +45,11 @@ export class WitnessReferences
 
   override *[Symbol.iterator](): Iterator<WitnessReference> {
     yield* this.#values;
+  }
+
+  // 境界: 描画専用。witness.refs は記録順（golden 凍結）。
+  toDocuments(): Json[] {
+    return this.#values.map((reference) => reference.toDocument());
   }
 
   toArray(): readonly WitnessReference[] {

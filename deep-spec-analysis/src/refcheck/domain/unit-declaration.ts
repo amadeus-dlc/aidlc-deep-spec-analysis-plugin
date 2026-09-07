@@ -1,4 +1,5 @@
 import type { UnitName } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
 import type { UnitDeclarations } from "./unit-declarations.ts";
 import type { UnitNames } from "./unit-names.ts";
 
@@ -26,15 +27,11 @@ export class UnitDeclaration {
   }
 
   equals(other: UnitDeclaration): boolean {
-    const dependencies = this.#dependsOn.toArray();
-    const otherDependencies = other.#dependsOn.toArray();
-    return (
-      this.#name.equals(other.#name) &&
-      dependencies.length === otherDependencies.length &&
-      dependencies.every((dependency, index) =>
-        dependency.equals(otherDependencies[index] as (typeof dependencies)[number]),
-      )
-    );
+    return this.#name.equals(other.#name) && this.#dependsOn.equals(other.#dependsOn);
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#name.hashCode(), this.#dependsOn.hashCode()]);
   }
 
   dependsOn(): UnitNames {
@@ -43,6 +40,6 @@ export class UnitDeclaration {
 
   // 宣言済みユニットへの依存先を値順で（未宣言の辺は落とす——凍結挙動）。
   declaredDependencies(declared: UnitDeclarations): readonly UnitName[] {
-    return [...this.#dependsOn.sortedByValue()].filter((dep) => declared.declares(dep.asString()));
+    return this.#dependsOn.sortedByValue().declaredIn(declared);
   }
 }

@@ -1,5 +1,6 @@
 import { TargetIdentifier, TargetIdentifiers, type UnitName } from "@deep-spec-analysis/kernel-domain";
 import {
+  combinedHash,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -65,7 +66,7 @@ export class DesignUnit {
       ...seed.obligations.ids(),
       ...seed.scenarios.ids(),
       ...seed.machines.transitionIds(),
-      ...[...seed.machines].map((machine) => machine.id().asString()),
+      ...seed.machines.ids(),
     ];
     if (new Set(identifiers).size !== identifiers.length)
       throw new IllegalArgumentException({ kind: "duplicate-design-target" });
@@ -95,6 +96,17 @@ export class DesignUnit {
       sameIterable(this.#scenarios, other.#scenarios, (left, right) => left.equals(right)) &&
       sameIterable(this.#background, other.#background, (left, right) => left.equals(right))
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#unit.hashCode(),
+      this.#catalog.hashCode(),
+      this.#obligations.hashCode(),
+      this.#machines.hashCode(),
+      this.#scenarios.hashCode(),
+      this.#background.hashCode(),
+    ]);
   }
 
   id(): DesignUnitIdentifier {
@@ -164,10 +176,10 @@ export class DesignUnit {
 
     // 1) 設計義務は素通し（frRefs は帰属のため保持。空の frRefs は lowered
     //    文書で適法——v1 バックエンドは frRefs を不透明な帰属文字列として扱う）。
-    for (const ob of this.#obligations.sortedCanonically()) {
-      const id = nextId();
-      obligations.push(ob.loweredAs(id));
-    }
+    this.#obligations.sortedCanonically().foldLeft(obligations, (acc, ob) => {
+      acc.push(ob.loweredAs(nextId()));
+      return acc;
+    });
 
     // 2) 状態機械のコンパイルダウン：遷移 → 暗黙ガード・効果つき event 義務、
     //    ignores → 明示 no-op event。降ろし方は遷移／ignore 自身が知っている。
@@ -203,19 +215,15 @@ export class DesignUnit {
     }
 
     // 4) シナリオと背景。
-    const scenarios: LoweredScenario[] = [];
-    let scN = 0;
-    for (const sc of this.#scenarios.sortedCanonically()) {
-      scN += 1;
-      const id = LoweredIdentifier.of(`SC-${scN}`);
-      scenarios.push(sc.loweredAs(id));
-    }
-    const background: LoweredBackground[] = [];
-    let bgN = 0;
-    for (const bg of this.#background.sortedCanonically()) {
-      bgN += 1;
-      background.push(bg.loweredAs(LoweredIdentifier.of(`BG-${bgN}`)));
-    }
+    // SC-n / BG-n の採番は整列後の位置そのもの。
+    const scenarios = this.#scenarios.sortedCanonically().foldLeft<LoweredScenario[]>([], (acc, sc) => {
+      acc.push(sc.loweredAs(LoweredIdentifier.of(`SC-${acc.length + 1}`)));
+      return acc;
+    });
+    const background = this.#background.sortedCanonically().foldLeft<LoweredBackground[]>([], (acc, bg) => {
+      acc.push(bg.loweredAs(LoweredIdentifier.of(`BG-${acc.length + 1}`)));
+      return acc;
+    });
 
     return LoweredUnit.parse({
       machines: this.#machines,
@@ -230,7 +238,12 @@ export class DesignUnit {
   // 自由関数 designEnumValues のメソッド化（OOUI 裁定）。判定は宣言に問う。
   declaredEnumValuesOf(attrPath: string): string[] | null {
     const values = this.#catalog.enumValuesAt(attrPath);
-    return values === null ? null : values.toArray().map((member) => member.asString());
+    return values === null
+      ? null
+      : values.foldLeft<string[]>([], (acc, member) => {
+          acc.push(member.asString());
+          return acc;
+        });
   }
 
   // 属性パスの enum 宣言値（未宣言・非 enum は空）。旧 enumValuesOf の逐語移植。

@@ -43,6 +43,18 @@ export class SatisfiabilityModuloTheoriesQueryVerdicts
     return [...this];
   }
 
+  override map(
+    transform: (
+      element: SatisfiabilityModuloTheoriesQueryVerdictEntry,
+    ) => SatisfiabilityModuloTheoriesQueryVerdictEntry,
+  ): SatisfiabilityModuloTheoriesQueryVerdicts {
+    return this.mapTo(transform, SatisfiabilityModuloTheoriesQueryVerdicts.of);
+  }
+
+  override combine(other: SatisfiabilityModuloTheoriesQueryVerdicts): SatisfiabilityModuloTheoriesQueryVerdicts {
+    return this.combineTo(other, SatisfiabilityModuloTheoriesQueryVerdicts.of);
+  }
+
   static parse(
     values: readonly SatisfiabilityModuloTheoriesQueryVerdictEntry[],
   ): Result<SatisfiabilityModuloTheoriesQueryVerdicts, ParseError> {

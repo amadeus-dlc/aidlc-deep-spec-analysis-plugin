@@ -30,6 +30,14 @@ export class ObligationIdentifiers
     return new ObligationIdentifiers(values);
   }
 
+  override map(transform: (element: ObligationIdentifier) => ObligationIdentifier): ObligationIdentifiers {
+    return this.mapTo(transform, ObligationIdentifiers.of);
+  }
+
+  override combine(other: ObligationIdentifiers): ObligationIdentifiers {
+    return this.combineTo(other, ObligationIdentifiers.of);
+  }
+
   static parse(values: readonly ObligationIdentifier[]): Result<ObligationIdentifiers, ParseError> {
     return parseConstruction(() => new ObligationIdentifiers(values));
   }

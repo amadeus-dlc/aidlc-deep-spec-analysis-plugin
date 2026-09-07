@@ -12,6 +12,10 @@ import {
   type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
 import {
+  canonicalStringify,
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
   IllegalArgumentException,
   ok,
   type ParseError,
@@ -89,22 +93,27 @@ export class Scenario {
       left === undefined
         ? right === undefined
         : right !== undefined && ExpressionTree.of(left).isCanonicallyEqual(ExpressionTree.of(right));
-    const refs = this.#functionalRequirementReferences.toArray();
-    const otherRefs = other.#functionalRequirementReferences.toArray();
-    const bindings = [...this.#bindings];
-    const otherBindings = [...other.#bindings];
     return (
       this.#id.equals(other.#id) &&
       this.#expectation.asString() === other.#expectation.asString() &&
-      refs.length === otherRefs.length &&
-      refs.every((ref, index) => ref.equals(otherRefs[index] as (typeof refs)[number])) &&
-      bindings.length === otherBindings.length &&
-      bindings.every((binding, index) => binding.equals(otherBindings[index] as (typeof bindings)[number])) &&
+      this.#functionalRequirementReferences.equals(other.#functionalRequirementReferences) &&
+      this.#bindings.equals(other.#bindings) &&
       (this.#eventTrigger === undefined
         ? other.#eventTrigger === undefined
         : other.#eventTrigger !== undefined && this.#eventTrigger.equals(other.#eventTrigger)) &&
       expressionEqual(this.#expect, other.#expect)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#id.hashCode(),
+      hashOfString(this.#expectation.asString()),
+      this.#functionalRequirementReferences.hashCode(),
+      this.#bindings.hashCode(),
+      hashOfNullable(this.#eventTrigger, (trigger) => trigger.hashCode()),
+      hashOfNullable(this.#expect, (expr) => hashOfString(canonicalStringify(expr))),
+    ]);
   }
   kind(): "accept" | "reject" {
     return this.#expectation.asString();
@@ -166,7 +175,7 @@ export class Scenario {
     const violated = accept
       ? components.violatedBy(TraceState.fromBindings(this.#bindings)).ids().toTargetIds()
       : TargetIdentifiers.of([]);
-    const parsedTargets = FindingTargets.parse(target, [...violated]);
+    const parsedTargets = FindingTargets.parseWithTail(target, violated);
     if (!parsedTargets.ok) return parsedTargets;
     const targets = parsedTargets.value.sortedUniqueCanonically();
     return ok({
@@ -199,7 +208,7 @@ export class Scenario {
     if (!this.isViolatedBySatisfiability(verdict.isSat()))
       return ok({ findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) });
     const accept = this.isAccept();
-    const parsedTargets = FindingTargets.parse(target, accept ? [...coreTargets] : []);
+    const parsedTargets = FindingTargets.parseWithTail(target, accept ? coreTargets : TargetIdentifiers.of([]));
     if (!parsedTargets.ok) return parsedTargets;
     const targets = accept ? parsedTargets.value.sortedUniqueCanonically() : parsedTargets.value;
     const finding = VerificationFinding.of({

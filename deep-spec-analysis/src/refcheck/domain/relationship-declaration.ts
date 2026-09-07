@@ -5,6 +5,7 @@ import {
   TargetIdentifier,
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfBoolean, hashOfNullable } from "@deep-spec-analysis/kernel-infrastructure";
 import type { CardinalityNotation } from "./cardinality-notation.ts";
 import type { ElementPath } from "./element-path.ts";
 import type { EntityDeclarations } from "./entity-declarations.ts";
@@ -89,5 +90,15 @@ export class RelationshipDeclaration {
       optionalEqual(this.#cardinality, other.#cardinality) &&
       this.#hasDirection === other.#hasDirection
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#element.hashCode(),
+      hashOfNullable(this.#from, (from) => from.hashCode()),
+      hashOfNullable(this.#to, (to) => to.hashCode()),
+      hashOfNullable(this.#cardinality, (cardinality) => cardinality.hashCode()),
+      hashOfBoolean(this.#hasDirection),
+    ]);
   }
 }

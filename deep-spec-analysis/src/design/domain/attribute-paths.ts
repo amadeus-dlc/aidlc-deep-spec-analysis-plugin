@@ -22,6 +22,14 @@ export class AttributePaths extends FirstClassCollectionBase<AttributePath, Attr
     return new AttributePaths(values);
   }
 
+  override map(transform: (element: AttributePath) => AttributePath): AttributePaths {
+    return this.mapTo(transform, AttributePaths.of);
+  }
+
+  override combine(other: AttributePaths): AttributePaths {
+    return this.combineTo(other, AttributePaths.of);
+  }
+
   static parse(values: readonly AttributePath[]): Result<AttributePaths, ParseError> {
     return parseConstruction(() => new AttributePaths(values));
   }
@@ -37,6 +45,23 @@ export class AttributePaths extends FirstClassCollectionBase<AttributePath, Attr
 
   has(value: AttributePath): boolean {
     return this.#values.has(value);
+  }
+
+  // 文字列としての辞書順。invariant／scenario の診断文言はこの順で凍結されている。
+  sortedLexicographically(): AttributePaths {
+    return AttributePaths.of(
+      [...this.#values].sort((a, b) => (a.asString() < b.asString() ? -1 : a.asString() > b.asString() ? 1 : 0)),
+    );
+  }
+
+  // 正準順（AttributePath.compareTo）。event の診断文言はこの順。
+  sortedCanonically(): AttributePaths {
+    return AttributePaths.of([...this.#values].sort((a, b) => a.compareTo(b)));
+  }
+
+  // 境界: 描画専用。パスを文字列にして区切り文字で連結する。
+  joined(separator: string): string {
+    return [...this.#values].map((path) => path.asString()).join(separator);
   }
 
   toArray(): readonly AttributePath[] {

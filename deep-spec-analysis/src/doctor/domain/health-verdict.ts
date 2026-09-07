@@ -24,6 +24,14 @@ export class HealthVerdict
     return new HealthVerdict(values);
   }
 
+  override map(transform: (element: Check) => Check): HealthVerdict {
+    return this.mapTo(transform, HealthVerdict.of);
+  }
+
+  override combine(other: HealthVerdict): HealthVerdict {
+    return this.combineTo(other, HealthVerdict.of);
+  }
+
   static parse(values: readonly Check[]): Result<HealthVerdict, ParseError> {
     return parseConstruction(() => new HealthVerdict(values));
   }

@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 // 状態機械で初期状態として指定した状態。所属先の状態宣言との照合は機械が担う。
 export class InitialState {
@@ -20,6 +25,9 @@ export class InitialState {
 
   equals(other: InitialState): boolean {
     return this.#value === other.#value;
+  }
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
   matchesName(value: string): boolean {
     return this.#value === value;

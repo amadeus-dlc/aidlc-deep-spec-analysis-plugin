@@ -1,5 +1,11 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfNumber,
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { NumericBound } from "./numeric-bound.ts";
 
 // default 宣言 — 文書上は文字列または数値（それ以外は宣言なし扱い＝凍結挙動）。
@@ -20,6 +26,9 @@ export class AttributeDefault {
   }
   equals(other: AttributeDefault): boolean {
     return this.#value === other.#value || (Number.isNaN(this.#value) && Number.isNaN(other.#value));
+  }
+  hashCode(): number {
+    return typeof this.#value === "number" ? hashOfNumber(this.#value) : hashOfString(this.#value);
   }
   isNumber(): boolean {
     return typeof this.#value === "number";

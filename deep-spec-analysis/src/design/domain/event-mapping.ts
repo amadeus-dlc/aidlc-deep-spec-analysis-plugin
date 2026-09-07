@@ -1,4 +1,5 @@
 import type { TriggerName } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfNullable, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignUnit } from "./design-unit.ts";
 import { RefinementStatus } from "./refinement-status.ts";
 import type { TransitionReferences } from "./transition-references.ts";
@@ -30,14 +31,19 @@ export class EventMapping {
   }
 
   equals(other: EventMapping): boolean {
-    const left = [...this.#transitions].map((transition) => transition.asString());
-    const right = [...other.#transitions].map((transition) => transition.asString());
     return (
       this.#reqTrigger.equals(other.#reqTrigger) &&
       this.#reason === other.#reason &&
-      left.length === right.length &&
-      left.every((value, index) => value === right[index])
+      this.#transitions.equals(other.#transitions)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#reqTrigger.hashCode(),
+      hashOfNullable(this.#reason, hashOfString),
+      this.#transitions.hashCode(),
+    ]);
   }
 
   statusIn(unit: DesignUnit): RefinementStatus {

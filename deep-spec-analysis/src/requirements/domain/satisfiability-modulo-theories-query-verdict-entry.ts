@@ -1,4 +1,5 @@
 import type { QueryLabel } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
 import type { SatisfiabilityModuloTheoriesQueryVerdict } from "./satisfiability-modulo-theories-query-verdict.ts";
 
 // SMT クエリの索引項目。verdict だけでは QueryLabel との対応を復元できないため、
@@ -29,5 +30,9 @@ export class SatisfiabilityModuloTheoriesQueryVerdictEntry {
 
   equals(other: SatisfiabilityModuloTheoriesQueryVerdictEntry): boolean {
     return this.#query.equals(other.#query) && this.#verdict.equals(other.#verdict);
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#query.hashCode(), this.#verdict.hashCode()]);
   }
 }

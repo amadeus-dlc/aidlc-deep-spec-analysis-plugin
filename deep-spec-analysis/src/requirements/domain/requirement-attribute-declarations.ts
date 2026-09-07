@@ -31,6 +31,16 @@ export class RequirementAttributeDeclarations
     return new RequirementAttributeDeclarations(values);
   }
 
+  override map(
+    transform: (element: RequirementAttributeDeclaration) => RequirementAttributeDeclaration,
+  ): RequirementAttributeDeclarations {
+    return this.mapTo(transform, RequirementAttributeDeclarations.of);
+  }
+
+  override combine(other: RequirementAttributeDeclarations): RequirementAttributeDeclarations {
+    return this.combineTo(other, RequirementAttributeDeclarations.of);
+  }
+
   static parse(
     values: readonly RequirementAttributeDeclaration[],
   ): Result<RequirementAttributeDeclarations, ParseError> {

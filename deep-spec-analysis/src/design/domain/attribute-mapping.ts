@@ -20,7 +20,10 @@ import { sameExpression } from "./value-equality.ts";
 
 import {
   boundedValueSnapshot,
+  canonicalStringify,
+  combinedHash,
   err,
+  hashOfString,
   ok,
   type ParseError,
   parseConstruction,
@@ -84,6 +87,26 @@ export class AttributeMapping {
       left.length === right.length &&
       left.every((key, index) => key === right[index] && variant.cases[key] === otherVariant.cases[key])
     );
+  }
+
+  hashCode(): number {
+    const variant = this.#variant;
+    if (variant.kind === "expression") {
+      return combinedHash([
+        this.#req.hashCode(),
+        hashOfString(variant.kind),
+        hashOfString(canonicalStringify(variant.expr)),
+      ]);
+    }
+    if (variant.kind === "enum-cases") {
+      return combinedHash([
+        this.#req.hashCode(),
+        hashOfString(variant.kind),
+        variant.from.hashCode(),
+        hashOfString(canonicalStringify(variant.cases)),
+      ]);
+    }
+    return combinedHash([this.#req.hashCode(), hashOfString(variant.kind)]);
   }
 
   diagnostics(unit: DesignUnit, attributes: RefinementAttributes): ErrorMessages {
@@ -182,23 +205,27 @@ export class AttributeMapping {
   abstractFrameEquality(): Expression | null {
     const variant = this.#variant;
     if (variant.kind === "enum-cases") {
-      const values = EnumerationMembers.of(Object.values(variant.cases).map((value) => EnumerationMember.of(value)))
-        .sortedUniqueCanonically()
-        .toArray();
       // 2 つの設計値が等しく抽象されるのは同じ要件値へ写るとき：要件値ごとに
       // 「pre がその類に居る iff post がその類に居る」。
-      const classes = values.map((reqValue) => {
-        const members = Object.entries(variant.cases)
-          .filter(([, rv]) => reqValue.matchesLiteral(rv))
-          .map(([d]) => d)
-          .sort();
-        const inClass = (primed: boolean): Expression => {
-          const refNode: Expression = { op: "ref", path: variant.from.asString(), ...(primed ? { prime: true } : {}) };
-          const eqs = members.map((d) => ({ op: "eq", args: [refNode, { op: "enum", value: d }] }) as Expression);
-          return eqs.length === 1 ? (eqs[0] as Expression) : { op: "or", args: eqs };
-        };
-        return { op: "iff", args: [inClass(false), inClass(true)] } as Expression;
-      });
+      const classes = EnumerationMembers.of(Object.values(variant.cases).map((value) => EnumerationMember.of(value)))
+        .sortedUniqueCanonically()
+        .foldLeft<Expression[]>([], (acc, reqValue) => {
+          const members = Object.entries(variant.cases)
+            .filter(([, rv]) => reqValue.matchesLiteral(rv))
+            .map(([d]) => d)
+            .sort();
+          const inClass = (primed: boolean): Expression => {
+            const refNode: Expression = {
+              op: "ref",
+              path: variant.from.asString(),
+              ...(primed ? { prime: true } : {}),
+            };
+            const eqs = members.map((d) => ({ op: "eq", args: [refNode, { op: "enum", value: d }] }) as Expression);
+            return eqs.length === 1 ? (eqs[0] as Expression) : { op: "or", args: eqs };
+          };
+          acc.push({ op: "iff", args: [inClass(false), inClass(true)] } as Expression);
+          return acc;
+        });
       return classes.length === 1 ? (classes[0] as Expression) : { op: "and", args: classes };
     }
     if (variant.kind === "unspecified") return null;
@@ -225,8 +252,10 @@ export class AttributeMapping {
         .map((value) => EnumerationMember.of(value)),
     )
       .sortedUniqueCanonically()
-      .toArray()
-      .map((member) => member.asString());
+      .foldLeft<string[]>([], (acc, member) => {
+        acc.push(member.asString());
+        return acc;
+      });
   }
 
   // 式写像が参照する設計属性パス（昇順・重複なし）。enum-cases / unspecified

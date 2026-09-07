@@ -1,5 +1,8 @@
 import {
   err,
+  hashOfBoolean,
+  hashOfNumber,
+  hashOfString,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -46,6 +49,14 @@ export class BindingValue {
 
   equals(other: BindingValue): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return this.match<number>({
+      bool: (value) => hashOfBoolean(value),
+      int: (value) => hashOfNumber(value),
+      enum: (value) => hashOfString(value),
+    });
   }
 
   match<T>(cases: { bool: (value: boolean) => T; int: (value: number) => T; enum: (value: string) => T }): T {

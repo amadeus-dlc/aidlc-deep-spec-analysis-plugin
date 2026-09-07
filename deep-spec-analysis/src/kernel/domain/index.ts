@@ -32,7 +32,6 @@ export type { FirstClassCollection } from "./first-class-collection.ts";
 export { FirstClassCollectionBase } from "./first-class-collection-base.ts";
 export type { FirstClassCollectionFactory } from "./first-class-collection-factory.ts";
 export { FunctionalRequirementReferences } from "./functional-requirement-references.ts";
-export { ImmutableFirstClassCollection } from "./immutable-first-class-collection.ts";
 export { IntermediateRepresentationVersion } from "./intermediate-representation-version.ts";
 export { KeySet } from "./key-set.ts";
 export { KeyedIndex } from "./keyed-index.ts";

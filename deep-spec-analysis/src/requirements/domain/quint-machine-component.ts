@@ -1,6 +1,13 @@
 import type { Expression } from "@deep-spec-analysis/kernel-domain";
 import { AttributePath, ExpressionTree } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combinedHash,
+  hashOfString,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 import type { ObligationIdentifier } from "./obligation-identifier.ts";
 
@@ -87,6 +94,10 @@ export class QuintMachineComponent {
       this.#id.equals(other.#id) &&
       ExpressionTree.of(this.#expression).isCanonicallyEqual(ExpressionTree.of(other.#expression))
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#id.hashCode(), hashOfString(canonicalStringify(this.#expression))]);
   }
 
   isViolatedIn(state: TraceState): boolean {

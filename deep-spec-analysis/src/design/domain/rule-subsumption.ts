@@ -1,5 +1,7 @@
 import type { FindingTargets, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import {
+  combinedHash,
+  hashOfString,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -33,6 +35,15 @@ export class RuleSubsumption {
       left.every((target, index) => target === right[index]) &&
       this.#finding.equals(other.#finding)
     );
+  }
+  hashCode(): number {
+    return combinedHash([
+      ...this.#probe
+        .targets()
+        .toStrings()
+        .map((target) => hashOfString(target)),
+      this.#finding.hashCode(),
+    ]);
   }
   isReverseOf(other: RuleSubsumption): boolean {
     return this.#probe.isReverseOf(other.#probe);

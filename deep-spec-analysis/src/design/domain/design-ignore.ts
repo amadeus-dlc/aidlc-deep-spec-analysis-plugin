@@ -4,6 +4,7 @@ import {
   ObligationNature,
   type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 import type { LoweredOrigin } from "./lowered-origin.ts";
 // 状態機械の ignore 宣言（契約3）。(state, trigger) での no-op を人間が承認
 // した証跡。compile-down（明示 no-op event——状態は動かない）は ignore 自身が
@@ -31,6 +32,10 @@ export class DesignIgnore {
 
   equals(other: DesignIgnore): boolean {
     return this.#state === other.#state && this.#trigger.equals(other.#trigger);
+  }
+
+  hashCode(): number {
+    return combinedHash([hashOfString(this.#state), this.#trigger.hashCode()]);
   }
 
   state(): string {

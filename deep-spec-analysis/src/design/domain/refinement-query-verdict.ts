@@ -1,6 +1,9 @@
 import { QueryLabel } from "@deep-spec-analysis/kernel-domain";
 import {
   boundedValueSnapshot,
+  canonicalStringify,
+  combinedHash,
+  hashOfString,
   type ParseError,
   parseConstruction,
   type Result,
@@ -55,6 +58,15 @@ export class RefinementQueryVerdict {
       sameRecord(this.#decodedModel ?? {}, other.#decodedModel ?? {}) &&
       sameRecord(this.#decodedPostModel ?? {}, other.#decodedPostModel ?? {})
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      hashOfString(this.#status),
+      combinedHash((this.#core ?? []).map((label) => label.hashCode())),
+      hashOfString(canonicalStringify(this.#decodedModel ?? {})),
+      hashOfString(canonicalStringify(this.#decodedPostModel ?? {})),
+    ]);
   }
 
   isSat(): boolean {

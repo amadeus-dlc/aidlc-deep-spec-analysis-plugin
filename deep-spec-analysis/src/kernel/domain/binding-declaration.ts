@@ -1,3 +1,4 @@
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
 import type { AttributePath } from "./attribute-path.ts";
 import type { DeclaredBindingValue } from "./declared-binding-value.ts";
 
@@ -21,5 +22,9 @@ export class BindingDeclaration {
 
   equals(other: BindingDeclaration): boolean {
     return this.#path.equals(other.#path) && this.#value.equals(other.#value);
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#path.hashCode(), this.#value.hashCode()]);
   }
 }

@@ -20,6 +20,10 @@ export class FormalModelIdentifier {
     return this.#path.equals(other.#path);
   }
 
+  hashCode(): number {
+    return this.#path.hashCode();
+  }
+
   artifactPath(): ArtifactPath {
     return this.#path;
   }

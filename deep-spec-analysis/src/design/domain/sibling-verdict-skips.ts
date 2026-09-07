@@ -24,6 +24,14 @@ export class SiblingVerdictSkips extends FirstClassCollectionBase<SiblingVerdict
     return new SiblingVerdictSkips(values);
   }
 
+  override map(transform: (element: SiblingVerdictSkip) => SiblingVerdictSkip): SiblingVerdictSkips {
+    return this.mapTo(transform, SiblingVerdictSkips.of);
+  }
+
+  override combine(other: SiblingVerdictSkips): SiblingVerdictSkips {
+    return this.combineTo(other, SiblingVerdictSkips.of);
+  }
+
   static parse(values: readonly SiblingVerdictSkip[]): Result<SiblingVerdictSkips, ParseError> {
     return parseConstruction(() => new SiblingVerdictSkips(values));
   }

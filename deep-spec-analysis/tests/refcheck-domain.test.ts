@@ -263,16 +263,15 @@ describe("first-class collections", () => {
     const names = AttributeNames.of([]);
     expect(names.count()).toBe(0);
     expect(names.add(AttributeName.of("qty")).count()).toBe(1);
-    expect(names.count()).toBe(0);
 
-    expect([...AllowedValues.of([]).add(AllowedValue.of("open"))].length).toBe(1);
-    expect([...StateNames.of([]).add(StateName.of("open"))].length).toBe(1);
-    expect(SourceIdentifiers.of([]).add(SourceIdentifier.of("FR-1")).toArray().length).toBe(1);
-    expect(AttributeDeclarations.of([]).add(attr("a")).toArray().length).toBe(1);
-    expect(EntityDeclarations.of([]).add(entity("Order")).toArray().length).toBe(1);
+    expect(AllowedValues.of([]).add(AllowedValue.of("open")).count()).toBe(1);
+    expect(StateNames.of([]).add(StateName.of("open")).count()).toBe(1);
+    expect(SourceIdentifiers.of([]).add(SourceIdentifier.of("FR-1")).count()).toBe(1);
+    expect(AttributeDeclarations.of([]).add(attr("a")).count()).toBe(1);
+    expect(EntityDeclarations.of([]).add(entity("Order")).count()).toBe(1);
     expect(
-      [
-        ...RelationshipDeclarations.of([]).add(
+      RelationshipDeclarations.of([])
+        .add(
           RelationshipDeclaration.of({
             element: ElementPath.of("r[0]"),
             from: null,
@@ -280,8 +279,8 @@ describe("first-class collections", () => {
             cardinality: null,
             hasDirection: false,
           }),
-        ),
-      ].length,
+        )
+        .count(),
     ).toBe(1);
     expect(
       RuleDeclarations.of([])
@@ -295,12 +294,12 @@ describe("first-class collections", () => {
             missing: [],
           }),
         )
-        .toArray().length,
+        .count(),
     ).toBe(1);
     expect(
       ShapeErrors.of([])
         .add(ShapeError.of({ element: ElementPath.of("entities"), detail: "x" }))
-        .toArray().length,
+        .count(),
     ).toBe(1);
     const sketch = StateMachineSketch.of({
       spec: MachineSpecification.of("Order"),
@@ -314,7 +313,7 @@ describe("first-class collections", () => {
       component: ComponentName.of("Core"),
       attributes: AttributeNames.of([]),
     });
-    expect(DomainEntitySketches.of([]).add(de).toArray().length).toBe(1);
+    expect(DomainEntitySketches.of([]).add(de).count()).toBe(1);
   });
 
   test("collection-owned set knowledge: names, duplicates, membership, index lookups", () => {
@@ -340,7 +339,7 @@ describe("first-class collections", () => {
         }),
       ]),
     );
-    expect(rels.toArray().length).toBe(1);
+    expect(rels.count()).toBe(1);
 
     const index = SiblingUnitIndex.of(
       KeyedIndex.of([[UnitName.of("u1"), EntityDeclarations.of([entity("Order", [attr("qty")])])]]),
@@ -388,7 +387,7 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
       .add(CheckFamily.of("A-2"))
       .add(CheckFamily.of("A-3"));
     expect([...fams].map((f) => f.asString())).toEqual(["A-1", "A-2", "A-3"]);
-    expect(fams.toArray().length).toBe(3);
+    expect(fams.count()).toBe(3);
     expect(fams.checkTargets().toStrings()).toEqual(["check:A-1", "check:A-2", "check:A-3"]);
   });
 
@@ -401,7 +400,7 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     expect(names.declares("a")).toBe(true);
     expect(names.declares("z")).toBe(false);
     expect([...names.sortedByValue()].map((n) => n.asString())).toEqual(["a", "b"]);
-    expect(names.toArray().length).toBe(2);
+    expect(names.count()).toBe(2);
   });
 
   test("LineNumber and BlockIndex reject non-positive locations and rehydrate verbatim", () => {
@@ -452,12 +451,12 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
       .add(UnitDeclaration.of({ name: UnitName.of("a"), dependsOn: UnitNames.of([]) }));
     // 宣言済みの依存先だけを値順で（未宣言 "ghost" は落ちる）。
     expect(decl.declaredDependencies(decls).map((d) => d.asString())).toEqual(["a"]);
-    expect(decl.dependsOn().toArray().length).toBe(2);
+    expect(decl.dependsOn().count()).toBe(2);
     expect(decls.declares("b")).toBe(true);
     expect(decls.declares("z")).toBe(false);
     expect([...decls.sortedByName()].map((d) => d.name().asString())).toEqual(["a", "b"]);
     expect(decls.names().declares("a")).toBe(true);
-    expect(decls.toArray().length).toBe(2);
+    expect(decls.count()).toBe(2);
     const block = SpecificationBlockAssessment.sound(BlockIndex.of(1), LineNumber.of(1));
     expect(block.blockId()).toBe("contract:block-1");
     expect(block.locationLabel()).toBe("yaml fence #1 (line 1)");
@@ -504,7 +503,6 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     });
     const comps = Components.of([]).add(a).add(b);
     expect(comps.count()).toBe(2);
-    expect([...comps].length).toBe(2);
     expect(comps.declares(aName)).toBe(true);
     expect(comps.declares(ComponentName.of("Z"))).toBe(false);
     expect(comps.byName(bName)).toBe(b);
@@ -512,18 +510,16 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     expect(a.name().asString()).toBe("A");
     expect(a.element().asString()).toBe("components[0]");
     expect(a.dependsOn().listsComponent(bName)).toBe(true);
-    expect(a.dependsOn().toArray().length).toBe(1);
-    expect([...a.dependsOn()].length).toBe(1);
-    expect(a.dependsOn().add(refBtoA).toArray().length).toBe(2);
-    expect(a.dependents().toArray().length).toBe(1);
+    expect(a.dependsOn().count()).toBe(1);
+    expect(a.dependsOn().add(refBtoA).count()).toBe(2);
+    expect(a.dependents().count()).toBe(1);
     expect(a.entities().declaresEntity(EntityName.of("Order"))).toBe(true);
     expect(a.entities().declaresEntity(EntityName.of("Ghost"))).toBe(false);
-    expect([...a.entities()].length).toBe(1);
-    expect(a.entities().add(entity).toArray().length).toBe(2);
+    expect(a.entities().count()).toBe(1);
+    expect(a.entities().add(entity).count()).toBe(2);
     expect(entity.name().asString()).toBe("Order");
     expect(entity.element().asString()).toBe("components[0]");
-    expect([...entity.references()].length).toBe(1);
-    expect(entity.references().toArray().length).toBe(1);
+    expect(entity.references().count()).toBe(1);
     expect(refAtoB.component().asString()).toBe("B");
     expect(refAtoB.element().asString()).toBe("components[0]");
     // A -> B -> A の閉路は正準化されて 1 件。
@@ -542,7 +538,6 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     expect(errs.toArray()[0]?.detail()).toBe("x");
     expect(errs.toArray()[0]?.element().asString()).toBe(el.asString());
     expect(errs.count()).toBe(1);
-    expect([...errs].length).toBe(1);
   });
 
   test("components own their shape checks: PascalCase, duplicates, self-dependency, ownership (wave 6)", () => {
@@ -684,7 +679,7 @@ describe("refcheck payload collections (first-class operations)", () => {
     const ias = InputAnchors.of([])
       .add(ia)
       .addAll([InputAnchor.of({ artifact: "a.md", sha256: ContentHash.of("b".repeat(64)) })]);
-    expect([...ias].length).toBe(2);
+    expect(ias.count()).toBe(2);
     expect(
       ias
         .sortedByArtifact()
@@ -752,7 +747,7 @@ describe("sketch collection pins (one-public-type refactor)", () => {
     const des = DomainEntitySketches.of([de("B")])
       .add(de("A"))
       .add(de("a"));
-    expect([...des].length).toBe(3);
+    expect(des.count()).toBe(3);
     // 名前昇順・正規化名の初出のみ（"a" は "A" の正規化重複で落ちる——凍結順）。
     expect(des.sortedDistinctByNormalizedName().map((d) => d.name().asString())).toEqual(["A", "B"]);
     const sm = StateMachineSketch.of({
@@ -762,8 +757,7 @@ describe("sketch collection pins (one-public-type refactor)", () => {
       unsupported: null,
     });
     const sms = StateMachineSketches.of([]).add(sm);
-    expect([...sms].length).toBe(1);
-    expect(sms.toArray().length).toBe(1);
+    expect(sms.count()).toBe(1);
   });
 });
 

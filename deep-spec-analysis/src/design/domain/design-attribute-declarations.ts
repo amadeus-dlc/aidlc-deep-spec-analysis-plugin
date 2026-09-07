@@ -26,6 +26,16 @@ export class DesignAttributeDeclarations extends FirstClassCollectionBase<
     return new DesignAttributeDeclarations(values);
   }
 
+  override map(
+    transform: (element: DesignAttributeDeclaration) => DesignAttributeDeclaration,
+  ): DesignAttributeDeclarations {
+    return this.mapTo(transform, DesignAttributeDeclarations.of);
+  }
+
+  override combine(other: DesignAttributeDeclarations): DesignAttributeDeclarations {
+    return this.combineTo(other, DesignAttributeDeclarations.of);
+  }
+
   static parse(values: readonly DesignAttributeDeclaration[]): Result<DesignAttributeDeclarations, ParseError> {
     return parseConstruction(() => new DesignAttributeDeclarations(values));
   }

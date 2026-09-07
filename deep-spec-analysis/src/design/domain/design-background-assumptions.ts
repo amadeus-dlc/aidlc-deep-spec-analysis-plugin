@@ -27,6 +27,16 @@ export class DesignBackgroundAssumptions extends FirstClassCollectionBase<
     return new DesignBackgroundAssumptions(values);
   }
 
+  override map(
+    transform: (element: DesignBackgroundAssumption) => DesignBackgroundAssumption,
+  ): DesignBackgroundAssumptions {
+    return this.mapTo(transform, DesignBackgroundAssumptions.of);
+  }
+
+  override combine(other: DesignBackgroundAssumptions): DesignBackgroundAssumptions {
+    return this.combineTo(other, DesignBackgroundAssumptions.of);
+  }
+
   static parse(values: readonly DesignBackgroundAssumption[]): Result<DesignBackgroundAssumptions, ParseError> {
     return parseConstruction(() => new DesignBackgroundAssumptions(values));
   }

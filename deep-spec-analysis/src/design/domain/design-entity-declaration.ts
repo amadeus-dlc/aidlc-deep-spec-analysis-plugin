@@ -1,3 +1,4 @@
+import { combinedHash, hashOfNullable, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignAttributeDeclaration } from "./design-attribute-declaration.ts";
 import type { DesignAttributeDeclarations } from "./design-attribute-declarations.ts";
 import type { DesignEntityName } from "./design-entity-name.ts";
@@ -29,14 +30,19 @@ export class DesignEntityDeclaration {
   }
 
   equals(other: DesignEntityDeclaration): boolean {
-    const left = [...this.#attributes];
-    const right = [...other.#attributes];
     return (
       this.#name.equals(other.#name) &&
       this.#description === other.#description &&
-      left.length === right.length &&
-      left.every((attribute, index) => attribute.equals(right[index] as DesignAttributeDeclaration))
+      this.#attributes.equals(other.#attributes)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#name.hashCode(),
+      hashOfNullable(this.#description, hashOfString),
+      this.#attributes.hashCode(),
+    ]);
   }
 
   name(): DesignEntityName {
@@ -57,11 +63,11 @@ export class DesignEntityDeclaration {
   inspectAttributes(
     visitor: (coordinate: string, attribute: DesignAttributeDeclaration, duplicated: boolean) => void,
   ): void {
-    const seen = new Set<string>();
-    for (const attribute of this.#attributes) {
+    this.#attributes.foldLeft(new Set<string>(), (seen, attribute) => {
       const attributeName = attribute.name().asString();
       visitor(`${this.#name.asString()}.${attributeName}`, attribute, seen.has(attributeName));
       seen.add(attributeName);
-    }
+      return seen;
+    });
   }
 }

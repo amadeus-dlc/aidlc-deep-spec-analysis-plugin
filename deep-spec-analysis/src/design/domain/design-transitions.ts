@@ -24,6 +24,14 @@ export class DesignTransitions extends FirstClassCollectionBase<DesignTransition
     return new DesignTransitions(values);
   }
 
+  override map(transform: (element: DesignTransition) => DesignTransition): DesignTransitions {
+    return this.mapTo(transform, DesignTransitions.of);
+  }
+
+  override combine(other: DesignTransitions): DesignTransitions {
+    return this.combineTo(other, DesignTransitions.of);
+  }
+
   static parse(values: readonly DesignTransition[]): Result<DesignTransitions, ParseError> {
     return parseConstruction(() => new DesignTransitions(values));
   }

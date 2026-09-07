@@ -6,6 +6,7 @@ import {
   TargetIdentifier,
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfNullable, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 import type { DeclaredEntities } from "./declared-entities.ts";
 import type { EntityDeclaration } from "./entity-declaration.ts";
 import { FD_S1, FD_S2 } from "./functional-check-families.ts";
@@ -65,15 +66,26 @@ export class StateMachineSketch {
     if (this.#state.kind !== "declared" || other.#state.kind !== "declared") return false;
     const left = this.#state.declaration;
     const right = other.#state.declaration;
-    const states = left.states.toArray();
-    const otherStates = right.states.toArray();
     return (
       left.spec.equals(right.spec) &&
-      states.length === otherStates.length &&
-      states.every((state, index) => state.equals(otherStates[index] as (typeof states)[number])) &&
+      left.states.equals(right.states) &&
       left.fenceLine.equals(right.fenceLine) &&
       left.unsupported === right.unsupported
     );
+  }
+
+  hashCode(): number {
+    const state = this.#state;
+    if (state.kind === "unrecognized")
+      return combinedHash([hashOfString(state.kind), state.line.hashCode(), state.reason.hashCode()]);
+    const declaration = state.declaration;
+    return combinedHash([
+      hashOfString(state.kind),
+      declaration.spec.hashCode(),
+      declaration.states.hashCode(),
+      declaration.fenceLine.hashCode(),
+      hashOfNullable(declaration.unsupported, hashOfString),
+    ]);
   }
 
   // FD-S1／S2 の不変条件（種別規律の裁定 13）: 図の状態は実体のライフサイクル

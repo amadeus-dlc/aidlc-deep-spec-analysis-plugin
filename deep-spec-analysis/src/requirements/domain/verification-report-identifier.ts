@@ -4,6 +4,7 @@
 
 import type { ArtifactPath } from "@deep-spec-analysis/kernel-domain";
 import { BackendName } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
 
 export class VerificationReportIdentifier {
   readonly #directory: ArtifactPath;
@@ -21,6 +22,10 @@ export class VerificationReportIdentifier {
 
   equals(other: VerificationReportIdentifier): boolean {
     return this.#directory.equals(other.#directory) && this.#backend.equals(other.#backend);
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#directory.hashCode(), this.#backend.hashCode()]);
   }
 
   backendName(): BackendName {

@@ -24,6 +24,10 @@ export class RefinementMaterialsIdentifier {
     return this.#model.equals(other.#model);
   }
 
+  hashCode(): number {
+    return this.#model.hashCode();
+  }
+
   modelArtifactPath(): ArtifactPath {
     return this.#model.artifactPath();
   }

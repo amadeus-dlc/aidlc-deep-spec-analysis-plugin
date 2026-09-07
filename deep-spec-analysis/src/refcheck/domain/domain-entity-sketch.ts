@@ -6,6 +6,7 @@ import {
   TargetIdentifiers,
   type UnitName,
 } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
 import type { AttributeNames } from "./attribute-names.ts";
 import type { ComponentName } from "./component-name.ts";
 import type { EntityName } from "./entity-name.ts";
@@ -46,7 +47,7 @@ export class DomainEntitySketch {
   ): void {
     const compArt = componentsArtifact.asString();
     const key = this.#name.normalized();
-    const definers = unitEntities.definersOf(key).toArray();
+    const definers = unitEntities.definersOf(key).toStrings();
     if (definers.length >= 2) {
       report.finding(
         XS_1,
@@ -54,14 +55,14 @@ export class DomainEntitySketch {
         FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", this.#name.asString())), []),
         [
           WitnessReference.at(compArt, this.catalogLabel()),
-          ...definers.map((u) =>
+          ...definers.map((unit) =>
             WitnessReference.at(
-              `construction/${u.asString()}/functional-design/entities.md`,
+              `construction/${unit}/functional-design/entities.md`,
               `entity ${this.#name.asString()}`,
             ),
           ),
         ],
-        `domain entity "${this.#name.asString()}" is defined in ${definers.length} units (${definers.map((unit) => unit.asString()).join(", ")}) — ownership is duplicated`,
+        `domain entity "${this.#name.asString()}" is defined in ${definers.length} units (${definers.join(", ")}) — ownership is duplicated`,
       );
     } else if (definers.length === 0 && unitEntities.hasAnyUnit()) {
       report.finding(
@@ -95,14 +96,15 @@ export class DomainEntitySketch {
   }
 
   equals(other: DomainEntitySketch): boolean {
-    const attributes = this.#attributes.toArray();
-    const otherAttributes = other.#attributes.toArray();
     return (
       this.#name.equals(other.#name) &&
       this.#component.equals(other.#component) &&
-      attributes.length === otherAttributes.length &&
-      attributes.every((attribute, index) => attribute.equals(otherAttributes[index] as (typeof attributes)[number]))
+      this.#attributes.equals(other.#attributes)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#name.hashCode(), this.#component.hashCode(), this.#attributes.hashCode()]);
   }
 
   // 境界: witness に載るカタログ位置ラベル（凍結書式）。
@@ -112,10 +114,6 @@ export class DomainEntitySketch {
 
   // XS-3: このユニットの定義が落としている属性（値の昇順——凍結順）。
   attributesDroppedIn(unitAttrs: AttributeNames): string[] {
-    return this.#attributes
-      .toArray()
-      .filter((a) => !unitAttrs.coversNormalized(a))
-      .map((a) => a.asString())
-      .sort();
+    return this.#attributes.namesNotCoveredBy(unitAttrs);
   }
 }

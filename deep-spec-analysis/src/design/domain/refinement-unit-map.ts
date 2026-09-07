@@ -8,6 +8,7 @@ import {
   type TriggerName,
   UnitName,
 } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
 
 import type { AttributeMappings } from "./attribute-mappings.ts";
 import { DesignFinding } from "./design-finding.ts";
@@ -52,6 +53,15 @@ export class RefinementUnitMap {
       sameIterable(this.#eventMap, other.#eventMap, (left, right) => left.equals(right)) &&
       sameIterable(this.#unmapped, other.#unmapped, (left, right) => left.equals(right))
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#unit.hashCode(),
+      this.#attrMap.hashCode(),
+      this.#eventMap.hashCode(),
+      this.#unmapped.hashCode(),
+    ]);
   }
 
   gapFor(

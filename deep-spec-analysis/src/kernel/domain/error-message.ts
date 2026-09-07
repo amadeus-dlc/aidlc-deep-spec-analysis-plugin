@@ -1,4 +1,5 @@
 import {
+  hashOfString,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -29,5 +30,9 @@ export class ErrorMessage {
 
   equals(other: ErrorMessage): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 }

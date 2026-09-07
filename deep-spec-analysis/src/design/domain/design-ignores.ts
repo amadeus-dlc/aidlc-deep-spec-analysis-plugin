@@ -25,6 +25,14 @@ export class DesignIgnores extends FirstClassCollectionBase<DesignIgnore, Design
     return new DesignIgnores(values);
   }
 
+  override map(transform: (element: DesignIgnore) => DesignIgnore): DesignIgnores {
+    return this.mapTo(transform, DesignIgnores.of);
+  }
+
+  override combine(other: DesignIgnores): DesignIgnores {
+    return this.combineTo(other, DesignIgnores.of);
+  }
+
   static parse(values: readonly DesignIgnore[]): Result<DesignIgnores, ParseError> {
     return parseConstruction(() => new DesignIgnores(values));
   }

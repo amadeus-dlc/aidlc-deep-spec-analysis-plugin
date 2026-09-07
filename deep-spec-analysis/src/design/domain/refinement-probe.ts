@@ -121,10 +121,7 @@ export class RefinementProbe {
       case "enabledness":
         return this.#finding(
           FindingKind.completenessGap(),
-          FindingTargets.of(
-            target,
-            [...state.transitions].map((reference) => reference.asTargetId()),
-          ).sortedUniqueCanonically(),
+          FindingTargets.of(target, state.transitions.asTargetIds()).sortedUniqueCanonically(),
           DesignWitness.model(verdict.witnessModel()),
           `The requirements event ${id} applies in the witness design state, but none of its mapped design transitions is enabled there: the design has no answer in a region the requirement covers.`,
         );

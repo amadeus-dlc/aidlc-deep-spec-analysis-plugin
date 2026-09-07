@@ -112,7 +112,7 @@ export class SatisfiabilityModuloTheoriesProbe {
       const core = this.#coreTargets([...verdict.coreLabels()]);
       const effective =
         state.kind === "vacuity"
-          ? TargetIdentifiers.of([...core, state.subject.asTargetId()]).sortedUniqueCanonically()
+          ? core.add(state.subject.asTargetId()).sortedUniqueCanonically()
           : core.count() > 0
             ? core
             : state.fallback;

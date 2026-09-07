@@ -1,4 +1,5 @@
 import type { SkipReason, TargetIdentifier, UnitName } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfNullable, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 
 // 設計検証の skip。対象・理由・ユニットはそれぞれ型付きの値で受け取る。
 // 正準順（unit → target → reason）は記録自身の知識。
@@ -29,6 +30,15 @@ export class DesignSkipped {
       this.#unit.equals(other.#unit) &&
       this.#detail === other.#detail
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#target.hashCode(),
+      hashOfString(this.#reason.asString()),
+      this.#unit.hashCode(),
+      hashOfNullable(this.#detail, hashOfString),
+    ]);
   }
 
   target(): TargetIdentifier {

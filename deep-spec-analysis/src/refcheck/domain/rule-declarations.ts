@@ -30,6 +30,14 @@ export class RuleDeclarations
     return new RuleDeclarations(values);
   }
 
+  override map(transform: (element: RuleDeclaration) => RuleDeclaration): RuleDeclarations {
+    return this.mapTo(transform, RuleDeclarations.of);
+  }
+
+  override combine(other: RuleDeclarations): RuleDeclarations {
+    return this.combineTo(other, RuleDeclarations.of);
+  }
+
   static parse(values: readonly RuleDeclaration[]): Result<RuleDeclarations, ParseError> {
     return parseConstruction(() => new RuleDeclarations(values));
   }

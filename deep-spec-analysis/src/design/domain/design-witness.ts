@@ -9,6 +9,8 @@
 import type { Json } from "@deep-spec-analysis/kernel-infrastructure";
 import {
   boundedValueSnapshot,
+  canonicalStringify,
+  hashOfString,
   jsonEquals,
   type ParseError,
   parseConstruction,
@@ -56,6 +58,10 @@ export class DesignWitness {
 
   equals(other: DesignWitness): boolean {
     return jsonEquals(this.#document, other.#document);
+  }
+
+  hashCode(): number {
+    return hashOfString(canonicalStringify(this.#document));
   }
 
   // unsat core（`{ core: [...] }`）の形なら core のラベルだけを書き換えて返し、

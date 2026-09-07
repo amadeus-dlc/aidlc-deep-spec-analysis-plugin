@@ -4,6 +4,7 @@ import type {
   FunctionalRequirementReferences,
   UnitName,
 } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfNullable, hashOfString, type Json } from "@deep-spec-analysis/kernel-infrastructure";
 import type { WitnessReferences } from "./witness-references.ts";
 
 // refcheck finding（無沈黙台帳の 1 行）——kind・要件参照・対象・witness ref
@@ -68,20 +69,44 @@ export class Finding {
   }
 
   equals(other: Finding): boolean {
-    const sameValues = <T extends { equals(value: T): boolean }>(left: readonly T[], right: readonly T[]): boolean =>
-      left.length === right.length && left.every((value, index) => value.equals(right[index] as T));
     const unitsEqual =
       this.#unit === undefined
         ? other.#unit === undefined
         : other.#unit !== undefined && this.#unit.equals(other.#unit);
     return (
       this.#kind.equals(other.#kind) &&
-      sameValues(this.#functionalRequirementReferences.toArray(), other.#functionalRequirementReferences.toArray()) &&
-      sameValues(this.#targets.toArray(), other.#targets.toArray()) &&
-      sameValues(this.#witness.toArray(), other.#witness.toArray()) &&
+      this.#functionalRequirementReferences.equals(other.#functionalRequirementReferences) &&
+      this.#targets.equals(other.#targets) &&
+      this.#witness.equals(other.#witness) &&
       unitsEqual &&
       this.#detail === other.#detail
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#kind.hashCode(),
+      this.#functionalRequirementReferences.hashCode(),
+      this.#targets.hashCode(),
+      this.#witness.hashCode(),
+      hashOfNullable(this.#unit, (unit) => unit.hashCode()),
+      hashOfString(this.#detail),
+    ]);
+  }
+
+  // 境界: 描画専用。キー順 (kind, frRefs, targets, witness, detail, unit?) は
+  // 契約2 の凍結形。
+  toDocument(): { [k: string]: Json } {
+    const out: { [k: string]: Json } = {
+      kind: this.#kind.asString(),
+      frRefs: this.#functionalRequirementReferences.toStrings() as unknown as Json,
+      targets: this.#targets.toStrings() as unknown as Json,
+      witness: { refs: this.#witness.toDocuments() },
+      detail: this.#detail,
+    };
+    const unit = this.#unit?.asString();
+    if (unit !== undefined) out.unit = unit;
+    return out;
   }
 
   // 正準順の材料: kind 順位は所有者（コレクション）が引き、同順位なら targets の

@@ -36,16 +36,14 @@ export class DeclaredEntities {
 
   // 最上位＋各エンティティ配下の全関係宣言（旧 allRels の合成順）。
   allRels(): RelationshipDeclarations {
-    let all = this.#rels;
-    for (const e of this.#entities) all = all.concat(e.rels());
-    return all;
+    return this.#entities.foldLeft(this.#rels, (all, entity) => all.concat(entity.rels()));
   }
 
   check(report: ReferenceCheckReport, artifact: ArtifactPath): void {
-    for (const error of this.#shapeErrors) error.recordIn(FD_E1, report, artifact);
+    this.#shapeErrors.recordIn(FD_E1, report, artifact);
     this.#entities.checkDuplicates(report, artifact);
-    for (const entity of this.#entities) entity.checkDuplicateAttributes(report, artifact);
-    for (const entity of this.#entities) entity.checkAttributes(this.#entities, report, artifact);
-    for (const relationship of this.allRels()) relationship.checkAgainst(this.#entities, report, artifact);
+    this.#entities.checkDuplicateAttributes(report, artifact);
+    this.#entities.checkAttributes(report, artifact);
+    this.allRels().checkAgainst(this.#entities, report, artifact);
   }
 }

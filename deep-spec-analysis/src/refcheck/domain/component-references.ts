@@ -1,12 +1,24 @@
-import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  FindingKind,
+  FindingTargets,
+  type FirstClassCollection,
+  FirstClassCollectionBase,
+  TargetIdentifier,
+  TargetIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
   type ParseError,
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
+import { DD_2 } from "./component-check-families.ts";
 import type { ComponentName } from "./component-name.ts";
 import type { ComponentReference } from "./component-reference.ts";
+import type { Components } from "./components.ts";
+import type { ReferenceCheckReport } from "./reference-check-report.ts";
+import { WitnessReference } from "./witness-reference.ts";
 
 // 依存参照（depends_on / dependents）のファーストクラスコレクション。
 export class ComponentReferences
@@ -22,6 +34,14 @@ export class ComponentReferences
 
   protected override rebuild(values: readonly ComponentReference[]): ComponentReferences {
     return new ComponentReferences(values);
+  }
+
+  override map(transform: (element: ComponentReference) => ComponentReference): ComponentReferences {
+    return this.mapTo(transform, ComponentReferences.of);
+  }
+
+  override combine(other: ComponentReferences): ComponentReferences {
+    return this.combineTo(other, ComponentReferences.of);
   }
 
   static parse(values: readonly ComponentReference[]): Result<ComponentReferences, ParseError> {
@@ -43,6 +63,33 @@ export class ComponentReferences
   // DD-4 の対称性検査：この参照面が name を挙げているか。
   listsComponent(name: ComponentName): boolean {
     return this.#values.some((r) => r.component().equals(name));
+  }
+
+  // DD-2: 未宣言のコンポーネントを指す参照を、走査順のまま finding にする。
+  checkDeclared(
+    owner: ComponentName,
+    components: Components,
+    report: ReferenceCheckReport,
+    artifact: ArtifactPath,
+  ): void {
+    for (const reference of this.#values) {
+      if (!components.declares(reference.component()))
+        report.finding(
+          DD_2,
+          FindingKind.referenceBroken(),
+          FindingTargets.of(
+            TargetIdentifier.of(TargetIdentifiers.safe("component", reference.component().asString())),
+            [],
+          ),
+          [WitnessReference.at(artifact.asString(), reference.element().asString(), reference.component().asString())],
+          `"${owner.asString()}" references undeclared component "${reference.component().asString()}"`,
+        );
+    }
+  }
+
+  // 境界: DD-3 の witness 生成用。name を指す参照を走査順のまま返す。
+  pointingAt(name: ComponentName): readonly ComponentReference[] {
+    return this.#values.filter((reference) => reference.pointsAt(name));
   }
 
   toArray(): readonly ComponentReference[] {

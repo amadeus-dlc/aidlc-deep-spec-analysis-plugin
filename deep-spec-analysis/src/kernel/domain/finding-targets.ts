@@ -35,6 +35,14 @@ export class FindingTargets
     return TargetIdentifiers.of(values);
   }
 
+  override map(transform: (element: TargetIdentifier) => TargetIdentifier): FindingTargets {
+    return this.mapTo(transform, ([head, ...tail]) => FindingTargets.of(head, tail));
+  }
+
+  override combine(other: FindingTargets): FindingTargets {
+    return this.combineTo(other, ([head, ...tail]) => FindingTargets.of(head, tail));
+  }
+
   static of(head: TargetIdentifier, tail: readonly TargetIdentifier[]): FindingTargets {
     return new FindingTargets(head, tail);
   }
@@ -43,11 +51,16 @@ export class FindingTargets
     return parseConstruction(() => new FindingTargets(head, tail));
   }
 
+  // 先頭を明示し、続きは対象列そのものから組む。呼出側に配列化を強いない口。
+  static parseWithTail(head: TargetIdentifier, tail: TargetIdentifiers): Result<FindingTargets, ParseError> {
+    return parseConstruction(() => new FindingTargets(head, [...tail]));
+  }
+
   override *[Symbol.iterator](): Iterator<TargetIdentifier> {
     yield* this.#values;
   }
 
-  count(): number {
+  override count(): number {
     return this.#values.length;
   }
 

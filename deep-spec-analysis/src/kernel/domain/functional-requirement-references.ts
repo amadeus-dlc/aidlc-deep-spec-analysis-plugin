@@ -35,6 +35,14 @@ export class FunctionalRequirementReferences
     return new FunctionalRequirementReferences(values);
   }
 
+  override map(transform: (element: RequirementIdentifier) => RequirementIdentifier): FunctionalRequirementReferences {
+    return this.mapTo(transform, FunctionalRequirementReferences.of);
+  }
+
+  override combine(other: FunctionalRequirementReferences): FunctionalRequirementReferences {
+    return this.combineTo(other, FunctionalRequirementReferences.of);
+  }
+
   static parse(values: readonly RequirementIdentifier[]): Result<FunctionalRequirementReferences, ParseError> {
     return parseConstruction(() => new FunctionalRequirementReferences(values));
   }

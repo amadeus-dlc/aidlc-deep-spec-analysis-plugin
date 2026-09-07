@@ -75,16 +75,11 @@ export class DesignVerifyDirectory {
       throw new IllegalArgumentException({ kind: "design-report-directory-mismatch" });
     }
     const fileName = candidate.id().fileName();
-    const merged: DesignReport[] = [];
-    let replaced = false;
-    for (const sibling of this.#reports.toArray()) {
-      if (sibling.id().fileName() === fileName) {
-        merged.push(candidate);
-        replaced = true;
-      } else {
-        merged.push(sibling);
-      }
-    }
+    const replaced = this.#reports.exists((sibling) => sibling.id().fileName() === fileName);
+    const merged = this.#reports.foldLeft<DesignReport[]>([], (acc, sibling) => {
+      acc.push(sibling.id().fileName() === fileName ? candidate : sibling);
+      return acc;
+    });
     if (!replaced) {
       const at = merged.findIndex((s) => s.id().fileName() > fileName);
       if (at < 0) merged.push(candidate);
@@ -145,11 +140,7 @@ export class DesignVerifyDirectory {
     const reports =
       conformedCandidate === null
         ? this.#reports
-        : DesignReports.of(
-            this.#reports
-              .toArray()
-              .map((r) => (r.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : r)),
-          );
+        : this.#reports.map((r) => (r.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : r));
     return new DesignVerifyDirectory(this.#directory, reports, conformedCandidate, conformedCrossCheck);
   }
 

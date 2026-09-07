@@ -37,6 +37,16 @@ export class IntermediateRepresentationEntityDeclarations
     return new IntermediateRepresentationEntityDeclarations(values);
   }
 
+  override map(
+    transform: (element: IntermediateRepresentationEntityDeclaration) => IntermediateRepresentationEntityDeclaration,
+  ): IntermediateRepresentationEntityDeclarations {
+    return this.mapTo(transform, IntermediateRepresentationEntityDeclarations.of);
+  }
+
+  override combine(other: IntermediateRepresentationEntityDeclarations): IntermediateRepresentationEntityDeclarations {
+    return this.combineTo(other, IntermediateRepresentationEntityDeclarations.of);
+  }
+
   static parse(
     values: readonly IntermediateRepresentationEntityDeclaration[],
   ): Result<IntermediateRepresentationEntityDeclarations, ParseError> {
@@ -88,6 +98,12 @@ export class IntermediateRepresentationEntityDeclarations
   }
 
   diagnostics(): ErrorMessages {
+    return ErrorMessages.collect(this.diagnosticStrings().map(ErrorMessage.parse));
+  }
+
+  // 境界: 診断の表現予算は呼び手の ErrorMessages.collect が守るので、
+  // ここは文字列のまま返す。
+  diagnosticStrings(): string[] {
     const messages: string[] = [];
     this.#inspect(
       (entity, duplicate) => {
@@ -99,7 +115,7 @@ export class IntermediateRepresentationEntityDeclarations
         if (attribute.boundsOutsideSafeRange()) messages.push(`schema: ${coordinate}: bounds must be safe integers`);
       },
     );
-    return ErrorMessages.collect(messages.map(ErrorMessage.parse));
+    return messages;
   }
 
   toArray(): readonly IntermediateRepresentationEntityDeclaration[] {

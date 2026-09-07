@@ -1,4 +1,5 @@
 import { ErrorMessage, ErrorMessages, KeySet } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfBoolean, hashOfNullable } from "@deep-spec-analysis/kernel-infrastructure";
 import type { BusinessRuleReference } from "./business-rule-reference.ts";
 import type { BusinessRuleReferenceIndex } from "./business-rule-reference-index.ts";
 import type { BusinessRuleReferences } from "./business-rule-references.ts";
@@ -73,6 +74,20 @@ export class DesignUnitDeclaration {
     );
   }
 
+  hashCode(): number {
+    return combinedHash([
+      this.#unit.hashCode(),
+      this.#entities.hashCode(),
+      this.#obligations.hashCode(),
+      this.#stateMachines.hashCode(),
+      this.#scenarios.hashCode(),
+      this.#background.hashCode(),
+      this.#unformalizedTargets.hashCode(),
+      hashOfBoolean(this.#directoryExists),
+      hashOfNullable(this.#rules, (value) => value.hashCode()),
+    ]);
+  }
+
   unit(): DesignUnitIdentifier {
     return this.#unit;
   }
@@ -111,12 +126,19 @@ export class DesignUnitDeclaration {
     const errors: string[] = [];
     const unitName = this.#unit.asString();
     const where = (s: string): string => `unit ${unitName}: ${s}`;
-    for (const message of this.#entities.diagnostics()) errors.push(where(message.asString()));
+    // 診断列に unit 文脈を冠して積む（積み先の配列を畳み込みで通す）。
+    const locate = (messages: ErrorMessages): void => {
+      messages.foldLeft(errors, (acc, message) => {
+        acc.push(where(message.asString()));
+        return acc;
+      });
+    };
+    locate(this.#entities.diagnostics());
     const parsedCatalog = DesignAttributeCatalog.parse(this.#entities);
     const catalog = parsedCatalog.ok ? parsedCatalog.value : null;
     if (!parsedCatalog.ok && parsedCatalog.error.kind !== "ambiguous-design-attributes")
       errors.push(where(`attribute catalog: ${parsedCatalog.error.kind}`));
-    if (catalog !== null) for (const message of catalog.encodingDiagnostics()) errors.push(where(message.asString()));
+    if (catalog !== null) locate(catalog.encodingDiagnostics());
     const seenIds = new Set<string>();
     const dup = (id: string, ctx: string): void => {
       if (seenIds.has(id)) errors.push(where(`${ctx}: duplicate id "${id}"`));
@@ -125,14 +147,17 @@ export class DesignUnitDeclaration {
     const businessRuleReferencesUsed: BusinessRuleReference[] = [];
     const collectBr = (refs: BusinessRuleReferences | undefined): void => {
       if (refs === undefined) return;
-      for (const b of refs) businessRuleReferencesUsed.push(b);
+      refs.foldLeft(businessRuleReferencesUsed, (acc, reference) => {
+        acc.push(reference);
+        return acc;
+      });
     };
 
     for (const ob of this.#obligations) {
       const ctx = `obligation ${ob.id().asString()}`;
       dup(ob.id().asString(), ctx);
       collectBr(ob.businessRuleReferences());
-      for (const message of ob.diagnostics(catalog)) errors.push(where(message.asString()));
+      locate(ob.diagnostics(catalog));
     }
 
     for (const sm of this.#stateMachines) {
@@ -142,20 +167,20 @@ export class DesignUnitDeclaration {
         dup(tr.id().asString(), `transition ${tr.id().asString()}`);
         collectBr(tr.businessRuleReferences());
       }
-      if (catalog !== null) for (const message of sm.diagnostics(catalog)) errors.push(where(message.asString()));
+      if (catalog !== null) locate(sm.diagnostics(catalog));
     }
 
     for (const sc of this.#scenarios) {
       const ctx = `scenario ${sc.id().asString()}`;
       dup(sc.id().asString(), ctx);
       collectBr(sc.businessRuleReferences());
-      if (catalog !== null) for (const message of sc.diagnostics(catalog)) errors.push(where(message.asString()));
+      if (catalog !== null) locate(sc.diagnostics(catalog));
     }
 
     for (const bg of this.#background) {
       const ctx = `background ${bg.id().asString()}`;
       dup(bg.id().asString(), ctx);
-      if (catalog !== null) for (const message of bg.diagnostics(catalog)) errors.push(where(message.asString()));
+      if (catalog !== null) locate(bg.diagnostics(catalog));
     }
 
     // brRefs reverse-verification + BR coverage against this unit's rules.md.
@@ -179,8 +204,7 @@ export class DesignUnitDeclaration {
         );
       }
     } else {
-      for (const message of known.diagnostics(KeySet.of(businessRuleReferencesUsed), this.#unformalizedTargets))
-        errors.push(where(message.asString()));
+      locate(known.diagnostics(KeySet.of(businessRuleReferencesUsed), this.#unformalizedTargets));
     }
 
     return ErrorMessages.collect(errors.map(ErrorMessage.parse));

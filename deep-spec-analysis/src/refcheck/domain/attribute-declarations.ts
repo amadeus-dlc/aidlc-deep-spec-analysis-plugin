@@ -1,4 +1,8 @@
-import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  type FirstClassCollection,
+  FirstClassCollectionBase,
+} from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
   type ParseError,
@@ -7,6 +11,9 @@ import {
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { AttributeDeclaration } from "./attribute-declaration.ts";
 import type { AttributeName } from "./attribute-name.ts";
+import type { EntityDeclarations } from "./entity-declarations.ts";
+import type { EntityName } from "./entity-name.ts";
+import type { ReferenceCheckReport } from "./reference-check-report.ts";
 
 // 属性宣言のコレクション。重複検出・ライフサイクル属性の選定・名前解決という
 // 集合の知識を所有する。
@@ -23,6 +30,14 @@ export class AttributeDeclarations
 
   protected override rebuild(values: readonly AttributeDeclaration[]): AttributeDeclarations {
     return new AttributeDeclarations(values);
+  }
+
+  override map(transform: (element: AttributeDeclaration) => AttributeDeclaration): AttributeDeclarations {
+    return this.mapTo(transform, AttributeDeclarations.of);
+  }
+
+  override combine(other: AttributeDeclarations): AttributeDeclarations {
+    return this.combineTo(other, AttributeDeclarations.of);
   }
 
   static parse(values: readonly AttributeDeclaration[]): Result<AttributeDeclarations, ParseError> {
@@ -67,6 +82,15 @@ export class AttributeDeclarations
 
   names(): AttributeName[] {
     return this.#values.map((a) => a.name());
+  }
+
+  // 属性すべての型・境界・参照を宣言順に検査する（FD-E3〜FD-E6）。
+  check(entities: EntityDeclarations, report: ReferenceCheckReport, entity: EntityName, artifact: ArtifactPath): void {
+    for (const attribute of this.#values) {
+      attribute.checkType(report, entity, artifact);
+      attribute.checkBounds(report, entity, artifact);
+      attribute.checkReference(entities, report, entity, artifact);
+    }
   }
 
   toArray(): readonly AttributeDeclaration[] {

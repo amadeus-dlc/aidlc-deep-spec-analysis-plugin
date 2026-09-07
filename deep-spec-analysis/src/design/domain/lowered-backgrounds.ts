@@ -24,6 +24,14 @@ export class LoweredBackgrounds extends FirstClassCollectionBase<LoweredBackgrou
     return new LoweredBackgrounds(values);
   }
 
+  override map(transform: (element: LoweredBackground) => LoweredBackground): LoweredBackgrounds {
+    return this.mapTo(transform, LoweredBackgrounds.of);
+  }
+
+  override combine(other: LoweredBackgrounds): LoweredBackgrounds {
+    return this.combineTo(other, LoweredBackgrounds.of);
+  }
+
   static parse(values: readonly LoweredBackground[]): Result<LoweredBackgrounds, ParseError> {
     return parseConstruction(() => new LoweredBackgrounds(values));
   }
@@ -36,7 +44,7 @@ export class LoweredBackgrounds extends FirstClassCollectionBase<LoweredBackgrou
     yield* this.#values;
   }
 
-  count(): number {
+  override count(): number {
     return this.#values.length;
   }
 

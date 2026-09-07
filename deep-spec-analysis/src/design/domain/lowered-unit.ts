@@ -6,7 +6,7 @@ import type { DesignMachines } from "./design-machines.ts";
 
 import { err, type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { LoweredBackgrounds } from "./lowered-backgrounds.ts";
-import { LoweredObligations } from "./lowered-obligations.ts";
+import type { LoweredObligations } from "./lowered-obligations.ts";
 import type { LoweredScenarios } from "./lowered-scenarios.ts";
 import { LoweringIndex } from "./lowering-index.ts";
 import type { RefinementQuintInvariants } from "./refinement-quint-invariants.ts";
@@ -61,15 +61,15 @@ export class LoweredUnit {
 
   // 追加不変量を採番し、帰属索引と同時に拡張する。呼び手が二つを組み直さない。
   extendedWith(invariants: RefinementQuintInvariants): Result<LoweredUnit, ParseError> {
-    const obligations = [...this.#obligations];
+    let obligations = this.#obligations;
     const available = this.#index.availableObligationIdentifiers();
     for (const invariant of invariants) {
       const next = available.next();
       if (next.done) return err({ kind: "too-many-lowered-identifiers" });
-      obligations.push(invariant.loweredAs(next.value));
+      obligations = obligations.add(invariant.loweredAs(next.value));
     }
     return LoweredUnit.parse({
-      obligations: LoweredObligations.of(obligations),
+      obligations,
       machines: this.#machines,
       scenarios: this.#scenarios,
       background: this.#background,

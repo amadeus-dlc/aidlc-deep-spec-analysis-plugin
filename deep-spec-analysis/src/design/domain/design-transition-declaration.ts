@@ -1,5 +1,13 @@
 import { type Expression, ExpressionTree, type TriggerName } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { BusinessRuleReferences } from "./business-rule-references.ts";
 import type { DesignTransitionIdentifier } from "./design-transition-identifier.ts";
 import { sameExpression, sameIterable, sameOptional } from "./value-equality.ts";
@@ -54,6 +62,18 @@ export class DesignTransitionDeclaration {
       sameExpression(this.#guard, other.#guard) &&
       sameExpression(this.#effect, other.#effect)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#id.hashCode(),
+      hashOfNullable(this.#from, hashOfString),
+      hashOfNullable(this.#to, hashOfString),
+      hashOfNullable(this.#trigger, (value) => value.hashCode()),
+      hashOfNullable(this.#businessRuleReferences, (value) => value.hashCode()),
+      hashOfNullable(this.#guard, (value) => hashOfString(canonicalStringify(value))),
+      hashOfNullable(this.#effect, (value) => hashOfString(canonicalStringify(value))),
+    ]);
   }
 
   id(): DesignTransitionIdentifier {

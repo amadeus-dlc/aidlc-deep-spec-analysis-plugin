@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 // rules.md の source 欄から抽出された FR/NFR 参照。
 export class SourceIdentifier {
@@ -19,6 +24,9 @@ export class SourceIdentifier {
   }
   equals(other: SourceIdentifier): boolean {
     return this.#value === other.#value;
+  }
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
   asString(): string {
     return this.#value;

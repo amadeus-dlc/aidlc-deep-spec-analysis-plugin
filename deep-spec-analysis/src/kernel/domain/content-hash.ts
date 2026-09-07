@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 // SHA-256 ダイジェスト。64 桁の小文字16進数という不変条件を
 // コンストラクタに集約し、of / parse / ハッシュ計算の全経路で保証する。
 
@@ -38,6 +43,10 @@ export class ContentHash {
 
   equals(other: ContentHash): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   // 境界: 文書へ逐語で載る値。

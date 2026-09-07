@@ -27,6 +27,16 @@ export class SpecificationBlockAssessments
     return new SpecificationBlockAssessments(values);
   }
 
+  override map(
+    transform: (element: SpecificationBlockAssessment) => SpecificationBlockAssessment,
+  ): SpecificationBlockAssessments {
+    return this.mapTo(transform, SpecificationBlockAssessments.of);
+  }
+
+  override combine(other: SpecificationBlockAssessments): SpecificationBlockAssessments {
+    return this.combineTo(other, SpecificationBlockAssessments.of);
+  }
+
   static parse(values: readonly SpecificationBlockAssessment[]): Result<SpecificationBlockAssessments, ParseError> {
     return parseConstruction(() => new SpecificationBlockAssessments(values));
   }

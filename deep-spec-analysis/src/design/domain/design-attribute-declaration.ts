@@ -4,6 +4,7 @@ import type {
   DeclaredBound,
   EnumerationMembers,
 } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfNullable, hashOfNumber, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 
 import type { DesignAttributeName } from "./design-attribute-name.ts";
 
@@ -47,12 +48,12 @@ export class DesignAttributeDeclaration {
   }
 
   equals(other: DesignAttributeDeclaration): boolean {
-    const leftValues = this.#values?.toArray().map((value) => value.asString()) ?? null;
-    const rightValues = other.#values?.toArray().map((value) => value.asString()) ?? null;
+    const leftValues = this.#values;
+    const rightValues = other.#values;
     const sameValues =
-      leftValues === null || rightValues === null
+      leftValues === undefined || rightValues === undefined
         ? leftValues === rightValues
-        : leftValues.length === rightValues.length && leftValues.every((value, index) => value === rightValues[index]);
+        : leftValues.equals(rightValues);
     return (
       this.#name.equals(other.#name) &&
       this.#kind.equals(other.#kind) &&
@@ -61,6 +62,19 @@ export class DesignAttributeDeclaration {
       this.#max?.asNumber() === other.#max?.asNumber() &&
       sameValues
     );
+  }
+
+  hashCode(): number {
+    const values = this.#values;
+    const valuesHash = values === undefined ? 0 : values.hashCode();
+    return combinedHash([
+      this.#name.hashCode(),
+      this.#kind.hashCode(),
+      hashOfNullable(this.#description, hashOfString),
+      hashOfNullable(this.#min, (bound) => hashOfNumber(bound.asNumber())),
+      hashOfNullable(this.#max, (bound) => hashOfNumber(bound.asNumber())),
+      valuesHash,
+    ]);
   }
 
   // 同定面（座標組み立て・重複検査の材料）。
