@@ -153,9 +153,15 @@ export class DoctorPresenter {
             unavailable: (reason) => `could not be inspected (${reason.asString()})`,
           },
         )}`,
-        fix:
-          "Open the artifact and fix (or record as an accepted risk) each finding; " +
-          "the deep-spec-refcheck sensors re-check on every write and write the detail next to the artifact under deep-spec-refcheck/.",
+        fix: row.match({
+          complete: () =>
+            "Open the artifact and fix (or record as an accepted risk) each finding; " +
+            "the deep-spec-refcheck sensors re-check on every write and write the detail next to the artifact under deep-spec-refcheck/.",
+          partial: () =>
+            "Run the deep-spec-refcheck sensor in write mode and inspect deep-spec-refcheck/*.json for skipped inputs; restore the required inputs, run the sensor again, then fix or record each finding.",
+          unavailable: (reason) =>
+            `Resolve the deep-spec-refcheck backend error (${reason.asString()}), run the sensor in write mode, then run the doctor again.`,
+        }),
         severity: CheckSeverity.advisory(),
       }),
     );

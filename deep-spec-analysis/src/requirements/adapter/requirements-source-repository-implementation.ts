@@ -36,7 +36,10 @@ function findRequirementsFile(recordDir: string): RequirementsFileSearch {
   if (!phases.ok) {
     return phases.error.kind === "not-found" ? { kind: "absent" } : { kind: "unreadable", cause: phases.error.cause };
   }
-  for (const phase of [...phases.value].map((entry) => entry.name).sort()) {
+  for (const phase of [...phases.value]
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()) {
     const candidate = join(recordDir, phase, "requirements-analysis", "requirements.md");
     const candidateStat = readArtifactStat(candidate);
     if (candidateStat.ok) return { kind: "found", path: candidate };

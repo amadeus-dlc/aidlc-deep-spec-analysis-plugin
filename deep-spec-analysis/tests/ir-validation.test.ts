@@ -526,6 +526,22 @@ describe("RequirementsSourceIdentifier", () => {
     );
     expect(!missing.ok && missing.error.kind).toBe("not-found");
   });
+
+  test("phase discovery ignores the record's aidlc-state.md file", () => {
+    const record = join(tmpdir(), `deep-spec-source-state-file-${Math.random().toString(36).slice(2)}`);
+    try {
+      mkdirSync(join(record, "construction", "requirements-analysis"), { recursive: true });
+      writeFileSync(join(record, "aidlc-state.md"), "- **Scope**: feature\n");
+      writeFileSync(join(record, "construction", "requirements-analysis", "requirements.md"), "- FR-1: x\n");
+      const source = new RequirementsSourceRepositoryImplementation().findById(
+        RequirementsSourceIdentifier.of(ap(record)),
+      );
+      expect(source.ok).toBe(true);
+      if (source.ok) expect([...source.value.knownIds()].map((id) => id.asString())).toEqual(["FR-1"]);
+    } finally {
+      rmSync(record, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("SourceAnchor", () => {
@@ -1560,6 +1576,46 @@ describe("repository read failures keep the Result contract (PR#58 review)", () 
     );
     expect(!source.ok && source.error.kind).toBe("io-failed");
     rmSync(record, { recursive: true, force: true });
+  });
+
+  test("a regular construction unit entry is absent materials, not an ENOTDIR failure", () => {
+    const { record, modelPath } = makeDesignRecord();
+    const unitDirectory = join(record, "construction", "u1-tickets");
+    rmSync(unitDirectory, { recursive: true, force: true });
+    writeFileSync(unitDirectory, "not a directory");
+    try {
+      const found = new DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation({
+        schemaPath: designSchemaPath,
+      }).findById(
+        DesignIntermediateRepresentationValidationMaterialsIdentifier.of(DesignModelIdentifier.of(ap(modelPath))),
+      );
+      expect(found.ok).toBe(true);
+      if (found.ok) {
+        expect([...found.value.assess().errors()].map((message) => message.asString())).toContain(
+          "unit u1-tickets: no construction/u1-tickets/ directory exists under this record — the unit name matches no unit-of-work, so BR coverage cannot be verified",
+        );
+      }
+    } finally {
+      rmSync(record, { recursive: true, force: true });
+    }
+  });
+
+  test("a functional-design file under a real unit directory remains an io-failed read", () => {
+    const { record, modelPath } = makeDesignRecord();
+    const functionalDesign = join(record, "construction", "u1-tickets", "functional-design");
+    rmSync(functionalDesign, { recursive: true, force: true });
+    writeFileSync(functionalDesign, "not a directory");
+    try {
+      const found = new DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation({
+        schemaPath: designSchemaPath,
+      }).findById(
+        DesignIntermediateRepresentationValidationMaterialsIdentifier.of(DesignModelIdentifier.of(ap(modelPath))),
+      );
+      expect(found.ok).toBe(false);
+      if (!found.ok) expect(found.error.kind).toBe("io-failed");
+    } finally {
+      rmSync(record, { recursive: true, force: true });
+    }
   });
 });
 

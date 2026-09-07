@@ -12682,11 +12682,14 @@ class DesignIntermediateRepresentationValidationMaterialsRepositoryImplementatio
     const directory = readArtifactStat(unitDirectory);
     if (!directory.ok && directory.error.kind !== "not-found")
       return err(directory.error);
+    const directoryExists = directory.ok && directory.value.isDirectory();
+    if (!directoryExists)
+      return ok({ directoryExists, rulesMarkdown: null });
     const rules = readArtifactText(join4(unitDirectory, "functional-design", "rules.md"));
     if (!rules.ok && rules.error.kind !== "not-found")
       return err(rules.error);
     return ok({
-      directoryExists: directory.ok && directory.value.isDirectory(),
+      directoryExists,
       rulesMarkdown: rules.ok ? rules.value : null
     });
   }

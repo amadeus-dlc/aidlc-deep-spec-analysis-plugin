@@ -9,8 +9,14 @@ import {
   ReferenceCheckBackendClientImplementation,
   SolverProbeClientImplementation,
 } from "@deep-spec-analysis/doctor-adapter";
-import { DesignArtifactReference, IntentLocation, StructuralDebt } from "@deep-spec-analysis/doctor-domain";
-import { ArtifactPath, ContentHash } from "@deep-spec-analysis/kernel-domain";
+import {
+  DesignArtifactReference,
+  FindingCount,
+  IntentLocation,
+  StructuralDebt,
+  StructuralObservation,
+} from "@deep-spec-analysis/doctor-domain";
+import { ArtifactPath, ContentHash, ErrorMessage } from "@deep-spec-analysis/kernel-domain";
 import { canonicalStringify, ok } from "@deep-spec-analysis/kernel-infrastructure";
 import { requireSuccess } from "./result-fixtures.ts";
 
@@ -159,6 +165,37 @@ test("missing, partial and not-applicable refcheck results remain visible in doc
     expect(presenter.structuralDebt(ok(debt)).every((row) => !row.passes())).toBe(true);
     expect(debt.rows()).toHaveLength(1);
   }
+});
+
+test("structural debt fixes distinguish partial from unavailable refcheck observations", () => {
+  const artifact = DesignArtifactReference.of({
+    location: IntentLocation.of(ArtifactPath.of("default"), ArtifactPath.of("intent")),
+    tool: ArtifactPath.of("probe.ts"),
+    artifactPath: ArtifactPath.of("/workspace/components.md"),
+    relativePath: ArtifactPath.of("components.md"),
+  });
+  const debt = StructuralDebt.of([
+    StructuralObservation.partial(artifact, FindingCount.of(1), ErrorMessage.of("skipped input")),
+    StructuralObservation.unavailable(artifact, ErrorMessage.of("backend unavailable")),
+  ]);
+  const rows = presenter.structuralDebt(ok(debt));
+  expect(rows[0]?.fix()).toContain("write mode");
+  expect(rows[1]?.fix()).toContain("backend error");
+});
+
+test("design artifact discovery uses UTF-16 code-unit ordering independent of locale", () => {
+  const { project, client } = workspace();
+  const record = recordIn(project);
+  for (const unit of ["a-unit", "Z-unit"]) {
+    mkdirSync(join(record, "construction", unit, "functional-design"), { recursive: true });
+    writeFileSync(join(record, "construction", unit, "functional-design", "entities.md"), "# entities\n");
+  }
+  const artifacts = requireSuccess(client.designArtifacts());
+  expect(
+    [...artifacts]
+      .filter((artifact) => artifact.relativePath().asString().startsWith("construction/"))
+      .map((artifact) => artifact.relativePath().asString()),
+  ).toEqual(["construction/Z-unit/functional-design", "construction/a-unit/functional-design"]);
 });
 
 test("stage scopes support block and inline lists and distinguish missing from malformed", () => {
