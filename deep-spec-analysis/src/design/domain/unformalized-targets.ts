@@ -14,7 +14,7 @@ export class UnformalizedTargets extends FirstClassCollectionBase<TargetIdentifi
     this.#values = KeySet.of(boundedCollectionSnapshot(values, 65_536, "too-many-unformalized-targets"));
   }
 
-  protected rebuild(values: readonly TargetIdentifier[]): UnformalizedTargets {
+  protected override rebuild(values: readonly TargetIdentifier[]): UnformalizedTargets {
     return new UnformalizedTargets(values);
   }
 
@@ -31,7 +31,7 @@ export class UnformalizedTargets extends FirstClassCollectionBase<TargetIdentifi
     return new UnformalizedTargets([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<TargetIdentifier> {
+  override *[Symbol.iterator](): Iterator<TargetIdentifier> {
     yield* this.#values;
   }
 

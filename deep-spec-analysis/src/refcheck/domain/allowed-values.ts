@@ -19,7 +19,7 @@ export class AllowedValues
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-allowed-values");
   }
 
-  protected rebuild(values: readonly AllowedValue[]): AllowedValues {
+  protected override rebuild(values: readonly AllowedValue[]): AllowedValues {
     return new AllowedValues(values);
   }
 
@@ -35,7 +35,7 @@ export class AllowedValues
     return new AllowedValues([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<AllowedValue> {
+  override *[Symbol.iterator](): Iterator<AllowedValue> {
     yield* this.#values;
   }
 

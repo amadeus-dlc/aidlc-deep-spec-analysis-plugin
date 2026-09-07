@@ -16,7 +16,7 @@ export class SiblingVerdictSkips extends FirstClassCollectionBase<SiblingVerdict
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-sibling-verdict-skips");
   }
 
-  protected rebuild(values: readonly SiblingVerdictSkip[]): SiblingVerdictSkips {
+  protected override rebuild(values: readonly SiblingVerdictSkip[]): SiblingVerdictSkips {
     return new SiblingVerdictSkips(values);
   }
 
@@ -32,7 +32,7 @@ export class SiblingVerdictSkips extends FirstClassCollectionBase<SiblingVerdict
     return new SiblingVerdictSkips([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<SiblingVerdictSkip> {
+  override *[Symbol.iterator](): Iterator<SiblingVerdictSkip> {
     yield* this.#values;
   }
 

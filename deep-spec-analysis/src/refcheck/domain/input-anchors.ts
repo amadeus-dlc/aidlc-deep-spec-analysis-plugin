@@ -20,7 +20,7 @@ export class InputAnchors
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-input-anchors");
   }
 
-  protected rebuild(values: readonly InputAnchor[]): InputAnchors {
+  protected override rebuild(values: readonly InputAnchor[]): InputAnchors {
     return new InputAnchors(values);
   }
 
@@ -40,7 +40,7 @@ export class InputAnchors
     return new InputAnchors([...this.#values, ...values]);
   }
 
-  *[Symbol.iterator](): Iterator<InputAnchor> {
+  override *[Symbol.iterator](): Iterator<InputAnchor> {
     yield* this.#values;
   }
 

@@ -26,7 +26,7 @@ export class ObligationIdentifiers
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-obligation-identifiers");
   }
 
-  protected rebuild(values: readonly ObligationIdentifier[]): ObligationIdentifiers {
+  protected override rebuild(values: readonly ObligationIdentifier[]): ObligationIdentifiers {
     return new ObligationIdentifiers(values);
   }
 
@@ -42,7 +42,7 @@ export class ObligationIdentifiers
     return new ObligationIdentifiers([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<ObligationIdentifier> {
+  override *[Symbol.iterator](): Iterator<ObligationIdentifier> {
     yield* this.#values;
   }
 

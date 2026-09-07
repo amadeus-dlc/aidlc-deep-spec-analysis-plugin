@@ -27,7 +27,7 @@ export class RequirementAttributeDeclarations
     this.#byPath = KeyedIndex.of(this.#values.map((a) => [a.path(), a] as const));
   }
 
-  protected rebuild(values: readonly RequirementAttributeDeclaration[]): RequirementAttributeDeclarations {
+  protected override rebuild(values: readonly RequirementAttributeDeclaration[]): RequirementAttributeDeclarations {
     return new RequirementAttributeDeclarations(values);
   }
 
@@ -45,7 +45,7 @@ export class RequirementAttributeDeclarations
     return new RequirementAttributeDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<RequirementAttributeDeclaration> {
+  override *[Symbol.iterator](): Iterator<RequirementAttributeDeclaration> {
     yield* this.#values;
   }
 

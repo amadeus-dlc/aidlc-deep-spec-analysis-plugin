@@ -29,13 +29,13 @@ export class SatisfiabilityModuloTheoriesQueryVerdicts
     this.#values = KeyedIndex.of(snapshot.map((entry) => [entry.query(), entry] as const));
   }
 
-  protected rebuild(
+  protected override rebuild(
     values: readonly SatisfiabilityModuloTheoriesQueryVerdictEntry[],
   ): SatisfiabilityModuloTheoriesQueryVerdicts {
     return new SatisfiabilityModuloTheoriesQueryVerdicts(values);
   }
 
-  *[Symbol.iterator](): Iterator<SatisfiabilityModuloTheoriesQueryVerdictEntry> {
+  override *[Symbol.iterator](): Iterator<SatisfiabilityModuloTheoriesQueryVerdictEntry> {
     yield* this.#values.values();
   }
 

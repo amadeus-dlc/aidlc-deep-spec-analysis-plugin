@@ -20,7 +20,7 @@ export class ComponentReferences
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-component-references");
   }
 
-  protected rebuild(values: readonly ComponentReference[]): ComponentReferences {
+  protected override rebuild(values: readonly ComponentReference[]): ComponentReferences {
     return new ComponentReferences(values);
   }
 
@@ -36,7 +36,7 @@ export class ComponentReferences
     return new ComponentReferences([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<ComponentReference> {
+  override *[Symbol.iterator](): Iterator<ComponentReference> {
     yield* this.#values;
   }
 

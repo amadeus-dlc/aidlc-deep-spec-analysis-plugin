@@ -17,7 +17,7 @@ export class DesignUnits extends FirstClassCollectionBase<DesignUnit, DesignUnit
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-units");
   }
 
-  protected rebuild(values: readonly DesignUnit[]): DesignUnits {
+  protected override rebuild(values: readonly DesignUnit[]): DesignUnits {
     return new DesignUnits(values);
   }
 
@@ -33,7 +33,7 @@ export class DesignUnits extends FirstClassCollectionBase<DesignUnit, DesignUnit
     return new DesignUnits([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<DesignUnit> {
+  override *[Symbol.iterator](): Iterator<DesignUnit> {
     yield* this.#values;
   }
 

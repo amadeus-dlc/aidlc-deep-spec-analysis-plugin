@@ -30,11 +30,11 @@ export class DesignAssignments extends FirstClassCollectionBase<DesignAssignment
     this.#values = KeyedIndex.of(entries);
   }
 
-  protected rebuild(values: readonly DesignAssignment[]): DesignAssignments {
+  protected override rebuild(values: readonly DesignAssignment[]): DesignAssignments {
     return new DesignAssignments(values);
   }
 
-  *[Symbol.iterator](): Iterator<DesignAssignment> {
+  override *[Symbol.iterator](): Iterator<DesignAssignment> {
     yield* this.#values.values();
   }
 

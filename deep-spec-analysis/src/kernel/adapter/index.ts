@@ -6,6 +6,7 @@ export { decodeDeclaredBindings, decodeScenarioBindings } from "./bindings-decod
 export { readContractSchema, readFindingsSchema } from "./contract-schema.ts";
 export { DirectoryFinalizationLock } from "./directory-finalization-lock.ts";
 export type { DirectoryFinalizationLockOutcome } from "./directory-finalization-lock-outcome.ts";
+export type { DirectoryFinalizationLockPort } from "./directory-finalization-lock-port.ts";
 export { extractFences, type Fence } from "./fence.ts";
 export { decodeFindingsDocument, type FindingsDocument } from "./findings-document.ts";
 export { parseFindingsValues } from "./findings-values-parser.ts";

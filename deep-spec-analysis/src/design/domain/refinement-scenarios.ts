@@ -16,7 +16,7 @@ export class RefinementScenarios extends FirstClassCollectionBase<RefinementScen
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-refinement-scenarios");
   }
 
-  protected rebuild(values: readonly RefinementScenario[]): RefinementScenarios {
+  protected override rebuild(values: readonly RefinementScenario[]): RefinementScenarios {
     return new RefinementScenarios(values);
   }
 
@@ -32,7 +32,7 @@ export class RefinementScenarios extends FirstClassCollectionBase<RefinementScen
     return new RefinementScenarios([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<RefinementScenario> {
+  override *[Symbol.iterator](): Iterator<RefinementScenario> {
     yield* this.#values;
   }
 

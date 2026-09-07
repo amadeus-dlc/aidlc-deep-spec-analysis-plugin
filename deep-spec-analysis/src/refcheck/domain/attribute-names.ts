@@ -22,7 +22,7 @@ export class AttributeNames
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-attribute-names");
   }
 
-  protected rebuild(values: readonly AttributeName[]): AttributeNames {
+  protected override rebuild(values: readonly AttributeName[]): AttributeNames {
     return new AttributeNames(values);
   }
 
@@ -38,7 +38,7 @@ export class AttributeNames
     return new AttributeNames([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<AttributeName> {
+  override *[Symbol.iterator](): Iterator<AttributeName> {
     yield* this.#values;
   }
 

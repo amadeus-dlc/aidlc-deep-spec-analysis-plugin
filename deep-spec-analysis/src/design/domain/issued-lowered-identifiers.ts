@@ -20,11 +20,11 @@ export class IssuedLoweredIdentifiers extends FirstClassCollectionBase<LoweredId
       throw new IllegalArgumentException({ kind: "duplicate-lowered-identifier" });
   }
 
-  protected rebuild(values: readonly LoweredIdentifier[]): IssuedLoweredIdentifiers {
+  protected override rebuild(values: readonly LoweredIdentifier[]): IssuedLoweredIdentifiers {
     return new IssuedLoweredIdentifiers(values);
   }
 
-  *[Symbol.iterator](): Iterator<LoweredIdentifier> {
+  override *[Symbol.iterator](): Iterator<LoweredIdentifier> {
     yield* this.#values;
   }
   static of(values: readonly LoweredIdentifier[]): IssuedLoweredIdentifiers {

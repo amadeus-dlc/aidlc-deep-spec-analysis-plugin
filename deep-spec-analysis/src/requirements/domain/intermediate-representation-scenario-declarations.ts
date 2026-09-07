@@ -25,7 +25,7 @@ export class IntermediateRepresentationScenarioDeclarations
     );
   }
 
-  protected rebuild(
+  protected override rebuild(
     values: readonly IntermediateRepresentationScenarioDeclaration[],
   ): IntermediateRepresentationScenarioDeclarations {
     return new IntermediateRepresentationScenarioDeclarations(values);
@@ -47,7 +47,7 @@ export class IntermediateRepresentationScenarioDeclarations
     return new IntermediateRepresentationScenarioDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<IntermediateRepresentationScenarioDeclaration> {
+  override *[Symbol.iterator](): Iterator<IntermediateRepresentationScenarioDeclaration> {
     yield* this.#values;
   }
 

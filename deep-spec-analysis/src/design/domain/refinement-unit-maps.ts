@@ -18,7 +18,7 @@ export class RefinementUnitMaps extends FirstClassCollectionBase<RefinementUnitM
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-refinement-unit-maps");
   }
 
-  protected rebuild(values: readonly RefinementUnitMap[]): RefinementUnitMaps {
+  protected override rebuild(values: readonly RefinementUnitMap[]): RefinementUnitMaps {
     return new RefinementUnitMaps(values);
   }
 
@@ -34,7 +34,7 @@ export class RefinementUnitMaps extends FirstClassCollectionBase<RefinementUnitM
     return new RefinementUnitMaps([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<RefinementUnitMap> {
+  override *[Symbol.iterator](): Iterator<RefinementUnitMap> {
     yield* this.#values;
   }
 

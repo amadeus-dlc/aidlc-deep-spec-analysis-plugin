@@ -17,7 +17,7 @@ export class DesignInputAnchors extends FirstClassCollectionBase<DesignInputAnch
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-input-anchors");
   }
 
-  protected rebuild(values: readonly DesignInputAnchor[]): DesignInputAnchors {
+  protected override rebuild(values: readonly DesignInputAnchor[]): DesignInputAnchors {
     return new DesignInputAnchors(values);
   }
 
@@ -33,7 +33,7 @@ export class DesignInputAnchors extends FirstClassCollectionBase<DesignInputAnch
     return new DesignInputAnchors([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<DesignInputAnchor> {
+  override *[Symbol.iterator](): Iterator<DesignInputAnchor> {
     yield* this.#values;
   }
 

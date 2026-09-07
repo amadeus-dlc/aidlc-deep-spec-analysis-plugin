@@ -33,7 +33,7 @@ export class ReachabilityPlan extends FirstClassCollectionBase<MachineReachabili
     this.#machines = owned;
   }
 
-  protected rebuild(values: readonly MachineReachability[]): ReachabilityPlan {
+  protected override rebuild(values: readonly MachineReachability[]): ReachabilityPlan {
     return new ReachabilityPlan(values);
   }
 
@@ -67,7 +67,7 @@ export class ReachabilityPlan extends FirstClassCollectionBase<MachineReachabili
     return new ReachabilityPlan(machines);
   }
 
-  *[Symbol.iterator](): Iterator<MachineReachability> {
+  override *[Symbol.iterator](): Iterator<MachineReachability> {
     yield* this.#machines;
   }
 }

@@ -19,7 +19,7 @@ export class ComponentEntities
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-component-entities");
   }
 
-  protected rebuild(values: readonly ComponentEntity[]): ComponentEntities {
+  protected override rebuild(values: readonly ComponentEntity[]): ComponentEntities {
     return new ComponentEntities(values);
   }
 
@@ -35,7 +35,7 @@ export class ComponentEntities
     return new ComponentEntities([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<ComponentEntity> {
+  override *[Symbol.iterator](): Iterator<ComponentEntity> {
     yield* this.#values;
   }
 

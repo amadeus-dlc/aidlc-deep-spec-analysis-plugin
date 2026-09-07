@@ -19,7 +19,7 @@ export class DesignSkips extends FirstClassCollectionBase<DesignSkipped, DesignS
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-skips");
   }
 
-  protected rebuild(values: readonly DesignSkipped[]): DesignSkips {
+  protected override rebuild(values: readonly DesignSkipped[]): DesignSkips {
     return new DesignSkips(values);
   }
 
@@ -39,7 +39,7 @@ export class DesignSkips extends FirstClassCollectionBase<DesignSkipped, DesignS
     return new DesignSkips([...this.#values, ...other.#values]);
   }
 
-  *[Symbol.iterator](): Iterator<DesignSkipped> {
+  override *[Symbol.iterator](): Iterator<DesignSkipped> {
     yield* this.#values;
   }
 

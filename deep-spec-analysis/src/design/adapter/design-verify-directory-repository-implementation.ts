@@ -18,7 +18,11 @@ import { join } from "node:path";
 import type { DesignReport } from "@deep-spec-analysis/design-domain";
 import { DesignReports, DesignVerifyDirectory } from "@deep-spec-analysis/design-domain";
 import type { DesignVerifyDirectoryRepository } from "@deep-spec-analysis/design-usecase";
-import type { DirectoryFinalizationLockOutcome, ProcessLiveness } from "@deep-spec-analysis/kernel-adapter";
+import type {
+  DirectoryFinalizationLockOutcome,
+  DirectoryFinalizationLockPort,
+  ProcessLiveness,
+} from "@deep-spec-analysis/kernel-adapter";
 import {
   DirectoryFinalizationLock,
   readArtifactStat,
@@ -69,9 +73,11 @@ function documentsByFileName(reports: readonly DesignReport[]): Map<string, stri
 }
 
 export class DesignVerifyDirectoryRepositoryImplementation implements DesignVerifyDirectoryRepository {
-  readonly #lock: DirectoryFinalizationLock;
+  readonly #lock: DirectoryFinalizationLockPort;
 
-  constructor(lock: DirectoryFinalizationLock = new DirectoryFinalizationLock(new SystemClock(), UNPROBED_LIVENESS)) {
+  constructor(
+    lock: DirectoryFinalizationLockPort = new DirectoryFinalizationLock(new SystemClock(), UNPROBED_LIVENESS),
+  ) {
     this.#lock = lock;
   }
 

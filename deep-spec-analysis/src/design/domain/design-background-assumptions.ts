@@ -19,7 +19,7 @@ export class DesignBackgroundAssumptions extends FirstClassCollectionBase<
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-background-assumptions");
   }
 
-  protected rebuild(values: readonly DesignBackgroundAssumption[]): DesignBackgroundAssumptions {
+  protected override rebuild(values: readonly DesignBackgroundAssumption[]): DesignBackgroundAssumptions {
     return new DesignBackgroundAssumptions(values);
   }
 
@@ -40,7 +40,7 @@ export class DesignBackgroundAssumptions extends FirstClassCollectionBase<
     return new DesignBackgroundAssumptions([...this.#values].sort((a, b) => a.compareTo(b)));
   }
 
-  *[Symbol.iterator](): Iterator<DesignBackgroundAssumption> {
+  override *[Symbol.iterator](): Iterator<DesignBackgroundAssumption> {
     yield* this.#values;
   }
 

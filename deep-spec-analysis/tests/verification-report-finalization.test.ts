@@ -46,6 +46,7 @@ import {
   VerificationReports,
   VerificationSkips,
 } from "@deep-spec-analysis/requirements-domain";
+import type { VerificationDirectoryRepository } from "@deep-spec-analysis/requirements-usecase";
 import { VerificationReportFinalizer } from "@deep-spec-analysis/requirements-usecase";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -117,15 +118,20 @@ class StubLiveness implements ProcessLiveness {
 
 // 保存だけを失敗させる Repository。取得は本物に委ねる——「保存に失敗したら
 // verified へ抜けない」を Finalizer の水準で撃つための継ぎ目。
-class FailingStore extends VerificationDirectoryRepositoryImplementation {
+class FailingStore implements VerificationDirectoryRepository {
+  readonly #delegate: VerificationDirectoryRepositoryImplementation;
   readonly #failure: RepositoryError;
 
   constructor(failure: RepositoryError) {
-    super();
+    this.#delegate = new VerificationDirectoryRepositoryImplementation();
     this.#failure = failure;
   }
 
-  override store(_aggregate: VerificationDirectory): Result<void, RepositoryError> {
+  findByDirectory(directory: ArtifactPath) {
+    return this.#delegate.findByDirectory(directory);
+  }
+
+  store(_aggregate: VerificationDirectory): Result<void, RepositoryError> {
     return { ok: false, error: this.#failure };
   }
 }

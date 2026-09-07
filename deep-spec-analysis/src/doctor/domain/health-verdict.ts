@@ -20,7 +20,7 @@ export class HealthVerdict
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-health-checks");
   }
 
-  protected rebuild(values: readonly Check[]): HealthVerdict {
+  protected override rebuild(values: readonly Check[]): HealthVerdict {
     return new HealthVerdict(values);
   }
 
@@ -36,7 +36,7 @@ export class HealthVerdict
     return new HealthVerdict([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<Check> {
+  override *[Symbol.iterator](): Iterator<Check> {
     yield* this.#values;
   }
 

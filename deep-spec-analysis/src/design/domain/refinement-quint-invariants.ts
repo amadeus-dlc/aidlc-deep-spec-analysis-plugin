@@ -29,7 +29,7 @@ export class RefinementQuintInvariants extends FirstClassCollectionBase<
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-refinement-quint-invariants");
   }
 
-  protected rebuild(values: readonly RefinementQuintInvariant[]): RefinementQuintInvariants {
+  protected override rebuild(values: readonly RefinementQuintInvariant[]): RefinementQuintInvariants {
     return new RefinementQuintInvariants(values);
   }
 
@@ -45,7 +45,7 @@ export class RefinementQuintInvariants extends FirstClassCollectionBase<
     return new RefinementQuintInvariants([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<RefinementQuintInvariant> {
+  override *[Symbol.iterator](): Iterator<RefinementQuintInvariant> {
     yield* this.#values;
   }
 

@@ -16,7 +16,7 @@ export class TransitionReferences extends FirstClassCollectionBase<TransitionRef
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-transition-references");
   }
 
-  protected rebuild(values: readonly TransitionReference[]): TransitionReferences {
+  protected override rebuild(values: readonly TransitionReference[]): TransitionReferences {
     return new TransitionReferences(values);
   }
 
@@ -32,7 +32,7 @@ export class TransitionReferences extends FirstClassCollectionBase<TransitionRef
     return new TransitionReferences([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<TransitionReference> {
+  override *[Symbol.iterator](): Iterator<TransitionReference> {
     yield* this.#values;
   }
 

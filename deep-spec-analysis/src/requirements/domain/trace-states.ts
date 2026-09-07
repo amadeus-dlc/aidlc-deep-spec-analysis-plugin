@@ -20,7 +20,7 @@ export class TraceStates
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-trace-states");
   }
 
-  protected rebuild(values: readonly TraceState[]): TraceStates {
+  protected override rebuild(values: readonly TraceState[]): TraceStates {
     return new TraceStates(values);
   }
 
@@ -36,7 +36,7 @@ export class TraceStates
     return new TraceStates([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<TraceState> {
+  override *[Symbol.iterator](): Iterator<TraceState> {
     yield* this.#values;
   }
 

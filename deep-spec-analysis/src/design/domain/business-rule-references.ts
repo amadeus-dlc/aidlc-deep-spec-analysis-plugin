@@ -18,7 +18,7 @@ export class BusinessRuleReferences extends FirstClassCollectionBase<BusinessRul
     this.#values = boundedCollectionSnapshot(values, 10_000, "too-many-business-rule-references");
   }
 
-  protected rebuild(values: readonly BusinessRuleReference[]): BusinessRuleReferences {
+  protected override rebuild(values: readonly BusinessRuleReference[]): BusinessRuleReferences {
     return new BusinessRuleReferences(values);
   }
 
@@ -34,7 +34,7 @@ export class BusinessRuleReferences extends FirstClassCollectionBase<BusinessRul
     return new BusinessRuleReferences([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<BusinessRuleReference> {
+  override *[Symbol.iterator](): Iterator<BusinessRuleReference> {
     yield* this.#values;
   }
 

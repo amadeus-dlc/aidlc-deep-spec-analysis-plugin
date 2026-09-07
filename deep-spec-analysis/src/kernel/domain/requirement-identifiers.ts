@@ -27,7 +27,7 @@ export class RequirementIdentifiers
     this.#values = KeySet.of(snapshot);
   }
 
-  protected rebuild(values: readonly RequirementIdentifier[]): RequirementIdentifiers {
+  protected override rebuild(values: readonly RequirementIdentifier[]): RequirementIdentifiers {
     return new RequirementIdentifiers(values);
   }
 
@@ -44,7 +44,7 @@ export class RequirementIdentifiers
     return new RequirementIdentifiers([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<RequirementIdentifier> {
+  override *[Symbol.iterator](): Iterator<RequirementIdentifier> {
     yield* this.#values;
   }
 
@@ -61,7 +61,7 @@ export class RequirementIdentifiers
     return this.#values.toArray().map((v) => v.asString());
   }
 
-  isEmpty(): boolean {
+  override isEmpty(): boolean {
     return this.#values.isEmpty();
   }
 }

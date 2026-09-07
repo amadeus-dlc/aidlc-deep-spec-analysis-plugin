@@ -16,7 +16,7 @@ export class DesignMachines extends FirstClassCollectionBase<DesignMachine, Desi
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-machines");
   }
 
-  protected rebuild(values: readonly DesignMachine[]): DesignMachines {
+  protected override rebuild(values: readonly DesignMachine[]): DesignMachines {
     return new DesignMachines(values);
   }
 
@@ -32,7 +32,7 @@ export class DesignMachines extends FirstClassCollectionBase<DesignMachine, Desi
     return new DesignMachines([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<DesignMachine> {
+  override *[Symbol.iterator](): Iterator<DesignMachine> {
     yield* this.#values;
   }
 

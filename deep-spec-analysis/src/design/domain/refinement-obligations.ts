@@ -17,7 +17,7 @@ export class RefinementObligations extends FirstClassCollectionBase<RefinementOb
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-refinement-obligations");
   }
 
-  protected rebuild(values: readonly RefinementObligation[]): RefinementObligations {
+  protected override rebuild(values: readonly RefinementObligation[]): RefinementObligations {
     return new RefinementObligations(values);
   }
 
@@ -33,7 +33,7 @@ export class RefinementObligations extends FirstClassCollectionBase<RefinementOb
     return new RefinementObligations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<RefinementObligation> {
+  override *[Symbol.iterator](): Iterator<RefinementObligation> {
     yield* this.#values;
   }
 

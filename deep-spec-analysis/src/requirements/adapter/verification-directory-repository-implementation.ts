@@ -15,7 +15,11 @@
 
 import { mkdirSync, renameSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import type { DirectoryFinalizationLockOutcome, ProcessLiveness } from "@deep-spec-analysis/kernel-adapter";
+import type {
+  DirectoryFinalizationLockOutcome,
+  DirectoryFinalizationLockPort,
+  ProcessLiveness,
+} from "@deep-spec-analysis/kernel-adapter";
 import {
   DirectoryFinalizationLock,
   readArtifactStat,
@@ -73,10 +77,10 @@ function documentsByFileName(reports: readonly VerificationReport[]): Map<string
 }
 
 export class VerificationDirectoryRepositoryImplementation implements VerificationDirectoryRepository {
-  readonly #lock: DirectoryFinalizationLock;
+  readonly #lock: DirectoryFinalizationLockPort;
 
   constructor(
-    lock: DirectoryFinalizationLock = new DirectoryFinalizationLock(
+    lock: DirectoryFinalizationLockPort = new DirectoryFinalizationLock(
       new SystemClock(),
       UNPROBED_LIVENESS,
       VERIFICATION_LOCK_BASENAME,

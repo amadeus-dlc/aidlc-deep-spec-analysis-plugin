@@ -18,7 +18,7 @@ export class UnmappedDeclarations extends FirstClassCollectionBase<UnmappedTarge
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-unmapped-declarations");
   }
 
-  protected rebuild(values: readonly UnmappedTarget[]): UnmappedDeclarations {
+  protected override rebuild(values: readonly UnmappedTarget[]): UnmappedDeclarations {
     return new UnmappedDeclarations(values);
   }
 
@@ -34,7 +34,7 @@ export class UnmappedDeclarations extends FirstClassCollectionBase<UnmappedTarge
     return new UnmappedDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<UnmappedTarget> {
+  override *[Symbol.iterator](): Iterator<UnmappedTarget> {
     yield* this.#values;
   }
 

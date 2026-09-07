@@ -16,7 +16,7 @@ export class Scenarios extends FirstClassCollectionBase<Scenario, Scenarios> imp
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-scenarios");
   }
 
-  protected rebuild(values: readonly Scenario[]): Scenarios {
+  protected override rebuild(values: readonly Scenario[]): Scenarios {
     return new Scenarios(values);
   }
 
@@ -32,7 +32,7 @@ export class Scenarios extends FirstClassCollectionBase<Scenario, Scenarios> imp
     return new Scenarios([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<Scenario> {
+  override *[Symbol.iterator](): Iterator<Scenario> {
     yield* this.#values;
   }
 

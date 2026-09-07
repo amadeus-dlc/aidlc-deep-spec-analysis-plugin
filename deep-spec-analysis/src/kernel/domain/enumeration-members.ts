@@ -23,7 +23,7 @@ export class EnumerationMembers
     this.#values = boundedCollectionSnapshot(values, MAX_ENUMERATION_MEMBERS, "too-many-enum-members");
   }
 
-  protected rebuild(values: readonly EnumerationMember[]): EnumerationMembers {
+  protected override rebuild(values: readonly EnumerationMember[]): EnumerationMembers {
     return new EnumerationMembers(values);
   }
 
@@ -39,7 +39,7 @@ export class EnumerationMembers
     return new EnumerationMembers([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<EnumerationMember> {
+  override *[Symbol.iterator](): Iterator<EnumerationMember> {
     yield* this.#values;
   }
 
@@ -68,7 +68,7 @@ export class EnumerationMembers
     return this.#values;
   }
 
-  isEmpty(): boolean {
+  override isEmpty(): boolean {
     return this.#values.length === 0;
   }
 }

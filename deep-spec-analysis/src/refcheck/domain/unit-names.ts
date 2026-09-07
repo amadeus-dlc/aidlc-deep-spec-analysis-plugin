@@ -15,7 +15,7 @@ export class UnitNames extends FirstClassCollectionBase<UnitName, UnitNames> imp
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-unit-names");
   }
 
-  protected rebuild(values: readonly UnitName[]): UnitNames {
+  protected override rebuild(values: readonly UnitName[]): UnitNames {
     return new UnitNames(values);
   }
 
@@ -31,7 +31,7 @@ export class UnitNames extends FirstClassCollectionBase<UnitName, UnitNames> imp
     return new UnitNames([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<UnitName> {
+  override *[Symbol.iterator](): Iterator<UnitName> {
     yield* this.#values;
   }
 

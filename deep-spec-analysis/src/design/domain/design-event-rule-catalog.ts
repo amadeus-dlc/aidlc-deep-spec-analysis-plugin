@@ -33,7 +33,7 @@ export class DesignEventRuleCatalog extends FirstClassCollectionBase<DesignEvent
     );
   }
 
-  protected rebuild(values: readonly DesignEventRule[]): DesignEventRuleCatalog {
+  protected override rebuild(values: readonly DesignEventRule[]): DesignEventRuleCatalog {
     return new DesignEventRuleCatalog(this.#unit, values);
   }
   static of(unit: DesignUnit): DesignEventRuleCatalog {
@@ -46,7 +46,7 @@ export class DesignEventRuleCatalog extends FirstClassCollectionBase<DesignEvent
     const event = this.#events.get(id);
     return event?.hasAssignments() ? event : null;
   }
-  *[Symbol.iterator](): Iterator<DesignEventRule> {
+  override *[Symbol.iterator](): Iterator<DesignEventRule> {
     yield* this.#events.values();
   }
   subsumptionProbes(): readonly RuleSubsumptionProbe[] {

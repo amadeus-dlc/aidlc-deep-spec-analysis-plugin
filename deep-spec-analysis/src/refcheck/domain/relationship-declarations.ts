@@ -18,7 +18,7 @@ export class RelationshipDeclarations
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-relationship-declarations");
   }
 
-  protected rebuild(values: readonly RelationshipDeclaration[]): RelationshipDeclarations {
+  protected override rebuild(values: readonly RelationshipDeclaration[]): RelationshipDeclarations {
     return new RelationshipDeclarations(values);
   }
 
@@ -38,7 +38,7 @@ export class RelationshipDeclarations
     return new RelationshipDeclarations([...this.#values, ...other.#values]);
   }
 
-  *[Symbol.iterator](): Iterator<RelationshipDeclaration> {
+  override *[Symbol.iterator](): Iterator<RelationshipDeclaration> {
     yield* this.#values;
   }
 

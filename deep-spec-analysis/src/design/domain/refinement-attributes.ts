@@ -18,7 +18,7 @@ export class RefinementAttributes extends FirstClassCollectionBase<RefinementAtt
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-refinement-attributes");
   }
 
-  protected rebuild(values: readonly RefinementAttribute[]): RefinementAttributes {
+  protected override rebuild(values: readonly RefinementAttribute[]): RefinementAttributes {
     return new RefinementAttributes(values);
   }
 
@@ -34,7 +34,7 @@ export class RefinementAttributes extends FirstClassCollectionBase<RefinementAtt
     return new RefinementAttributes([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<RefinementAttribute> {
+  override *[Symbol.iterator](): Iterator<RefinementAttribute> {
     yield* this.#values;
   }
 

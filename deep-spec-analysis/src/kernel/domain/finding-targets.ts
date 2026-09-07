@@ -31,7 +31,7 @@ export class FindingTargets
     this.#values = Object.freeze(snapshot);
   }
 
-  protected rebuild(values: readonly TargetIdentifier[]): TargetIdentifiers {
+  protected override rebuild(values: readonly TargetIdentifier[]): TargetIdentifiers {
     return TargetIdentifiers.of(values);
   }
 
@@ -43,7 +43,7 @@ export class FindingTargets
     return parseConstruction(() => new FindingTargets(head, tail));
   }
 
-  *[Symbol.iterator](): Iterator<TargetIdentifier> {
+  override *[Symbol.iterator](): Iterator<TargetIdentifier> {
     yield* this.#values;
   }
 

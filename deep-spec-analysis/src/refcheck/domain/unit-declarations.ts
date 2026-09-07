@@ -32,7 +32,7 @@ export class UnitDeclarations
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-unit-declarations");
   }
 
-  protected rebuild(values: readonly UnitDeclaration[]): UnitDeclarations {
+  protected override rebuild(values: readonly UnitDeclaration[]): UnitDeclarations {
     return new UnitDeclarations(values);
   }
 
@@ -48,7 +48,7 @@ export class UnitDeclarations
     return new UnitDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<UnitDeclaration> {
+  override *[Symbol.iterator](): Iterator<UnitDeclaration> {
     yield* this.#values;
   }
 

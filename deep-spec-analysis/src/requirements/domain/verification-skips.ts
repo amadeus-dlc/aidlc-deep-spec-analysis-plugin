@@ -22,7 +22,7 @@ export class VerificationSkips
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-verification-skips");
   }
 
-  protected rebuild(values: readonly VerificationSkipped[]): VerificationSkips {
+  protected override rebuild(values: readonly VerificationSkipped[]): VerificationSkips {
     return new VerificationSkips(values);
   }
 
@@ -42,7 +42,7 @@ export class VerificationSkips
     return new VerificationSkips([...this.#values, ...other.#values]);
   }
 
-  *[Symbol.iterator](): Iterator<VerificationSkipped> {
+  override *[Symbol.iterator](): Iterator<VerificationSkipped> {
     yield* this.#values;
   }
 

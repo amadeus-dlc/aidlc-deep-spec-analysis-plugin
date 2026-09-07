@@ -18,7 +18,7 @@ export class DesignAttributeDeclarations extends FirstClassCollectionBase<
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-attribute-declarations");
   }
 
-  protected rebuild(values: readonly DesignAttributeDeclaration[]): DesignAttributeDeclarations {
+  protected override rebuild(values: readonly DesignAttributeDeclaration[]): DesignAttributeDeclarations {
     return new DesignAttributeDeclarations(values);
   }
 
@@ -34,7 +34,7 @@ export class DesignAttributeDeclarations extends FirstClassCollectionBase<
     return new DesignAttributeDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<DesignAttributeDeclaration> {
+  override *[Symbol.iterator](): Iterator<DesignAttributeDeclaration> {
     yield* this.#values;
   }
 

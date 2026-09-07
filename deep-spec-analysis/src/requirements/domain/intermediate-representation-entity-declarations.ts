@@ -31,7 +31,7 @@ export class IntermediateRepresentationEntityDeclarations
     );
   }
 
-  protected rebuild(
+  protected override rebuild(
     values: readonly IntermediateRepresentationEntityDeclaration[],
   ): IntermediateRepresentationEntityDeclarations {
     return new IntermediateRepresentationEntityDeclarations(values);
@@ -53,7 +53,7 @@ export class IntermediateRepresentationEntityDeclarations
     return new IntermediateRepresentationEntityDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<IntermediateRepresentationEntityDeclaration> {
+  override *[Symbol.iterator](): Iterator<IntermediateRepresentationEntityDeclaration> {
     yield* this.#values;
   }
 

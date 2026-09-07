@@ -18,7 +18,7 @@ export class DesignArtifacts
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-artifacts");
   }
 
-  protected rebuild(values: readonly DesignArtifactReference[]): DesignArtifacts {
+  protected override rebuild(values: readonly DesignArtifactReference[]): DesignArtifacts {
     return new DesignArtifacts(values);
   }
   static of(values: readonly DesignArtifactReference[]): DesignArtifacts {
@@ -27,7 +27,7 @@ export class DesignArtifacts
   static parse(values: readonly DesignArtifactReference[]): Result<DesignArtifacts, ParseError> {
     return parseConstruction(() => new DesignArtifacts(values));
   }
-  *[Symbol.iterator](): Iterator<DesignArtifactReference> {
+  override *[Symbol.iterator](): Iterator<DesignArtifactReference> {
     yield* this.#values;
   }
 }

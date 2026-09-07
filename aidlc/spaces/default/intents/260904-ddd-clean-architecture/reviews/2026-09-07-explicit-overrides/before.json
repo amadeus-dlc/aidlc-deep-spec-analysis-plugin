@@ -1,0 +1,1877 @@
+{
+  "checkedFiles": 672,
+  "diagnostics": [
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/attribute-mappings.ts",
+      "line": 41,
+      "column": 13,
+      "className": "AttributeMappings",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/attribute-mappings.ts",
+      "line": 57,
+      "column": 4,
+      "className": "AttributeMappings",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/attribute-paths.ts",
+      "line": 17,
+      "column": 13,
+      "className": "AttributePaths",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/attribute-paths.ts",
+      "line": 34,
+      "column": 4,
+      "className": "AttributePaths",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/business-rule-reference-index.ts",
+      "line": 27,
+      "column": 13,
+      "className": "BusinessRuleReferenceIndex",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/business-rule-reference-index.ts",
+      "line": 31,
+      "column": 4,
+      "className": "BusinessRuleReferenceIndex",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/business-rule-references.ts",
+      "line": 21,
+      "column": 13,
+      "className": "BusinessRuleReferences",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/business-rule-references.ts",
+      "line": 37,
+      "column": 4,
+      "className": "BusinessRuleReferences",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/checked-units.ts",
+      "line": 26,
+      "column": 13,
+      "className": "CheckedUnits",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/checked-units.ts",
+      "line": 42,
+      "column": 4,
+      "className": "CheckedUnits",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-assignments.ts",
+      "line": 33,
+      "column": 13,
+      "className": "DesignAssignments",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-assignments.ts",
+      "line": 37,
+      "column": 4,
+      "className": "DesignAssignments",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-attribute-catalog.ts",
+      "line": 59,
+      "column": 13,
+      "className": "DesignAttributeCatalog",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-attribute-catalog.ts",
+      "line": 78,
+      "column": 4,
+      "className": "DesignAttributeCatalog",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-attribute-declarations.ts",
+      "line": 21,
+      "column": 13,
+      "className": "DesignAttributeDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-attribute-declarations.ts",
+      "line": 37,
+      "column": 4,
+      "className": "DesignAttributeDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-background-assumptions.ts",
+      "line": 22,
+      "column": 13,
+      "className": "DesignBackgroundAssumptions",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-background-assumptions.ts",
+      "line": 43,
+      "column": 4,
+      "className": "DesignBackgroundAssumptions",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-background-declarations.ts",
+      "line": 21,
+      "column": 13,
+      "className": "DesignBackgroundDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-background-declarations.ts",
+      "line": 37,
+      "column": 4,
+      "className": "DesignBackgroundDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-cross-checked-entries.ts",
+      "line": 22,
+      "column": 13,
+      "className": "DesignCrossCheckedEntries",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-cross-checked-entries.ts",
+      "line": 38,
+      "column": 4,
+      "className": "DesignCrossCheckedEntries",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-entity-declarations.ts",
+      "line": 22,
+      "column": 13,
+      "className": "DesignEntityDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-entity-declarations.ts",
+      "line": 38,
+      "column": 4,
+      "className": "DesignEntityDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-event-rule-catalog.ts",
+      "line": 36,
+      "column": 13,
+      "className": "DesignEventRuleCatalog",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-event-rule-catalog.ts",
+      "line": 49,
+      "column": 4,
+      "className": "DesignEventRuleCatalog",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-findings.ts",
+      "line": 35,
+      "column": 13,
+      "className": "DesignFindings",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-findings.ts",
+      "line": 51,
+      "column": 4,
+      "className": "DesignFindings",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-ignore-declarations.ts",
+      "line": 21,
+      "column": 13,
+      "className": "DesignIgnoreDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-ignore-declarations.ts",
+      "line": 37,
+      "column": 4,
+      "className": "DesignIgnoreDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-ignores.ts",
+      "line": 20,
+      "column": 13,
+      "className": "DesignIgnores",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-ignores.ts",
+      "line": 36,
+      "column": 4,
+      "className": "DesignIgnores",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-input-anchors.ts",
+      "line": 20,
+      "column": 13,
+      "className": "DesignInputAnchors",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-input-anchors.ts",
+      "line": 36,
+      "column": 4,
+      "className": "DesignInputAnchors",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-machine-declarations.ts",
+      "line": 21,
+      "column": 13,
+      "className": "DesignMachineDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-machine-declarations.ts",
+      "line": 37,
+      "column": 4,
+      "className": "DesignMachineDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-machines.ts",
+      "line": 19,
+      "column": 13,
+      "className": "DesignMachines",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-machines.ts",
+      "line": 35,
+      "column": 4,
+      "className": "DesignMachines",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-obligation-declarations.ts",
+      "line": 21,
+      "column": 13,
+      "className": "DesignObligationDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-obligation-declarations.ts",
+      "line": 37,
+      "column": 4,
+      "className": "DesignObligationDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-obligations.ts",
+      "line": 19,
+      "column": 13,
+      "className": "DesignObligations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-obligations.ts",
+      "line": 40,
+      "column": 4,
+      "className": "DesignObligations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-reports.ts",
+      "line": 30,
+      "column": 13,
+      "className": "DesignReports",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-reports.ts",
+      "line": 42,
+      "column": 4,
+      "className": "DesignReports",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-scenario-declarations.ts",
+      "line": 21,
+      "column": 13,
+      "className": "DesignScenarioDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-scenario-declarations.ts",
+      "line": 37,
+      "column": 4,
+      "className": "DesignScenarioDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-scenarios.ts",
+      "line": 19,
+      "column": 13,
+      "className": "DesignScenarios",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-scenarios.ts",
+      "line": 40,
+      "column": 4,
+      "className": "DesignScenarios",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-skips.ts",
+      "line": 22,
+      "column": 13,
+      "className": "DesignSkips",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-skips.ts",
+      "line": 42,
+      "column": 4,
+      "className": "DesignSkips",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-transition-declarations.ts",
+      "line": 21,
+      "column": 13,
+      "className": "DesignTransitionDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-transition-declarations.ts",
+      "line": 37,
+      "column": 4,
+      "className": "DesignTransitionDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-transitions.ts",
+      "line": 19,
+      "column": 13,
+      "className": "DesignTransitions",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-transitions.ts",
+      "line": 35,
+      "column": 4,
+      "className": "DesignTransitions",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-unit-declarations.ts",
+      "line": 18,
+      "column": 13,
+      "className": "DesignUnitDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-unit-declarations.ts",
+      "line": 34,
+      "column": 4,
+      "className": "DesignUnitDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-units.ts",
+      "line": 20,
+      "column": 13,
+      "className": "DesignUnits",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/design-units.ts",
+      "line": 36,
+      "column": 4,
+      "className": "DesignUnits",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/effect-assignments.ts",
+      "line": 34,
+      "column": 13,
+      "className": "EffectAssignments",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/effect-assignments.ts",
+      "line": 66,
+      "column": 4,
+      "className": "EffectAssignments",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/event-mappings.ts",
+      "line": 20,
+      "column": 13,
+      "className": "EventMappings",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/event-mappings.ts",
+      "line": 36,
+      "column": 4,
+      "className": "EventMappings",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/initial-states.ts",
+      "line": 17,
+      "column": 13,
+      "className": "InitialStates",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/initial-states.ts",
+      "line": 33,
+      "column": 4,
+      "className": "InitialStates",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/issued-lowered-identifiers.ts",
+      "line": 23,
+      "column": 13,
+      "className": "IssuedLoweredIdentifiers",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/issued-lowered-identifiers.ts",
+      "line": 27,
+      "column": 4,
+      "className": "IssuedLoweredIdentifiers",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/lowered-backgrounds.ts",
+      "line": 19,
+      "column": 13,
+      "className": "LoweredBackgrounds",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/lowered-backgrounds.ts",
+      "line": 35,
+      "column": 4,
+      "className": "LoweredBackgrounds",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/lowered-obligations.ts",
+      "line": 20,
+      "column": 13,
+      "className": "LoweredObligations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/lowered-obligations.ts",
+      "line": 36,
+      "column": 4,
+      "className": "LoweredObligations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/lowered-scenarios.ts",
+      "line": 19,
+      "column": 13,
+      "className": "LoweredScenarios",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/lowered-scenarios.ts",
+      "line": 35,
+      "column": 4,
+      "className": "LoweredScenarios",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/reachability-plan.ts",
+      "line": 36,
+      "column": 13,
+      "className": "ReachabilityPlan",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/reachability-plan.ts",
+      "line": 70,
+      "column": 4,
+      "className": "ReachabilityPlan",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/refinement-attributes.ts",
+      "line": 21,
+      "column": 13,
+      "className": "RefinementAttributes",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/refinement-attributes.ts",
+      "line": 37,
+      "column": 4,
+      "className": "RefinementAttributes",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/refinement-obligations.ts",
+      "line": 20,
+      "column": 13,
+      "className": "RefinementObligations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/refinement-obligations.ts",
+      "line": 36,
+      "column": 4,
+      "className": "RefinementObligations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/refinement-query-verdicts.ts",
+      "line": 35,
+      "column": 13,
+      "className": "RefinementQueryVerdicts",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/refinement-query-verdicts.ts",
+      "line": 39,
+      "column": 4,
+      "className": "RefinementQueryVerdicts",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/refinement-quint-invariants.ts",
+      "line": 32,
+      "column": 13,
+      "className": "RefinementQuintInvariants",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/refinement-quint-invariants.ts",
+      "line": 48,
+      "column": 4,
+      "className": "RefinementQuintInvariants",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/refinement-scenarios.ts",
+      "line": 19,
+      "column": 13,
+      "className": "RefinementScenarios",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/refinement-scenarios.ts",
+      "line": 35,
+      "column": 4,
+      "className": "RefinementScenarios",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/refinement-unit-maps.ts",
+      "line": 21,
+      "column": 13,
+      "className": "RefinementUnitMaps",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/refinement-unit-maps.ts",
+      "line": 37,
+      "column": 4,
+      "className": "RefinementUnitMaps",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/rule-subsumptions.ts",
+      "line": 19,
+      "column": 13,
+      "className": "RuleSubsumptions",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/rule-subsumptions.ts",
+      "line": 23,
+      "column": 4,
+      "className": "RuleSubsumptions",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/sibling-verdict-findings.ts",
+      "line": 19,
+      "column": 13,
+      "className": "SiblingVerdictFindings",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/sibling-verdict-findings.ts",
+      "line": 35,
+      "column": 4,
+      "className": "SiblingVerdictFindings",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/sibling-verdict-skips.ts",
+      "line": 19,
+      "column": 13,
+      "className": "SiblingVerdictSkips",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/sibling-verdict-skips.ts",
+      "line": 35,
+      "column": 4,
+      "className": "SiblingVerdictSkips",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/transition-references.ts",
+      "line": 19,
+      "column": 13,
+      "className": "TransitionReferences",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/transition-references.ts",
+      "line": 35,
+      "column": 4,
+      "className": "TransitionReferences",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/unformalized-targets.ts",
+      "line": 17,
+      "column": 13,
+      "className": "UnformalizedTargets",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/unformalized-targets.ts",
+      "line": 34,
+      "column": 4,
+      "className": "UnformalizedTargets",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/unmapped-declarations.ts",
+      "line": 21,
+      "column": 13,
+      "className": "UnmappedDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/design/domain/unmapped-declarations.ts",
+      "line": 37,
+      "column": 4,
+      "className": "UnmappedDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/doctor/domain/design-artifacts.ts",
+      "line": 21,
+      "column": 13,
+      "className": "DesignArtifacts",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/doctor/domain/design-artifacts.ts",
+      "line": 30,
+      "column": 4,
+      "className": "DesignArtifacts",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/doctor/domain/health-verdict.ts",
+      "line": 23,
+      "column": 13,
+      "className": "HealthVerdict",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/doctor/domain/health-verdict.ts",
+      "line": 39,
+      "column": 4,
+      "className": "HealthVerdict",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/doctor/domain/installation-manifest.ts",
+      "line": 27,
+      "column": 13,
+      "className": "InstallationManifest",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/doctor/domain/installation-manifest.ts",
+      "line": 62,
+      "column": 4,
+      "className": "InstallationManifest",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/doctor/domain/stable-releases.ts",
+      "line": 21,
+      "column": 13,
+      "className": "StableReleases",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/doctor/domain/stable-releases.ts",
+      "line": 25,
+      "column": 4,
+      "className": "StableReleases",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/doctor/domain/stage-scopes.ts",
+      "line": 21,
+      "column": 13,
+      "className": "StageScopes",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/doctor/domain/stage-scopes.ts",
+      "line": 30,
+      "column": 4,
+      "className": "StageScopes",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/doctor/domain/structural-debt.ts",
+      "line": 19,
+      "column": 13,
+      "className": "StructuralDebt",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/doctor/domain/structural-debt.ts",
+      "line": 23,
+      "column": 4,
+      "className": "StructuralDebt",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/declared-bindings.ts",
+      "line": 26,
+      "column": 13,
+      "className": "DeclaredBindings",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/declared-bindings.ts",
+      "line": 40,
+      "column": 4,
+      "className": "DeclaredBindings",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/declared-bindings.ts",
+      "line": 47,
+      "column": 3,
+      "className": "DeclaredBindings",
+      "member": "isEmpty"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/enumeration-members.ts",
+      "line": 26,
+      "column": 13,
+      "className": "EnumerationMembers",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/enumeration-members.ts",
+      "line": 42,
+      "column": 4,
+      "className": "EnumerationMembers",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/enumeration-members.ts",
+      "line": 71,
+      "column": 3,
+      "className": "EnumerationMembers",
+      "member": "isEmpty"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/error-messages.ts",
+      "line": 26,
+      "column": 13,
+      "className": "ErrorMessages",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/error-messages.ts",
+      "line": 62,
+      "column": 4,
+      "className": "ErrorMessages",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/error-messages.ts",
+      "line": 66,
+      "column": 3,
+      "className": "ErrorMessages",
+      "member": "isEmpty"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/finding-targets.ts",
+      "line": 34,
+      "column": 13,
+      "className": "FindingTargets",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/finding-targets.ts",
+      "line": 46,
+      "column": 4,
+      "className": "FindingTargets",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/functional-requirement-references.ts",
+      "line": 34,
+      "column": 13,
+      "className": "FunctionalRequirementReferences",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/functional-requirement-references.ts",
+      "line": 50,
+      "column": 4,
+      "className": "FunctionalRequirementReferences",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/functional-requirement-references.ts",
+      "line": 54,
+      "column": 3,
+      "className": "FunctionalRequirementReferences",
+      "member": "isEmpty"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/requirement-identifiers.ts",
+      "line": 30,
+      "column": 13,
+      "className": "RequirementIdentifiers",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/requirement-identifiers.ts",
+      "line": 47,
+      "column": 4,
+      "className": "RequirementIdentifiers",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/requirement-identifiers.ts",
+      "line": 64,
+      "column": 3,
+      "className": "RequirementIdentifiers",
+      "member": "isEmpty"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/scenario-bindings.ts",
+      "line": 30,
+      "column": 13,
+      "className": "ScenarioBindings",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/scenario-bindings.ts",
+      "line": 34,
+      "column": 4,
+      "className": "ScenarioBindings",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/scenario-bindings.ts",
+      "line": 70,
+      "column": 3,
+      "className": "ScenarioBindings",
+      "member": "isEmpty"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/scenario-verdicts.ts",
+      "line": 29,
+      "column": 13,
+      "className": "ScenarioVerdicts",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/scenario-verdicts.ts",
+      "line": 33,
+      "column": 4,
+      "className": "ScenarioVerdicts",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/scenario-verdicts.ts",
+      "line": 52,
+      "column": 3,
+      "className": "ScenarioVerdicts",
+      "member": "isEmpty"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/target-identifiers.ts",
+      "line": 31,
+      "column": 13,
+      "className": "TargetIdentifiers",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/target-identifiers.ts",
+      "line": 59,
+      "column": 4,
+      "className": "TargetIdentifiers",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/kernel/domain/target-identifiers.ts",
+      "line": 98,
+      "column": 3,
+      "className": "TargetIdentifiers",
+      "member": "isEmpty"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/allowed-values.ts",
+      "line": 22,
+      "column": 13,
+      "className": "AllowedValues",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/allowed-values.ts",
+      "line": 38,
+      "column": 4,
+      "className": "AllowedValues",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/attribute-declarations.ts",
+      "line": 24,
+      "column": 13,
+      "className": "AttributeDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/attribute-declarations.ts",
+      "line": 40,
+      "column": 4,
+      "className": "AttributeDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/attribute-names.ts",
+      "line": 25,
+      "column": 13,
+      "className": "AttributeNames",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/attribute-names.ts",
+      "line": 41,
+      "column": 4,
+      "className": "AttributeNames",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/check-families.ts",
+      "line": 29,
+      "column": 13,
+      "className": "CheckFamilies",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/check-families.ts",
+      "line": 45,
+      "column": 4,
+      "className": "CheckFamilies",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/component-entities.ts",
+      "line": 22,
+      "column": 13,
+      "className": "ComponentEntities",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/component-entities.ts",
+      "line": 38,
+      "column": 4,
+      "className": "ComponentEntities",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/component-references.ts",
+      "line": 23,
+      "column": 13,
+      "className": "ComponentReferences",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/component-references.ts",
+      "line": 39,
+      "column": 4,
+      "className": "ComponentReferences",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/component-shape-errors.ts",
+      "line": 21,
+      "column": 13,
+      "className": "ComponentShapeErrors",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/component-shape-errors.ts",
+      "line": 37,
+      "column": 4,
+      "className": "ComponentShapeErrors",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/components.ts",
+      "line": 43,
+      "column": 13,
+      "className": "Components",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/components.ts",
+      "line": 59,
+      "column": 4,
+      "className": "Components",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/contract-rows.ts",
+      "line": 32,
+      "column": 13,
+      "className": "ContractRows",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/contract-rows.ts",
+      "line": 48,
+      "column": 4,
+      "className": "ContractRows",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/domain-entity-sketches.ts",
+      "line": 31,
+      "column": 13,
+      "className": "DomainEntitySketches",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/domain-entity-sketches.ts",
+      "line": 47,
+      "column": 4,
+      "className": "DomainEntitySketches",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/entity-declarations.ts",
+      "line": 42,
+      "column": 13,
+      "className": "EntityDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/entity-declarations.ts",
+      "line": 58,
+      "column": 4,
+      "className": "EntityDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/entity-references.ts",
+      "line": 21,
+      "column": 13,
+      "className": "EntityReferences",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/entity-references.ts",
+      "line": 37,
+      "column": 4,
+      "className": "EntityReferences",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/findings.ts",
+      "line": 20,
+      "column": 13,
+      "className": "Findings",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/findings.ts",
+      "line": 36,
+      "column": 4,
+      "className": "Findings",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/input-anchors.ts",
+      "line": 23,
+      "column": 13,
+      "className": "InputAnchors",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/input-anchors.ts",
+      "line": 43,
+      "column": 4,
+      "className": "InputAnchors",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/relationship-declarations.ts",
+      "line": 21,
+      "column": 13,
+      "className": "RelationshipDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/relationship-declarations.ts",
+      "line": 41,
+      "column": 4,
+      "className": "RelationshipDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/rule-declarations.ts",
+      "line": 29,
+      "column": 13,
+      "className": "RuleDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/rule-declarations.ts",
+      "line": 45,
+      "column": 4,
+      "className": "RuleDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/shape-errors.ts",
+      "line": 21,
+      "column": 13,
+      "className": "ShapeErrors",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/shape-errors.ts",
+      "line": 37,
+      "column": 4,
+      "className": "ShapeErrors",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/sibling-unit-index.ts",
+      "line": 50,
+      "column": 13,
+      "className": "SiblingUnitIndex",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/sibling-unit-index.ts",
+      "line": 57,
+      "column": 4,
+      "className": "SiblingUnitIndex",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/skips.ts",
+      "line": 20,
+      "column": 13,
+      "className": "Skips",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/skips.ts",
+      "line": 36,
+      "column": 4,
+      "className": "Skips",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/source-identifiers.ts",
+      "line": 26,
+      "column": 13,
+      "className": "SourceIdentifiers",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/source-identifiers.ts",
+      "line": 42,
+      "column": 4,
+      "className": "SourceIdentifiers",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/specification-block-assessments.ts",
+      "line": 26,
+      "column": 13,
+      "className": "SpecificationBlockAssessments",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/specification-block-assessments.ts",
+      "line": 42,
+      "column": 4,
+      "className": "SpecificationBlockAssessments",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/state-machine-sketches.ts",
+      "line": 27,
+      "column": 13,
+      "className": "StateMachineSketches",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/state-machine-sketches.ts",
+      "line": 43,
+      "column": 4,
+      "className": "StateMachineSketches",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/state-names.ts",
+      "line": 21,
+      "column": 13,
+      "className": "StateNames",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/state-names.ts",
+      "line": 37,
+      "column": 4,
+      "className": "StateNames",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/unit-declarations.ts",
+      "line": 35,
+      "column": 13,
+      "className": "UnitDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/unit-declarations.ts",
+      "line": 51,
+      "column": 4,
+      "className": "UnitDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/unit-names.ts",
+      "line": 18,
+      "column": 13,
+      "className": "UnitNames",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/unit-names.ts",
+      "line": 34,
+      "column": 4,
+      "className": "UnitNames",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/witness-references.ts",
+      "line": 21,
+      "column": 13,
+      "className": "WitnessReferences",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/refcheck/domain/witness-references.ts",
+      "line": 37,
+      "column": 4,
+      "className": "WitnessReferences",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/background-assumptions.ts",
+      "line": 22,
+      "column": 13,
+      "className": "BackgroundAssumptions",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/background-assumptions.ts",
+      "line": 38,
+      "column": 4,
+      "className": "BackgroundAssumptions",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/cross-checked-entries.ts",
+      "line": 22,
+      "column": 13,
+      "className": "CrossCheckedEntries",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/cross-checked-entries.ts",
+      "line": 38,
+      "column": 4,
+      "className": "CrossCheckedEntries",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/functional-requirement-reference-claims.ts",
+      "line": 22,
+      "column": 13,
+      "className": "FunctionalRequirementReferenceClaims",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/functional-requirement-reference-claims.ts",
+      "line": 40,
+      "column": 4,
+      "className": "FunctionalRequirementReferenceClaims",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/functional-requirement-reference-index.ts",
+      "line": 63,
+      "column": 13,
+      "className": "FunctionalRequirementReferenceIndex",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/functional-requirement-reference-index.ts",
+      "line": 67,
+      "column": 4,
+      "className": "FunctionalRequirementReferenceIndex",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/intermediate-representation-attribute-catalog.ts",
+      "line": 53,
+      "column": 13,
+      "className": "IntermediateRepresentationAttributeCatalog",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/intermediate-representation-attribute-catalog.ts",
+      "line": 59,
+      "column": 4,
+      "className": "IntermediateRepresentationAttributeCatalog",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/intermediate-representation-attribute-declarations.ts",
+      "line": 28,
+      "column": 13,
+      "className": "IntermediateRepresentationAttributeDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/intermediate-representation-attribute-declarations.ts",
+      "line": 50,
+      "column": 4,
+      "className": "IntermediateRepresentationAttributeDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/intermediate-representation-background-declarations.ts",
+      "line": 28,
+      "column": 13,
+      "className": "IntermediateRepresentationBackgroundDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/intermediate-representation-background-declarations.ts",
+      "line": 50,
+      "column": 4,
+      "className": "IntermediateRepresentationBackgroundDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/intermediate-representation-entity-declarations.ts",
+      "line": 34,
+      "column": 13,
+      "className": "IntermediateRepresentationEntityDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/intermediate-representation-entity-declarations.ts",
+      "line": 56,
+      "column": 4,
+      "className": "IntermediateRepresentationEntityDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/intermediate-representation-obligation-declarations.ts",
+      "line": 28,
+      "column": 13,
+      "className": "IntermediateRepresentationObligationDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/intermediate-representation-obligation-declarations.ts",
+      "line": 50,
+      "column": 4,
+      "className": "IntermediateRepresentationObligationDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/intermediate-representation-scenario-declarations.ts",
+      "line": 28,
+      "column": 13,
+      "className": "IntermediateRepresentationScenarioDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/intermediate-representation-scenario-declarations.ts",
+      "line": 50,
+      "column": 4,
+      "className": "IntermediateRepresentationScenarioDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/obligation-identifiers.ts",
+      "line": 29,
+      "column": 13,
+      "className": "ObligationIdentifiers",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/obligation-identifiers.ts",
+      "line": 45,
+      "column": 4,
+      "className": "ObligationIdentifiers",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/obligations.ts",
+      "line": 27,
+      "column": 13,
+      "className": "Obligations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/obligations.ts",
+      "line": 43,
+      "column": 4,
+      "className": "Obligations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/quint-machine-components.ts",
+      "line": 25,
+      "column": 13,
+      "className": "QuintMachineComponents",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/quint-machine-components.ts",
+      "line": 41,
+      "column": 4,
+      "className": "QuintMachineComponents",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/requirement-attribute-declarations.ts",
+      "line": 30,
+      "column": 13,
+      "className": "RequirementAttributeDeclarations",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/requirement-attribute-declarations.ts",
+      "line": 48,
+      "column": 4,
+      "className": "RequirementAttributeDeclarations",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-event-pair-probes.ts",
+      "line": 25,
+      "column": 13,
+      "className": "SatisfiabilityModuloTheoriesEventPairProbes",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-event-pair-probes.ts",
+      "line": 47,
+      "column": 4,
+      "className": "SatisfiabilityModuloTheoriesEventPairProbes",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-query-verdicts.ts",
+      "line": 32,
+      "column": 13,
+      "className": "SatisfiabilityModuloTheoriesQueryVerdicts",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-query-verdicts.ts",
+      "line": 38,
+      "column": 4,
+      "className": "SatisfiabilityModuloTheoriesQueryVerdicts",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/scenarios.ts",
+      "line": 19,
+      "column": 13,
+      "className": "Scenarios",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/scenarios.ts",
+      "line": 35,
+      "column": 4,
+      "className": "Scenarios",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/trace-state.ts",
+      "line": 27,
+      "column": 13,
+      "className": "TraceState",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/trace-state.ts",
+      "line": 31,
+      "column": 4,
+      "className": "TraceState",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/trace-states.ts",
+      "line": 23,
+      "column": 13,
+      "className": "TraceStates",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/trace-states.ts",
+      "line": 39,
+      "column": 4,
+      "className": "TraceStates",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/verification-findings.ts",
+      "line": 26,
+      "column": 13,
+      "className": "VerificationFindings",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/verification-findings.ts",
+      "line": 42,
+      "column": 4,
+      "className": "VerificationFindings",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/verification-reports.ts",
+      "line": 33,
+      "column": 13,
+      "className": "VerificationReports",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/verification-reports.ts",
+      "line": 49,
+      "column": 4,
+      "className": "VerificationReports",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/verification-skips.ts",
+      "line": 25,
+      "column": 13,
+      "className": "VerificationSkips",
+      "member": "rebuild"
+    },
+    {
+      "rule": "missing-override",
+      "path": "src/requirements/domain/verification-skips.ts",
+      "line": 45,
+      "column": 4,
+      "className": "VerificationSkips",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "tests/collection-operations-kernel.test.ts",
+      "line": 61,
+      "column": 3,
+      "className": "ProbeCollection",
+      "member": "[Symbol.iterator]"
+    },
+    {
+      "rule": "missing-override",
+      "path": "tests/collection-operations-kernel.test.ts",
+      "line": 65,
+      "column": 13,
+      "className": "ProbeCollection",
+      "member": "rebuild"
+    }
+  ]
+}

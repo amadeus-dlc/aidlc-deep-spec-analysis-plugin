@@ -47,14 +47,14 @@ export class SiblingUnitIndex
     );
   }
 
-  protected rebuild(values: readonly SiblingUnitIndexEntry[]): SiblingUnitIndex {
+  protected override rebuild(values: readonly SiblingUnitIndexEntry[]): SiblingUnitIndex {
     return new SiblingUnitIndex(
       KeyedIndex.of(values.map((entry) => [entry.unit(), entry.declarations()] as const)),
       values,
     );
   }
 
-  *[Symbol.iterator](): Iterator<SiblingUnitIndexEntry> {
+  override *[Symbol.iterator](): Iterator<SiblingUnitIndexEntry> {
     yield* this.#entries;
   }
 

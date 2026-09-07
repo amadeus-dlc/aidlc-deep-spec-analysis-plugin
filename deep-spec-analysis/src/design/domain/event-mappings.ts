@@ -17,7 +17,7 @@ export class EventMappings extends FirstClassCollectionBase<EventMapping, EventM
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-event-mappings");
   }
 
-  protected rebuild(values: readonly EventMapping[]): EventMappings {
+  protected override rebuild(values: readonly EventMapping[]): EventMappings {
     return new EventMappings(values);
   }
 
@@ -33,7 +33,7 @@ export class EventMappings extends FirstClassCollectionBase<EventMapping, EventM
     return new EventMappings([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<EventMapping> {
+  override *[Symbol.iterator](): Iterator<EventMapping> {
     yield* this.#values;
   }
 

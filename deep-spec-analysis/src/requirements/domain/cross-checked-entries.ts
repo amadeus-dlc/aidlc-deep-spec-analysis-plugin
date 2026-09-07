@@ -19,7 +19,7 @@ export class CrossCheckedEntries
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-cross-checked-entries");
   }
 
-  protected rebuild(values: readonly CrossCheckedEntry[]): CrossCheckedEntries {
+  protected override rebuild(values: readonly CrossCheckedEntry[]): CrossCheckedEntries {
     return new CrossCheckedEntries(values);
   }
 
@@ -35,7 +35,7 @@ export class CrossCheckedEntries
     return new CrossCheckedEntries([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<CrossCheckedEntry> {
+  override *[Symbol.iterator](): Iterator<CrossCheckedEntry> {
     yield* this.#values;
   }
 

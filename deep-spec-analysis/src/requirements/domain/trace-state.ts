@@ -24,11 +24,11 @@ export class TraceState extends FirstClassCollectionBase<TraceStateEntry, TraceS
     this.#entries = KeyedIndex.of(snapshot.map((entry) => [entry.path(), entry] as const));
   }
 
-  protected rebuild(values: readonly TraceStateEntry[]): TraceState {
+  protected override rebuild(values: readonly TraceStateEntry[]): TraceState {
     return TraceState.of(values);
   }
 
-  *[Symbol.iterator](): Iterator<TraceStateEntry> {
+  override *[Symbol.iterator](): Iterator<TraceStateEntry> {
     yield* this.#entries.values();
   }
 

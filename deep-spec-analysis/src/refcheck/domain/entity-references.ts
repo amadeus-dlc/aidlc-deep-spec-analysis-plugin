@@ -18,7 +18,7 @@ export class EntityReferences
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-entity-references");
   }
 
-  protected rebuild(values: readonly EntityReference[]): EntityReferences {
+  protected override rebuild(values: readonly EntityReference[]): EntityReferences {
     return new EntityReferences(values);
   }
 
@@ -34,7 +34,7 @@ export class EntityReferences
     return new EntityReferences([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<EntityReference> {
+  override *[Symbol.iterator](): Iterator<EntityReference> {
     yield* this.#values;
   }
 

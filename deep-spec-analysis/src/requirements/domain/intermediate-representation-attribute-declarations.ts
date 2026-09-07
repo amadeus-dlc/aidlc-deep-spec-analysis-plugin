@@ -25,7 +25,7 @@ export class IntermediateRepresentationAttributeDeclarations
     );
   }
 
-  protected rebuild(
+  protected override rebuild(
     values: readonly IntermediateRepresentationAttributeDeclaration[],
   ): IntermediateRepresentationAttributeDeclarations {
     return new IntermediateRepresentationAttributeDeclarations(values);
@@ -47,7 +47,7 @@ export class IntermediateRepresentationAttributeDeclarations
     return new IntermediateRepresentationAttributeDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<IntermediateRepresentationAttributeDeclaration> {
+  override *[Symbol.iterator](): Iterator<IntermediateRepresentationAttributeDeclaration> {
     yield* this.#values;
   }
 

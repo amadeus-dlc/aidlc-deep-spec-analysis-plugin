@@ -18,7 +18,7 @@ export class ShapeErrors
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-shape-errors");
   }
 
-  protected rebuild(values: readonly ShapeError[]): ShapeErrors {
+  protected override rebuild(values: readonly ShapeError[]): ShapeErrors {
     return new ShapeErrors(values);
   }
 
@@ -34,7 +34,7 @@ export class ShapeErrors
     return new ShapeErrors([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<ShapeError> {
+  override *[Symbol.iterator](): Iterator<ShapeError> {
     yield* this.#values;
   }
 

@@ -18,11 +18,11 @@ export class StableReleases extends FirstClassCollectionBase<PluginVersion, Stab
     this.#versions = boundedCollectionSnapshot(versions, 10_000, "too-many-stable-releases");
   }
 
-  protected rebuild(values: readonly PluginVersion[]): StableReleases {
+  protected override rebuild(values: readonly PluginVersion[]): StableReleases {
     return new StableReleases(values);
   }
 
-  *[Symbol.iterator](): Iterator<PluginVersion> {
+  override *[Symbol.iterator](): Iterator<PluginVersion> {
     yield* this.#versions;
   }
   static of(versions: readonly PluginVersion[]): StableReleases {

@@ -30,7 +30,7 @@ export class VerificationReports
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-verification-reports");
   }
 
-  protected rebuild(values: readonly VerificationReport[]): VerificationReports {
+  protected override rebuild(values: readonly VerificationReport[]): VerificationReports {
     return new VerificationReports(values);
   }
 
@@ -46,7 +46,7 @@ export class VerificationReports
     return new VerificationReports([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<VerificationReport> {
+  override *[Symbol.iterator](): Iterator<VerificationReport> {
     yield* this.#values;
   }
 

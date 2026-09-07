@@ -24,11 +24,11 @@ export class BusinessRuleReferenceIndex extends FirstClassCollectionBase<
     this.#ids = ids;
   }
 
-  protected rebuild(values: readonly BusinessRuleReference[]): BusinessRuleReferenceIndex {
+  protected override rebuild(values: readonly BusinessRuleReference[]): BusinessRuleReferenceIndex {
     return new BusinessRuleReferenceIndex(KeySet.of(values));
   }
 
-  *[Symbol.iterator](): Iterator<BusinessRuleReference> {
+  override *[Symbol.iterator](): Iterator<BusinessRuleReference> {
     yield* this.#ids;
   }
 

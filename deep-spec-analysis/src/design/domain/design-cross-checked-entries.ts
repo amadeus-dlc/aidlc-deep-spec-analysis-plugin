@@ -19,7 +19,7 @@ export class DesignCrossCheckedEntries extends FirstClassCollectionBase<
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-cross-checked-entries");
   }
 
-  protected rebuild(values: readonly DesignCrossCheckedEntry[]): DesignCrossCheckedEntries {
+  protected override rebuild(values: readonly DesignCrossCheckedEntry[]): DesignCrossCheckedEntries {
     return new DesignCrossCheckedEntries(values);
   }
 
@@ -35,7 +35,7 @@ export class DesignCrossCheckedEntries extends FirstClassCollectionBase<
     return new DesignCrossCheckedEntries([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<DesignCrossCheckedEntry> {
+  override *[Symbol.iterator](): Iterator<DesignCrossCheckedEntry> {
     yield* this.#values;
   }
 

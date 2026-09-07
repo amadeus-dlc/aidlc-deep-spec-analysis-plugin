@@ -60,11 +60,13 @@ export class FunctionalRequirementReferenceIndex
     return parseConstruction(() => new FunctionalRequirementReferenceIndex(claims));
   }
 
-  protected rebuild(values: readonly FunctionalRequirementReferenceClaim[]): FunctionalRequirementReferenceIndex {
+  protected override rebuild(
+    values: readonly FunctionalRequirementReferenceClaim[],
+  ): FunctionalRequirementReferenceIndex {
     return new FunctionalRequirementReferenceIndex(values);
   }
 
-  *[Symbol.iterator](): Iterator<FunctionalRequirementReferenceClaim> {
+  override *[Symbol.iterator](): Iterator<FunctionalRequirementReferenceClaim> {
     yield* this.#claims;
   }
 
