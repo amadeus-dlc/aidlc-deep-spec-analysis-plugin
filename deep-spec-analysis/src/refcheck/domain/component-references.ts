@@ -13,7 +13,7 @@ import {
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
-import { DD_2 } from "./component-check-families.ts";
+import { DD_2, DD_3 } from "./component-check-families.ts";
 import type { ComponentName } from "./component-name.ts";
 import type { ComponentReference } from "./component-reference.ts";
 import type { Components } from "./components.ts";
@@ -88,8 +88,20 @@ export class ComponentReferences
   }
 
   // 境界: DD-3 の witness 生成用。name を指す参照を走査順のまま返す。
-  pointingAt(name: ComponentName): readonly ComponentReference[] {
-    return this.#values.filter((reference) => reference.pointsAt(name));
+  pointingAt(name: ComponentName): ComponentReferences {
+    return this.filter((reference) => reference.pointsAt(name));
+  }
+
+  // DD-3: owner 自身を指す依存参照を、走査順のまま報告する。
+  checkSelfReferences(owner: ComponentName, report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const reference of this.pointingAt(owner).#values)
+      report.finding(
+        DD_3,
+        FindingKind.structureInvalid(),
+        FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", owner.asString())), []),
+        [WitnessReference.at(artifact.asString(), reference.element().asString(), owner.asString())],
+        `component "${owner.asString()}" lists itself as a dependency`,
+      );
   }
 
   toArray(): readonly ComponentReference[] {

@@ -54,8 +54,8 @@ export class UnitNames extends FirstClassCollectionBase<UnitName, UnitNames> imp
   }
 
   // CD-3: 宣言済みユニットへの依存先だけを走査順のまま（未宣言の辺は落とす——凍結挙動）。
-  declaredIn(declared: UnitDeclarations): readonly UnitName[] {
-    return this.#values.filter((name) => declared.declares(name.asString()));
+  declaredIn(declared: UnitDeclarations): UnitNames {
+    return this.filter((name) => declared.declares(name.asString()));
   }
 
   // 境界: 描画専用。unit 名を保持順のまま文字列にする。

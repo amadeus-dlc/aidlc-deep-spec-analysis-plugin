@@ -6,10 +6,9 @@ import {
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
 import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
-import { DD_1, DD_3 } from "./component-check-families.ts";
+import { DD_1 } from "./component-check-families.ts";
 import type { ComponentEntities } from "./component-entities.ts";
 import type { ComponentName } from "./component-name.ts";
-import type { ComponentReference } from "./component-reference.ts";
 import type { ComponentReferences } from "./component-references.ts";
 import type { Components } from "./components.ts";
 import type { ElementPath } from "./element-path.ts";
@@ -63,14 +62,7 @@ export class Component {
     this.#entities.checkReferenceOwners(components, report, artifact);
   }
   checkSelfReferences(report: ReferenceCheckReport, artifact: ArtifactPath): void {
-    for (const reference of this.selfReferences())
-      report.finding(
-        DD_3,
-        FindingKind.structureInvalid(),
-        FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", this.#name.asString())), []),
-        [WitnessReference.at(artifact.asString(), reference.element().asString(), this.#name.asString())],
-        `component "${this.#name.asString()}" lists itself as a dependency`,
-      );
+    this.#allReferences().checkSelfReferences(this.#name, report, artifact);
   }
   checkIdentifiers(report: ReferenceCheckReport, artifact: ArtifactPath): void {
     this.#entities.checkIdentifiers(report, artifact);
@@ -128,7 +120,7 @@ export class Component {
   }
 
   // DD-3: 自分自身を指す依存参照（depends_on → dependents の走査順——凍結）。
-  selfReferences(): readonly ComponentReference[] {
+  selfReferences(): ComponentReferences {
     return this.#allReferences().pointingAt(this.#name);
   }
 
