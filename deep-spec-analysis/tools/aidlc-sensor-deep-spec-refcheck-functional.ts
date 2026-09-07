@@ -131,6 +131,38 @@ function compareCanonically(a, b) {
 function sortedUniqueCanonically(values) {
   return [...new Set(values)].sort(compareCanonically);
 }
+// src/kernel/infrastructure/hash-code.ts
+var SEED = 1;
+var MULTIPLIER = 31;
+var TRUE_HASH = 1231;
+var FALSE_HASH = 1237;
+function hashOfString(value) {
+  let hash = 0;
+  for (let index = 0;index < value.length; index++)
+    hash = MULTIPLIER * hash + value.charCodeAt(index) | 0;
+  return hash;
+}
+function hashOfNumber(value) {
+  if (Number.isNaN(value))
+    return 0;
+  if (Number.isSafeInteger(value))
+    return value === 0 ? 0 : value | 0;
+  const view = new DataView(new ArrayBuffer(8));
+  view.setFloat64(0, value);
+  return view.getInt32(0) ^ view.getInt32(4) | 0;
+}
+function hashOfBoolean(value) {
+  return value ? TRUE_HASH : FALSE_HASH;
+}
+function hashOfNullable(value, hash) {
+  return value === null || value === undefined ? 0 : hash(value);
+}
+function combinedHash(hashes) {
+  let hash = SEED;
+  for (const element of hashes)
+    hash = MULTIPLIER * hash + element | 0;
+  return hash;
+}
 // src/kernel/infrastructure/json.ts
 function isObject(v) {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -420,6 +452,9 @@ class ArtifactPath {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -442,6 +477,9 @@ class AttributeBound {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfNumber(this.#value);
   }
   asNumber() {
     return this.#value;
@@ -466,6 +504,9 @@ class AttributeKind {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   isBool() {
     return this.#value === "bool";
@@ -499,6 +540,9 @@ class AttributePath {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   compareTo(other) {
     return compareCanonically(this.#value, other.#value);
   }
@@ -525,6 +569,9 @@ class BackendName {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -548,6 +595,9 @@ class BindingDeclaration {
   }
   equals(other) {
     return this.#path.equals(other.#path) && this.#value.equals(other.#value);
+  }
+  hashCode() {
+    return combinedHash([this.#path.hashCode(), this.#value.hashCode()]);
   }
 }
 // src/kernel/domain/binding-value.ts
@@ -581,6 +631,13 @@ class BindingValue {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return this.match({
+      bool: (value) => hashOfBoolean(value),
+      int: (value) => hashOfNumber(value),
+      enum: (value) => hashOfString(value)
+    });
   }
   match(cases) {
     if (typeof this.#value === "boolean")
@@ -624,6 +681,9 @@ class ContentHash {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -662,6 +722,9 @@ class Declaration {
   equals(other) {
     return jsonEquals(this.#value, other.#value);
   }
+  hashCode() {
+    return hashOfString(canonicalStringify(this.#value));
+  }
   describe() {
     return JSON.stringify(this.#value);
   }
@@ -689,6 +752,9 @@ class DeclaredBindingValue {
   }
   equals(other) {
     return this.#value.equals(other.#value);
+  }
+  hashCode() {
+    return this.#value.hashCode();
   }
 }
 // src/kernel/domain/collection-operations.ts
@@ -774,46 +840,57 @@ function collectionMap(source, transform) {
   }
   return values;
 }
-
-// src/kernel/domain/immutable-first-class-collection.ts
-class ImmutableFirstClassCollection {
-  #values;
-  constructor(values) {
-    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-immutable-collection-elements");
+function collectionEquals(left, right) {
+  const leftIterator = left[Symbol.iterator]();
+  const rightIterator = right[Symbol.iterator]();
+  let inspected = 0;
+  for (;; ) {
+    checkReadBudget("collection-equals", inspected);
+    inspected++;
+    const leftStep = leftIterator.next();
+    const rightStep = rightIterator.next();
+    if (leftStep.done === true || rightStep.done === true)
+      return leftStep.done === rightStep.done;
+    if (!leftStep.value.equals(rightStep.value))
+      return false;
   }
-  static of(values) {
-    return new ImmutableFirstClassCollection(values);
+}
+function collectionHashCode(source) {
+  let hash = 1;
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-hash-code", inspected);
+    inspected++;
+    hash = 31 * hash + element.hashCode() | 0;
   }
-  static parse(values) {
-    return parseConstruction(() => new ImmutableFirstClassCollection(values));
+  return hash;
+}
+function collectionCount(source) {
+  let inspected = 0;
+  for (const _element of source) {
+    checkReadBudget("collection-count", inspected);
+    inspected++;
   }
-  [Symbol.iterator]() {
-    return this.#values[Symbol.iterator]();
+  return inspected;
+}
+function collectionCombine(left, right) {
+  const values = [];
+  for (const source of [left, right])
+    for (const element of source) {
+      checkReadBudget("collection-combine", values.length);
+      values.push(element);
+    }
+  return values;
+}
+function collectionFoldLeft(source, initial, accumulate) {
+  let accumulator = initial;
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-fold-left", inspected);
+    inspected++;
+    accumulator = accumulate(accumulator, element);
   }
-  at(index) {
-    return collectionAt(this, index);
-  }
-  head() {
-    return collectionHead(this);
-  }
-  tail() {
-    return ImmutableFirstClassCollection.of(collectionTail(this));
-  }
-  include(element) {
-    return collectionInclude(this, element);
-  }
-  exists(predicate) {
-    return collectionExists(this, predicate);
-  }
-  filter(predicate) {
-    return ImmutableFirstClassCollection.of(collectionFilter(this, predicate));
-  }
-  map(transform) {
-    return ImmutableFirstClassCollection.of(collectionMap(this, transform));
-  }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
+  return accumulator;
 }
 
 // src/kernel/domain/non-empty-first-class-collection-base.ts
@@ -837,8 +914,23 @@ class NonEmptyFirstClassCollectionBase {
   filter(predicate) {
     return this.rebuild(collectionFilter(this, predicate));
   }
-  map(transform) {
-    return ImmutableFirstClassCollection.of(collectionMap(this, transform));
+  equals(other) {
+    return this === other || collectionEquals(this, other);
+  }
+  hashCode() {
+    return collectionHashCode(this);
+  }
+  count() {
+    return collectionCount(this);
+  }
+  foldLeft(initial, accumulate) {
+    return collectionFoldLeft(this, initial, accumulate);
+  }
+  mapTo(transform, factory) {
+    return factory(collectionMap(this, transform));
+  }
+  combineTo(other, factory) {
+    return factory(collectionCombine(this, other));
   }
 }
 
@@ -866,6 +958,12 @@ class DeclaredBindings extends FirstClassCollectionBase {
   rebuild(values) {
     return new DeclaredBindings(values);
   }
+  map(transform) {
+    return this.mapTo(transform, DeclaredBindings.of);
+  }
+  combine(other) {
+    return this.combineTo(other, DeclaredBindings.of);
+  }
   static parse(values) {
     return parseConstruction(() => new DeclaredBindings(values));
   }
@@ -877,6 +975,18 @@ class DeclaredBindings extends FirstClassCollectionBase {
   }
   *[Symbol.iterator]() {
     yield* this.#values;
+  }
+  matchesVerbatim(other) {
+    if (this.count() !== other.count())
+      return false;
+    const otherValues = other.#values;
+    return !this.#values.some((binding, index) => {
+      const counterpart = otherValues[index];
+      return counterpart === undefined || !binding.path().equals(counterpart.path()) || binding.value().describe() !== counterpart.value().describe();
+    });
+  }
+  verbatimHashCode() {
+    return combinedHash(this.#values.map((binding) => combinedHash([binding.path().hashCode(), hashOfString(binding.value().describe())])));
   }
   toArray() {
     return this.#values;
@@ -948,6 +1058,9 @@ class EnumerationMember {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   compareTo(other) {
     return compareCanonically(this.#value, other.#value);
   }
@@ -966,6 +1079,12 @@ class EnumerationMembers extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new EnumerationMembers(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, EnumerationMembers.of);
+  }
+  combine(other) {
+    return this.combineTo(other, EnumerationMembers.of);
   }
   static parse(values) {
     return parseConstruction(() => new EnumerationMembers(values));
@@ -1024,6 +1143,9 @@ class ErrorMessage {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
 }
 // src/kernel/domain/error-messages.ts
 var MAX_MESSAGES = 65536;
@@ -1036,6 +1158,12 @@ class ErrorMessages extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new ErrorMessages(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, ErrorMessages.of);
+  }
+  combine(other) {
+    return this.combineTo(other, ErrorMessages.of);
   }
   static parse(values) {
     return parseConstruction(() => new ErrorMessages(values));
@@ -1053,6 +1181,9 @@ class ErrorMessages extends FirstClassCollectionBase {
       values.push(diagnostic.ok ? diagnostic.value : ErrorMessage.of("validation diagnostic could not be represented within its text budget"));
     }
     return new ErrorMessages(values);
+  }
+  asDiagnostics() {
+    return [...this.#values].map((message) => ok(message));
   }
   add(value) {
     return new ErrorMessages([...this.#values, value]);
@@ -1163,6 +1294,9 @@ class ExpressionTree {
   equals(other) {
     return this.isCanonicallyEqual(other);
   }
+  hashCode() {
+    return hashOfString(canonicalStringify(this.#root));
+  }
 }
 // src/kernel/domain/finding-kind.ts
 var KIND_RANK = {
@@ -1233,6 +1367,9 @@ class FindingKind {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   compareTo(other) {
     return KIND_RANK[this.#value] - KIND_RANK[other.#value];
   }
@@ -1269,6 +1406,9 @@ class TargetIdentifier {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   compareTo(other) {
     return compareCanonically(this.#value, other.#value);
   }
@@ -1294,6 +1434,12 @@ class TargetIdentifiers extends FirstClassCollectionBase {
   }
   static of(values) {
     return new TargetIdentifiers(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, TargetIdentifiers.of);
+  }
+  combine(other) {
+    return this.combineTo(other, TargetIdentifiers.of);
   }
   static parse(values) {
     return parseConstruction(() => new TargetIdentifiers(values));
@@ -1354,11 +1500,20 @@ class FindingTargets extends NonEmptyFirstClassCollectionBase {
   rebuild(values) {
     return TargetIdentifiers.of(values);
   }
+  map(transform) {
+    return this.mapTo(transform, ([head, ...tail]) => FindingTargets.of(head, tail));
+  }
+  combine(other) {
+    return this.combineTo(other, ([head, ...tail]) => FindingTargets.of(head, tail));
+  }
   static of(head, tail) {
     return new FindingTargets(head, tail);
   }
   static parse(head, tail) {
     return parseConstruction(() => new FindingTargets(head, tail));
+  }
+  static parseWithTail(head, tail) {
+    return parseConstruction(() => new FindingTargets(head, [...tail]));
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -1429,6 +1584,12 @@ class FunctionalRequirementReferences extends FirstClassCollectionBase {
   rebuild(values) {
     return new FunctionalRequirementReferences(values);
   }
+  map(transform) {
+    return this.mapTo(transform, FunctionalRequirementReferences.of);
+  }
+  combine(other) {
+    return this.combineTo(other, FunctionalRequirementReferences.of);
+  }
   static parse(values) {
     return parseConstruction(() => new FunctionalRequirementReferences(values));
   }
@@ -1473,6 +1634,9 @@ class IntermediateRepresentationVersion {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   majorVersion() {
     return Number.parseInt(this.#value.split(".")[0] ?? "", 10);
@@ -1584,6 +1748,9 @@ class NormalizedName {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -1604,6 +1771,9 @@ class ObligationNature {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   asString() {
     return this.#value;
@@ -1640,6 +1810,9 @@ class QueryLabel {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   compareTo(other) {
     return this.#value < other.#value ? -1 : this.#value > other.#value ? 1 : 0;
   }
@@ -1666,6 +1839,9 @@ class RequirementIdentifier {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   compareTo(other) {
     return compareCanonically(this.#value, other.#value);
   }
@@ -1688,6 +1864,12 @@ class RequirementIdentifiers extends FirstClassCollectionBase {
   }
   static of(values) {
     return new RequirementIdentifiers(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, RequirementIdentifiers.of);
+  }
+  combine(other) {
+    return this.combineTo(other, RequirementIdentifiers.of);
   }
   static parse(values) {
     return parseConstruction(() => new RequirementIdentifiers(values));
@@ -1736,6 +1918,9 @@ class ScenarioBinding {
   equals(other) {
     return this.#path.equals(other.#path) && this.#value.equals(other.#value);
   }
+  hashCode() {
+    return combinedHash([this.#path.hashCode(), this.#value.hashCode()]);
+  }
 }
 // src/kernel/domain/scenario-bindings.ts
 class ScenarioBindings extends FirstClassCollectionBase {
@@ -1757,6 +1942,12 @@ class ScenarioBindings extends FirstClassCollectionBase {
   }
   *[Symbol.iterator]() {
     yield* this.#values;
+  }
+  map(transform) {
+    return this.mapTo(transform, ScenarioBindings.of);
+  }
+  combine(other) {
+    return this.combineTo(other, ScenarioBindings.of);
   }
   static parse(values) {
     return parseConstruction(() => new ScenarioBindings(values));
@@ -1898,6 +2089,15 @@ class ScenarioVerdict {
   equals(other) {
     return this.#backend.equals(other.#backend) && this.#modelHash.equals(other.#modelHash) && this.#state === other.#state && this.#target.equals(other.#target) && (this.#unit === null ? other.#unit === null : other.#unit !== null && this.#unit.equals(other.#unit));
   }
+  hashCode() {
+    return combinedHash([
+      this.#backend.hashCode(),
+      this.#modelHash.hashCode(),
+      hashOfString(this.#state),
+      this.#target.hashCode(),
+      hashOfNullable(this.#unit, (unit) => unit.hashCode())
+    ]);
+  }
   verdictLabel() {
     if (this.#state !== "clean" && this.#state !== "violated")
       throw new Error("defect: an unverified scenario has no verdict label");
@@ -1925,6 +2125,12 @@ class ScenarioVerdicts extends FirstClassCollectionBase {
   }
   static of(values) {
     return new ScenarioVerdicts(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, ScenarioVerdicts.of);
+  }
+  combine(other) {
+    return this.combineTo(other, ScenarioVerdicts.of);
   }
   static parse(values) {
     return parseConstruction(() => new ScenarioVerdicts(values));
@@ -2023,6 +2229,9 @@ class TriggerName {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -2045,6 +2254,9 @@ class UnitName {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   asString() {
     return this.#value;
@@ -2089,6 +2301,9 @@ class VerificationMethod {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   asString() {
     return this.#value;
@@ -2669,6 +2884,9 @@ class AllowedValue {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -2685,6 +2903,12 @@ class AllowedValues extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new AllowedValues(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, AllowedValues.of);
+  }
+  combine(other) {
+    return this.combineTo(other, AllowedValues.of);
   }
   static parse(values) {
     return parseConstruction(() => new AllowedValues(values));
@@ -2732,6 +2956,9 @@ class AppliesTo {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -2756,6 +2983,12 @@ class CheckFamilies extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new CheckFamilies(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, CheckFamilies.of);
+  }
+  combine(other) {
+    return this.combineTo(other, CheckFamilies.of);
   }
   static parse(values) {
     return parseConstruction(() => new CheckFamilies(values));
@@ -2795,6 +3028,9 @@ class CheckFamily {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   asString() {
     return this.#value;
@@ -2862,6 +3098,9 @@ class ElementPath {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -2894,6 +3133,19 @@ class WitnessReference {
   }
   equals(other) {
     return this.#artifact.equals(other.#artifact) && this.#element.equals(other.#element) && this.#value === other.#value;
+  }
+  hashCode() {
+    return combinedHash([
+      this.#artifact.hashCode(),
+      this.#element.hashCode(),
+      hashOfNullable(this.#value, hashOfString)
+    ]);
+  }
+  toDocument() {
+    const out = { artifact: this.#artifact.asString(), element: this.#element.asString() };
+    if (this.#value !== undefined)
+      out.value = this.#value;
+    return out;
   }
   pointsAt(artifact, element) {
     return this.#artifact.asString() === artifact && this.#element.asString() === element;
@@ -2982,10 +3234,22 @@ class AttributeDeclaration {
   }
   equals(other) {
     const optionalEqual = (left, right) => left === null ? right === null : right !== null && left.equals(right);
-    const allowedEqual = this.#allowed === null ? other.#allowed === null : other.#allowed !== null && this.#allowed.toArray().length === other.#allowed.toArray().length && this.#allowed.toArray().every((value, index) => value.equals(other.#allowed?.toArray()[index]));
-    const defaultsEqual = optionalEqual(this.#def, other.#def);
-    const boundEqual = (left, right) => left === null ? right === null : right !== null && left.equals(right);
-    return this.#name.equals(other.#name) && this.#element.equals(other.#element) && optionalEqual(this.#type, other.#type) && this.#uniqueIsTrue === other.#uniqueIsTrue && optionalEqual(this.#references, other.#references) && allowedEqual && defaultsEqual && this.#minDeclared === other.#minDeclared && this.#maxDeclared === other.#maxDeclared && boundEqual(this.#min, other.#min) && boundEqual(this.#max, other.#max);
+    return this.#name.equals(other.#name) && this.#element.equals(other.#element) && optionalEqual(this.#type, other.#type) && this.#uniqueIsTrue === other.#uniqueIsTrue && optionalEqual(this.#references, other.#references) && optionalEqual(this.#allowed, other.#allowed) && optionalEqual(this.#def, other.#def) && this.#minDeclared === other.#minDeclared && this.#maxDeclared === other.#maxDeclared && optionalEqual(this.#min, other.#min) && optionalEqual(this.#max, other.#max);
+  }
+  hashCode() {
+    return combinedHash([
+      this.#name.hashCode(),
+      this.#element.hashCode(),
+      hashOfNullable(this.#type, (type) => type.hashCode()),
+      hashOfBoolean(this.#uniqueIsTrue),
+      hashOfNullable(this.#references, (references) => references.hashCode()),
+      hashOfNullable(this.#allowed, (allowed) => allowed.hashCode()),
+      hashOfNullable(this.#def, (def) => def.hashCode()),
+      hashOfBoolean(this.#minDeclared),
+      hashOfBoolean(this.#maxDeclared),
+      hashOfNullable(this.#min, (min) => min.hashCode()),
+      hashOfNullable(this.#max, (max) => max.hashCode())
+    ]);
   }
   hasAllowedValues() {
     return this.#allowed !== null;
@@ -3050,6 +3314,12 @@ class AttributeDeclarations extends FirstClassCollectionBase {
   rebuild(values) {
     return new AttributeDeclarations(values);
   }
+  map(transform) {
+    return this.mapTo(transform, AttributeDeclarations.of);
+  }
+  combine(other) {
+    return this.combineTo(other, AttributeDeclarations.of);
+  }
   static parse(values) {
     return parseConstruction(() => new AttributeDeclarations(values));
   }
@@ -3085,6 +3355,13 @@ class AttributeDeclarations extends FirstClassCollectionBase {
   names() {
     return this.#values.map((a) => a.name());
   }
+  check(entities, report, entity, artifact) {
+    for (const attribute of this.#values) {
+      attribute.checkType(report, entity, artifact);
+      attribute.checkBounds(report, entity, artifact);
+      attribute.checkReference(entities, report, entity, artifact);
+    }
+  }
   toArray() {
     return this.#values;
   }
@@ -3105,6 +3382,9 @@ class AttributeDefault {
   }
   equals(other) {
     return this.#value === other.#value || Number.isNaN(this.#value) && Number.isNaN(other.#value);
+  }
+  hashCode() {
+    return typeof this.#value === "number" ? hashOfNumber(this.#value) : hashOfString(this.#value);
   }
   isNumber() {
     return typeof this.#value === "number";
@@ -3147,6 +3427,9 @@ class AttributeName {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -3170,6 +3453,12 @@ class AttributeNames extends FirstClassCollectionBase {
   rebuild(values) {
     return new AttributeNames(values);
   }
+  map(transform) {
+    return this.mapTo(transform, AttributeNames.of);
+  }
+  combine(other) {
+    return this.combineTo(other, AttributeNames.of);
+  }
   static parse(values) {
     return parseConstruction(() => new AttributeNames(values));
   }
@@ -3187,6 +3476,9 @@ class AttributeNames extends FirstClassCollectionBase {
   }
   coversNormalized(name) {
     return this.#values.some((v) => v.normalized().equals(name.normalized()));
+  }
+  namesNotCoveredBy(other) {
+    return this.#values.filter((name) => !other.coversNormalized(name)).map((name) => name.asString()).sort();
   }
   toArray() {
     return this.#values;
@@ -3208,6 +3500,9 @@ class BlockIndex {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfNumber(this.#value);
   }
   asNumber() {
     return this.#value;
@@ -3231,6 +3526,9 @@ class BusinessRuleIdentifier {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   asString() {
     return this.#value;
@@ -3259,6 +3557,9 @@ class CardinalityNotation {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   asString() {
     return this.#value;
@@ -3306,24 +3607,18 @@ class Component {
       report.finding(DD_1, FindingKind.structureInvalid(), FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", name)), []), [WitnessReference.at(artifact.asString(), `${this.#element.asString()}.name`, name)], `component name "${name}" is not PascalCase`);
   }
   checkReferences(components, report, artifact) {
-    for (const reference of [...this.#dependsOn, ...this.#dependents]) {
-      if (!components.declares(reference.component()))
-        report.finding(DD_2, FindingKind.referenceBroken(), FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", reference.component().asString())), []), [WitnessReference.at(artifact.asString(), reference.element().asString(), reference.component().asString())], `"${this.#name.asString()}" references undeclared component "${reference.component().asString()}"`);
-    }
-    for (const entity of this.#entities)
-      entity.checkReferenceOwners(components, report, artifact);
+    this.#allReferences().checkDeclared(this.#name, components, report, artifact);
+    this.#entities.checkReferenceOwners(components, report, artifact);
   }
   checkSelfReferences(report, artifact) {
     for (const reference of this.selfReferences())
       report.finding(DD_3, FindingKind.structureInvalid(), FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", this.#name.asString())), []), [WitnessReference.at(artifact.asString(), reference.element().asString(), this.#name.asString())], `component "${this.#name.asString()}" lists itself as a dependency`);
   }
   checkIdentifiers(report, artifact) {
-    for (const entity of this.#entities)
-      entity.checkIdentifier(report, artifact);
+    this.#entities.checkIdentifiers(report, artifact);
   }
   checkEntityReferences(components, report, artifact) {
-    for (const entity of this.#entities)
-      entity.checkReferenceTargets(components, report, artifact);
+    this.#entities.checkReferenceTargets(components, report, artifact);
   }
   declaresEntity(name) {
     return this.#entities.declaresEntity(name);
@@ -3335,17 +3630,16 @@ class Component {
     return this.#element;
   }
   equals(other) {
-    const sameReferences = (left, right) => {
-      const leftValues = left.toArray();
-      const rightValues = right.toArray();
-      return leftValues.length === rightValues.length && leftValues.every((value, index) => value.equals(rightValues[index]));
-    };
-    const sameEntities = (left, right) => {
-      const leftValues = left.toArray();
-      const rightValues = right.toArray();
-      return leftValues.length === rightValues.length && leftValues.every((value, index) => value.equals(rightValues[index]));
-    };
-    return this.#name.equals(other.#name) && this.#element.equals(other.#element) && sameReferences(this.#dependsOn, other.#dependsOn) && sameReferences(this.#dependents, other.#dependents) && sameEntities(this.#entities, other.#entities);
+    return this.#name.equals(other.#name) && this.#element.equals(other.#element) && this.#dependsOn.equals(other.#dependsOn) && this.#dependents.equals(other.#dependents) && this.#entities.equals(other.#entities);
+  }
+  hashCode() {
+    return combinedHash([
+      this.#name.hashCode(),
+      this.#element.hashCode(),
+      this.#dependsOn.hashCode(),
+      this.#dependents.hashCode(),
+      this.#entities.hashCode()
+    ]);
   }
   dependsOn() {
     return this.#dependsOn;
@@ -3360,7 +3654,10 @@ class Component {
     return /^[A-Z][A-Za-z0-9]*$/.test(this.#name.asString());
   }
   selfReferences() {
-    return [...this.#dependsOn, ...this.#dependents].filter((r) => r.pointsAt(this.#name));
+    return this.#allReferences().pointingAt(this.#name);
+  }
+  #allReferences() {
+    return this.#dependsOn.combine(this.#dependents);
   }
 }
 // src/refcheck/domain/fence-count.ts
@@ -3449,9 +3746,7 @@ class ComponentCatalogOutcome {
         return null;
       },
       extracted: (components, shapeErrors) => {
-        for (const e of shapeErrors) {
-          report.finding(DD_0, FindingKind.structureInvalid(), FindingTargets.of(TargetIdentifier.of(DD_0.asCheckTarget()), []), [WitnessReference.at(art, e.element().asString())], e.detail());
-        }
+        shapeErrors.recordIn(DD_0, report, artifact);
         return shapeErrors.count() > 0 && components.count() === 0 ? null : components;
       }
     });
@@ -3474,6 +3769,12 @@ class ComponentEntities extends FirstClassCollectionBase {
   rebuild(values) {
     return new ComponentEntities(values);
   }
+  map(transform) {
+    return this.mapTo(transform, ComponentEntities.of);
+  }
+  combine(other) {
+    return this.combineTo(other, ComponentEntities.of);
+  }
   static parse(values) {
     return parseConstruction(() => new ComponentEntities(values));
   }
@@ -3488,6 +3789,18 @@ class ComponentEntities extends FirstClassCollectionBase {
   }
   declaresEntity(name) {
     return this.#values.some((e) => e.name().equals(name));
+  }
+  checkReferenceOwners(components, report, artifact) {
+    for (const entity of this.#values)
+      entity.checkReferenceOwners(components, report, artifact);
+  }
+  checkIdentifiers(report, artifact) {
+    for (const entity of this.#values)
+      entity.checkIdentifier(report, artifact);
+  }
+  checkReferenceTargets(components, report, artifact) {
+    for (const entity of this.#values)
+      entity.checkReferenceTargets(components, report, artifact);
   }
   toArray() {
     return this.#values;
@@ -3513,21 +3826,10 @@ class ComponentEntity {
       report.finding(DD_5, FindingKind.structureInvalid(), FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", this.#name.asString())), []), [WitnessReference.at(artifact.asString(), `${this.#element.asString()}.identifier`)], `entity "${this.#name.asString()}" has no identifier`);
   }
   checkReferenceOwners(components, report, artifact) {
-    for (const reference of this.#references) {
-      if (!components.declares(reference.ownedBy()))
-        report.finding(DD_2, FindingKind.referenceBroken(), FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", reference.ownedBy().asString())), []), [
-          WitnessReference.at(artifact.asString(), `${reference.element().asString()}.owned_by`, reference.ownedBy().asString())
-        ], `entity "${this.#name.asString()}" references owner component "${reference.ownedBy().asString()}" which is not declared`);
-    }
+    this.#references.checkOwnersDeclared(this.#name, components, report, artifact);
   }
   checkReferenceTargets(components, report, artifact) {
-    for (const reference of this.#references) {
-      const owner = components.byName(reference.ownedBy());
-      if (owner !== null && !owner.declaresEntity(reference.entity()))
-        report.finding(DD_6, FindingKind.referenceBroken(), FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", reference.entity().asString())), []), [
-          WitnessReference.at(artifact.asString(), `${reference.element().asString()}.entity`, reference.entity().asString())
-        ], `entity "${this.#name.asString()}" references "${reference.entity().asString()}" as owned by "${reference.ownedBy().asString()}", but "${reference.ownedBy().asString()}" declares no such entity`);
-    }
+    this.#references.checkTargetsDeclared(this.#name, components, report, artifact);
   }
   name() {
     return this.#name;
@@ -3542,10 +3844,16 @@ class ComponentEntity {
     return this.#identifier !== null;
   }
   equals(other) {
-    const references = this.#references.toArray();
-    const otherReferences = other.#references.toArray();
     const identifiersEqual = this.#identifier === null ? other.#identifier === null : other.#identifier !== null && this.#identifier.equals(other.#identifier);
-    return this.#name.equals(other.#name) && this.#element.equals(other.#element) && identifiersEqual && references.length === otherReferences.length && references.every((reference, index) => reference.equals(otherReferences[index]));
+    return this.#name.equals(other.#name) && this.#element.equals(other.#element) && identifiersEqual && this.#references.equals(other.#references);
+  }
+  hashCode() {
+    return combinedHash([
+      this.#name.hashCode(),
+      this.#element.hashCode(),
+      hashOfNullable(this.#identifier, (identifier) => identifier.hashCode()),
+      this.#references.hashCode()
+    ]);
   }
 }
 // src/refcheck/domain/component-name.ts
@@ -3566,6 +3874,9 @@ class ComponentName {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   compareTo(other) {
     return compareCanonically(this.#value, other.#value);
@@ -3597,6 +3908,9 @@ class ComponentReference {
   equals(other) {
     return this.#component.equals(other.#component) && this.#element.equals(other.#element);
   }
+  hashCode() {
+    return combinedHash([this.#component.hashCode(), this.#element.hashCode()]);
+  }
 }
 // src/refcheck/domain/component-references.ts
 class ComponentReferences extends FirstClassCollectionBase {
@@ -3607,6 +3921,12 @@ class ComponentReferences extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new ComponentReferences(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, ComponentReferences.of);
+  }
+  combine(other) {
+    return this.combineTo(other, ComponentReferences.of);
   }
   static parse(values) {
     return parseConstruction(() => new ComponentReferences(values));
@@ -3622,6 +3942,15 @@ class ComponentReferences extends FirstClassCollectionBase {
   }
   listsComponent(name) {
     return this.#values.some((r) => r.component().equals(name));
+  }
+  checkDeclared(owner, components, report, artifact) {
+    for (const reference of this.#values) {
+      if (!components.declares(reference.component()))
+        report.finding(DD_2, FindingKind.referenceBroken(), FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", reference.component().asString())), []), [WitnessReference.at(artifact.asString(), reference.element().asString(), reference.component().asString())], `"${owner.asString()}" references undeclared component "${reference.component().asString()}"`);
+    }
+  }
+  pointingAt(name) {
+    return this.#values.filter((reference) => reference.pointsAt(name));
   }
   toArray() {
     return this.#values;
@@ -3647,6 +3976,9 @@ class ComponentShapeError {
   equals(other) {
     return this.#element.equals(other.#element) && this.#detail === other.#detail;
   }
+  hashCode() {
+    return combinedHash([this.#element.hashCode(), hashOfString(this.#detail)]);
+  }
 }
 // src/refcheck/domain/component-shape-errors.ts
 class ComponentShapeErrors extends FirstClassCollectionBase {
@@ -3657,6 +3989,12 @@ class ComponentShapeErrors extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new ComponentShapeErrors(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, ComponentShapeErrors.of);
+  }
+  combine(other) {
+    return this.combineTo(other, ComponentShapeErrors.of);
   }
   static parse(values) {
     return parseConstruction(() => new ComponentShapeErrors(values));
@@ -3672,6 +4010,10 @@ class ComponentShapeErrors extends FirstClassCollectionBase {
   }
   count() {
     return this.#values.length;
+  }
+  recordIn(family, report, artifact) {
+    for (const error of this.#values)
+      report.finding(family, FindingKind.structureInvalid(), FindingTargets.of(TargetIdentifier.of(family.asCheckTarget()), []), [WitnessReference.at(artifact.asString(), error.element().asString())], error.detail());
   }
   toArray() {
     return this.#values;
@@ -3696,6 +4038,9 @@ class EntityName {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -3713,6 +4058,12 @@ class Components extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new Components(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, Components.of);
+  }
+  combine(other) {
+    return this.combineTo(other, Components.of);
   }
   static parse(values) {
     return parseConstruction(() => new Components(values));
@@ -3902,6 +4253,9 @@ class ContractIdentifier {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -3922,6 +4276,9 @@ class ContractParty {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   asString() {
     return this.#value;
@@ -3962,6 +4319,15 @@ class ContractRow {
   equals(other) {
     return this.#id.equals(other.#id) && this.#provider.equals(other.#provider) && this.#consumer.equals(other.#consumer) && this.#owner.equals(other.#owner) && this.#line.equals(other.#line);
   }
+  hashCode() {
+    return combinedHash([
+      this.#id.hashCode(),
+      this.#provider.hashCode(),
+      this.#consumer.hashCode(),
+      this.#owner.hashCode(),
+      this.#line.hashCode()
+    ]);
+  }
   connects(from, to) {
     return this.#provider.asString() === from && this.#consumer.asString() === to || this.#consumer.asString() === from && this.#provider.asString() === to;
   }
@@ -3998,6 +4364,12 @@ class ContractRows extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new ContractRows(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, ContractRows.of);
+  }
+  combine(other) {
+    return this.combineTo(other, ContractRows.of);
   }
   static parse(values) {
     return parseConstruction(() => new ContractRows(values));
@@ -4083,21 +4455,14 @@ class DeclaredEntities {
     return this.#entities;
   }
   allRels() {
-    let all = this.#rels;
-    for (const e of this.#entities)
-      all = all.concat(e.rels());
-    return all;
+    return this.#entities.foldLeft(this.#rels, (all, entity) => all.concat(entity.rels()));
   }
   check(report, artifact) {
-    for (const error of this.#shapeErrors)
-      error.recordIn(FD_E1, report, artifact);
+    this.#shapeErrors.recordIn(FD_E1, report, artifact);
     this.#entities.checkDuplicates(report, artifact);
-    for (const entity of this.#entities)
-      entity.checkDuplicateAttributes(report, artifact);
-    for (const entity of this.#entities)
-      entity.checkAttributes(this.#entities, report, artifact);
-    for (const relationship of this.allRels())
-      relationship.checkAgainst(this.#entities, report, artifact);
+    this.#entities.checkDuplicateAttributes(report, artifact);
+    this.#entities.checkAttributes(report, artifact);
+    this.allRels().checkAgainst(this.#entities, report, artifact);
   }
 }
 // src/refcheck/domain/declared-rule-identifier.ts
@@ -4366,9 +4731,31 @@ class Finding {
     return this.#detail;
   }
   equals(other) {
-    const sameValues = (left, right) => left.length === right.length && left.every((value, index) => value.equals(right[index]));
     const unitsEqual = this.#unit === undefined ? other.#unit === undefined : other.#unit !== undefined && this.#unit.equals(other.#unit);
-    return this.#kind.equals(other.#kind) && sameValues(this.#functionalRequirementReferences.toArray(), other.#functionalRequirementReferences.toArray()) && sameValues(this.#targets.toArray(), other.#targets.toArray()) && sameValues(this.#witness.toArray(), other.#witness.toArray()) && unitsEqual && this.#detail === other.#detail;
+    return this.#kind.equals(other.#kind) && this.#functionalRequirementReferences.equals(other.#functionalRequirementReferences) && this.#targets.equals(other.#targets) && this.#witness.equals(other.#witness) && unitsEqual && this.#detail === other.#detail;
+  }
+  hashCode() {
+    return combinedHash([
+      this.#kind.hashCode(),
+      this.#functionalRequirementReferences.hashCode(),
+      this.#targets.hashCode(),
+      this.#witness.hashCode(),
+      hashOfNullable(this.#unit, (unit) => unit.hashCode()),
+      hashOfString(this.#detail)
+    ]);
+  }
+  toDocument() {
+    const out = {
+      kind: this.#kind.asString(),
+      frRefs: this.#functionalRequirementReferences.toStrings(),
+      targets: this.#targets.toStrings(),
+      witness: { refs: this.#witness.toDocuments() },
+      detail: this.#detail
+    };
+    const unit = this.#unit?.asString();
+    if (unit !== undefined)
+      out.unit = unit;
+    return out;
   }
   compareTo(other) {
     const kr = this.#kind.compareTo(other.#kind);
@@ -4392,6 +4779,12 @@ class Findings extends FirstClassCollectionBase {
   rebuild(values) {
     return new Findings(values);
   }
+  map(transform) {
+    return this.mapTo(transform, Findings.of);
+  }
+  combine(other) {
+    return this.combineTo(other, Findings.of);
+  }
   static parse(values) {
     return parseConstruction(() => new Findings(values));
   }
@@ -4410,6 +4803,9 @@ class Findings extends FirstClassCollectionBase {
   sortedCanonically() {
     return new Findings([...this.#values].sort((a, b) => a.compareTo(b)));
   }
+  toDocuments() {
+    return this.#values.map((finding) => finding.toDocument());
+  }
   toArray() {
     return this.#values;
   }
@@ -4424,6 +4820,12 @@ class InputAnchors extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new InputAnchors(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, InputAnchors.of);
+  }
+  combine(other) {
+    return this.combineTo(other, InputAnchors.of);
   }
   static parse(values) {
     return parseConstruction(() => new InputAnchors(values));
@@ -4442,6 +4844,13 @@ class InputAnchors extends FirstClassCollectionBase {
   }
   sortedByArtifact() {
     return new InputAnchors([...this.#values].sort((a, b) => a.compareByArtifact(b)));
+  }
+  recordIn(report) {
+    for (const anchor of this.#values)
+      report.input(anchor);
+  }
+  toDocuments() {
+    return this.#values.map((anchor) => anchor.toDocument());
   }
   toArray() {
     return this.#values;
@@ -4478,6 +4887,23 @@ class Skipped {
   equals(other) {
     return this.#target.equals(other.#target) && this.#reason.asString() === other.#reason.asString() && (this.#unit === undefined ? other.#unit === undefined : other.#unit !== undefined && this.#unit.equals(other.#unit)) && this.#detail === other.#detail;
   }
+  hashCode() {
+    return combinedHash([
+      this.#target.hashCode(),
+      hashOfString(this.#reason.asString()),
+      hashOfNullable(this.#unit, (unit) => unit.hashCode()),
+      hashOfNullable(this.#detail, hashOfString)
+    ]);
+  }
+  toDocument() {
+    const out = { target: this.#target.asString(), reason: this.#reason.asString() };
+    if (this.#detail !== undefined)
+      out.detail = this.#detail;
+    const unit = this.#unit?.asString();
+    if (unit !== undefined)
+      out.unit = unit;
+    return out;
+  }
   compareTo(other) {
     const c = this.#target.compareTo(other.#target);
     if (c !== 0)
@@ -4495,6 +4921,12 @@ class Skips extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new Skips(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, Skips.of);
+  }
+  combine(other) {
+    return this.combineTo(other, Skips.of);
   }
   static parse(values) {
     return parseConstruction(() => new Skips(values));
@@ -4514,6 +4946,9 @@ class Skips extends FirstClassCollectionBase {
   sortedCanonically() {
     return new Skips([...this.#values].sort((a, b) => a.compareTo(b)));
   }
+  toDocuments() {
+    return this.#values.map((skipped) => skipped.toDocument());
+  }
   toArray() {
     return this.#values;
   }
@@ -4529,6 +4964,12 @@ class WitnessReferences extends FirstClassCollectionBase {
   rebuild(values) {
     return new WitnessReferences(values);
   }
+  map(transform) {
+    return this.mapTo(transform, WitnessReferences.of);
+  }
+  combine(other) {
+    return this.combineTo(other, WitnessReferences.of);
+  }
   static parse(values) {
     return parseConstruction(() => new WitnessReferences(values));
   }
@@ -4540,6 +4981,9 @@ class WitnessReferences extends FirstClassCollectionBase {
   }
   *[Symbol.iterator]() {
     yield* this.#values;
+  }
+  toDocuments() {
+    return this.#values.map((reference) => reference.toDocument());
   }
   toArray() {
     return this.#values;
@@ -4627,7 +5071,7 @@ class ReferenceCheckReport {
     return this.#unavailableReason === null && this.#findings.isEmpty();
   }
   toDocument() {
-    const inputs = this.#inputs.toArray().map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() }));
+    const inputs = this.#inputs.toDocuments();
     const ordered = {
       backend: this.#id.backendName().asString(),
       irVersion: CATALOG_VERSION,
@@ -4639,36 +5083,8 @@ class ReferenceCheckReport {
       ordered.unavailable = { reason };
     ordered.inputs = inputs;
     ordered.checked = this.#checked.toStrings();
-    ordered.findings = this.#findings.toArray().map((f) => {
-      const refs = f.witnessRefs().toArray().map((r) => {
-        const out2 = { artifact: r.artifact(), element: r.element() };
-        const value = r.value();
-        if (value !== undefined)
-          out2.value = value;
-        return out2;
-      });
-      const out = {
-        kind: f.kind(),
-        frRefs: f.functionalRequirementReferences().toStrings(),
-        targets: f.targets().toStrings(),
-        witness: { refs },
-        detail: f.detail()
-      };
-      const unit = f.unit();
-      if (unit !== undefined)
-        out.unit = unit;
-      return out;
-    });
-    ordered.skipped = this.#skipped.toArray().map((sk) => {
-      const out = { target: sk.target(), reason: sk.reason() };
-      const detail = sk.detail();
-      if (detail !== undefined)
-        out.detail = detail;
-      const unit = sk.unit();
-      if (unit !== undefined)
-        out.unit = unit;
-      return out;
-    });
+    ordered.findings = this.#findings.toDocuments();
+    ordered.skipped = this.#skipped.toDocuments();
     return ordered;
   }
   conformedTo(schema) {
@@ -4690,6 +5106,9 @@ class ReferenceCheckReportIdentifier {
   }
   equals(other) {
     return this.#directory.equals(other.#directory) && this.#backend.equals(other.#backend);
+  }
+  hashCode() {
+    return combinedHash([this.#directory.hashCode(), this.#backend.hashCode()]);
   }
   backendName() {
     return this.#backend;
@@ -4848,8 +5267,7 @@ class DesignRecord {
       report.input(fd.spec.input);
     if (fd.components !== null)
       report.input(fd.components.input);
-    for (const anchor of fd.siblingInputs)
-      report.input(anchor);
+    fd.siblingInputs.recordIn(report);
     return ok(report);
   }
 }
@@ -4864,6 +5282,9 @@ class DesignRecordIdentifier {
   }
   equals(other) {
     return this.#path.equals(other.#path);
+  }
+  hashCode() {
+    return this.#path.hashCode();
   }
   artifactPath() {
     return this.#path;
@@ -4885,12 +5306,12 @@ class DomainEntitySketch {
   checkAgainst(unitEntities, unit, report, componentsArtifact) {
     const compArt = componentsArtifact.asString();
     const key = this.#name.normalized();
-    const definers = unitEntities.definersOf(key).toArray();
+    const definers = unitEntities.definersOf(key).toStrings();
     if (definers.length >= 2) {
       report.finding(XS_1, FindingKind.consistencyMismatch(), FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", this.#name.asString())), []), [
         WitnessReference.at(compArt, this.catalogLabel()),
-        ...definers.map((u) => WitnessReference.at(`construction/${u.asString()}/functional-design/entities.md`, `entity ${this.#name.asString()}`))
-      ], `domain entity "${this.#name.asString()}" is defined in ${definers.length} units (${definers.map((unit2) => unit2.asString()).join(", ")}) \u2014 ownership is duplicated`);
+        ...definers.map((unit2) => WitnessReference.at(`construction/${unit2}/functional-design/entities.md`, `entity ${this.#name.asString()}`))
+      ], `domain entity "${this.#name.asString()}" is defined in ${definers.length} units (${definers.join(", ")}) \u2014 ownership is duplicated`);
     } else if (definers.length === 0 && unitEntities.hasAnyUnit()) {
       report.finding(XS_2, FindingKind.consistencyMismatch(), FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", this.#name.asString())), []), [WitnessReference.at(compArt, this.catalogLabel())], `domain entity "${this.#name.asString()}" is defined in no unit's entities.md \u2014 it was dropped on the way to functional design`);
     }
@@ -4908,15 +5329,16 @@ class DomainEntitySketch {
     return this.#name;
   }
   equals(other) {
-    const attributes = this.#attributes.toArray();
-    const otherAttributes = other.#attributes.toArray();
-    return this.#name.equals(other.#name) && this.#component.equals(other.#component) && attributes.length === otherAttributes.length && attributes.every((attribute, index) => attribute.equals(otherAttributes[index]));
+    return this.#name.equals(other.#name) && this.#component.equals(other.#component) && this.#attributes.equals(other.#attributes);
+  }
+  hashCode() {
+    return combinedHash([this.#name.hashCode(), this.#component.hashCode(), this.#attributes.hashCode()]);
   }
   catalogLabel() {
     return `entity ${this.#name.asString()} (component ${this.#component.asString()})`;
   }
   attributesDroppedIn(unitAttrs) {
-    return this.#attributes.toArray().filter((a) => !unitAttrs.coversNormalized(a)).map((a) => a.asString()).sort();
+    return this.#attributes.namesNotCoveredBy(unitAttrs);
   }
 }
 // src/refcheck/domain/domain-entity-sketches.ts
@@ -4928,6 +5350,12 @@ class DomainEntitySketches extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new DomainEntitySketches(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, DomainEntitySketches.of);
+  }
+  combine(other) {
+    return this.combineTo(other, DomainEntitySketches.of);
   }
   static parse(values) {
     return parseConstruction(() => new DomainEntitySketches(values));
@@ -4987,11 +5415,7 @@ class EntityDeclaration {
       ], `attribute "${this.#name.asString()}.${duplicate.name().asString()}" is declared more than once`);
   }
   checkAttributes(entities, report, artifact) {
-    for (const attribute of this.#attrs) {
-      attribute.checkType(report, this.#name, artifact);
-      attribute.checkBounds(report, this.#name, artifact);
-      attribute.checkReference(entities, report, this.#name, artifact);
-    }
+    this.#attrs.check(entities, report, this.#name, artifact);
   }
   name() {
     return this.#name;
@@ -5000,8 +5424,15 @@ class EntityDeclaration {
     return this.#element;
   }
   equals(other) {
-    const sameValues = (left, right) => left.length === right.length && left.every((value, index) => value.equals(right[index]));
-    return this.#name.equals(other.#name) && this.#element.equals(other.#element) && sameValues(this.#attrs.toArray(), other.#attrs.toArray()) && sameValues(this.#rels.toArray(), other.#rels.toArray());
+    return this.#name.equals(other.#name) && this.#element.equals(other.#element) && this.#attrs.equals(other.#attrs) && this.#rels.equals(other.#rels);
+  }
+  hashCode() {
+    return combinedHash([
+      this.#name.hashCode(),
+      this.#element.hashCode(),
+      this.#attrs.hashCode(),
+      this.#rels.hashCode()
+    ]);
   }
   attributeNames() {
     return AttributeNames.of(this.#attrs.names());
@@ -5042,6 +5473,12 @@ class EntityDeclarations extends FirstClassCollectionBase {
   rebuild(values) {
     return new EntityDeclarations(values);
   }
+  map(transform) {
+    return this.mapTo(transform, EntityDeclarations.of);
+  }
+  combine(other) {
+    return this.combineTo(other, EntityDeclarations.of);
+  }
   static parse(values) {
     return parseConstruction(() => new EntityDeclarations(values));
   }
@@ -5069,6 +5506,14 @@ class EntityDeclarations extends FirstClassCollectionBase {
       report.finding(FD_E1, FindingKind.structureInvalid(), FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", duplicate.name().asString())), []), [
         WitnessReference.at(artifact.asString(), `${duplicate.element().asString()}.name`, duplicate.name().asString())
       ], `entity "${duplicate.name().asString()}" is declared more than once`);
+  }
+  checkDuplicateAttributes(report, artifact) {
+    for (const entity of this.#values)
+      entity.checkDuplicateAttributes(report, artifact);
+  }
+  checkAttributes(report, artifact) {
+    for (const entity of this.#values)
+      entity.checkAttributes(this, report, artifact);
   }
   containsNamed(name) {
     return this.#names.has(name);
@@ -5130,6 +5575,9 @@ class EntityReference {
   equals(other) {
     return this.#entity.equals(other.#entity) && this.#ownedBy.equals(other.#ownedBy) && this.#element.equals(other.#element);
   }
+  hashCode() {
+    return combinedHash([this.#entity.hashCode(), this.#ownedBy.hashCode(), this.#element.hashCode()]);
+  }
 }
 // src/refcheck/domain/entity-references.ts
 class EntityReferences extends FirstClassCollectionBase {
@@ -5140,6 +5588,12 @@ class EntityReferences extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new EntityReferences(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, EntityReferences.of);
+  }
+  combine(other) {
+    return this.combineTo(other, EntityReferences.of);
   }
   static parse(values) {
     return parseConstruction(() => new EntityReferences(values));
@@ -5152,6 +5606,23 @@ class EntityReferences extends FirstClassCollectionBase {
   }
   *[Symbol.iterator]() {
     yield* this.#values;
+  }
+  checkOwnersDeclared(entity, components, report, artifact) {
+    for (const reference of this.#values) {
+      if (!components.declares(reference.ownedBy()))
+        report.finding(DD_2, FindingKind.referenceBroken(), FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", reference.ownedBy().asString())), []), [
+          WitnessReference.at(artifact.asString(), `${reference.element().asString()}.owned_by`, reference.ownedBy().asString())
+        ], `entity "${entity.asString()}" references owner component "${reference.ownedBy().asString()}" which is not declared`);
+    }
+  }
+  checkTargetsDeclared(entity, components, report, artifact) {
+    for (const reference of this.#values) {
+      const owner = components.byName(reference.ownedBy());
+      if (owner !== null && !owner.declaresEntity(reference.entity()))
+        report.finding(DD_6, FindingKind.referenceBroken(), FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", reference.entity().asString())), []), [
+          WitnessReference.at(artifact.asString(), `${reference.element().asString()}.entity`, reference.entity().asString())
+        ], `entity "${entity.asString()}" references "${reference.entity().asString()}" as owned by "${reference.ownedBy().asString()}", but "${reference.ownedBy().asString()}" declares no such entity`);
+    }
   }
   toArray() {
     return this.#values;
@@ -5180,6 +5651,12 @@ class InputAnchor {
   equals(other) {
     return this.#artifact.equals(other.#artifact) && this.#sha256.equals(other.#sha256);
   }
+  hashCode() {
+    return combinedHash([this.#artifact.hashCode(), this.#sha256.hashCode()]);
+  }
+  toDocument() {
+    return { artifact: this.#artifact.asString(), sha256: this.#sha256.asString() };
+  }
   compareByArtifact(other) {
     const a = this.#artifact.asString();
     const b = other.#artifact.asString();
@@ -5202,6 +5679,9 @@ class LineNumber {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfNumber(this.#value);
   }
   asNumber() {
     return this.#value;
@@ -5235,6 +5715,9 @@ class MachineSpecification {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -5262,6 +5745,9 @@ class NumericBound {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfNumber(this.#value);
+  }
   asNumber() {
     return this.#value;
   }
@@ -5287,6 +5773,9 @@ class ReferenceTarget {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   asString() {
     return this.#value;
@@ -5336,6 +5825,15 @@ class RelationshipDeclaration {
     const optionalEqual = (left, right) => left === null ? right === null : right !== null && left.equals(right);
     return this.#element.equals(other.#element) && optionalEqual(this.#from, other.#from) && optionalEqual(this.#to, other.#to) && optionalEqual(this.#cardinality, other.#cardinality) && this.#hasDirection === other.#hasDirection;
   }
+  hashCode() {
+    return combinedHash([
+      this.#element.hashCode(),
+      hashOfNullable(this.#from, (from) => from.hashCode()),
+      hashOfNullable(this.#to, (to) => to.hashCode()),
+      hashOfNullable(this.#cardinality, (cardinality) => cardinality.hashCode()),
+      hashOfBoolean(this.#hasDirection)
+    ]);
+  }
 }
 // src/refcheck/domain/relationship-declarations.ts
 class RelationshipDeclarations extends FirstClassCollectionBase {
@@ -5346,6 +5844,12 @@ class RelationshipDeclarations extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new RelationshipDeclarations(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, RelationshipDeclarations.of);
+  }
+  combine(other) {
+    return this.combineTo(other, RelationshipDeclarations.of);
   }
   static parse(values) {
     return parseConstruction(() => new RelationshipDeclarations(values));
@@ -5361,6 +5865,10 @@ class RelationshipDeclarations extends FirstClassCollectionBase {
   }
   *[Symbol.iterator]() {
     yield* this.#values;
+  }
+  checkAgainst(entities, report, artifact) {
+    for (const relationship of this.#values)
+      relationship.checkAgainst(entities, report, artifact);
   }
   toArray() {
     return this.#values;
@@ -5386,6 +5894,9 @@ class RuleCategory {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   asString() {
     return this.#value;
@@ -5421,10 +5932,17 @@ class RuleDeclaration {
   }
   equals(other) {
     const optionalEqual = (left, right) => left === null ? right === null : right !== null && left.equals(right);
-    const sourceIds = this.#sourceIds.toArray();
-    const otherSourceIds = other.#sourceIds.toArray();
-    const sourceIdsEqual = sourceIds.length === otherSourceIds.length && sourceIds.every((sourceId, index) => sourceId.equals(otherSourceIds[index]));
-    return (this.#id === null ? other.#id === null : other.#id !== null && this.#id.asString() === other.#id.asString()) && this.#element.equals(other.#element) && optionalEqual(this.#category, other.#category) && optionalEqual(this.#appliesTo, other.#appliesTo) && sourceIdsEqual && this.#missing.length === other.#missing.length && this.#missing.every((missing, index) => missing === other.#missing[index]);
+    return (this.#id === null ? other.#id === null : other.#id !== null && this.#id.asString() === other.#id.asString()) && this.#element.equals(other.#element) && optionalEqual(this.#category, other.#category) && optionalEqual(this.#appliesTo, other.#appliesTo) && this.#sourceIds.equals(other.#sourceIds) && this.#missing.length === other.#missing.length && this.#missing.every((missing, index) => missing === other.#missing[index]);
+  }
+  hashCode() {
+    return combinedHash([
+      hashOfNullable(this.#id, (id) => hashOfString(id.asString())),
+      this.#element.hashCode(),
+      hashOfNullable(this.#category, (category) => category.hashCode()),
+      hashOfNullable(this.#appliesTo, (appliesTo) => appliesTo.hashCode()),
+      this.#sourceIds.hashCode(),
+      combinedHash(this.#missing.map((missing) => hashOfString(missing)))
+    ]);
   }
   #findingTarget(fallback) {
     return this.identifierForUniqueness()?.asString() ?? fallback;
@@ -5474,6 +5992,12 @@ class RuleDeclarations extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new RuleDeclarations(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, RuleDeclarations.of);
+  }
+  combine(other) {
+    return this.combineTo(other, RuleDeclarations.of);
   }
   static parse(values) {
     return parseConstruction(() => new RuleDeclarations(values));
@@ -5531,6 +6055,9 @@ class ShapeError {
   equals(other) {
     return this.#element.equals(other.#element) && this.#detail === other.#detail;
   }
+  hashCode() {
+    return combinedHash([this.#element.hashCode(), hashOfString(this.#detail)]);
+  }
   recordIn(family, report, artifact) {
     report.finding(family, FindingKind.structureInvalid(), FindingTargets.of(TargetIdentifier.of(family.asCheckTarget()), []), [WitnessReference.at(artifact.asString(), this.#element.asString())], this.#detail);
   }
@@ -5545,6 +6072,12 @@ class ShapeErrors extends FirstClassCollectionBase {
   rebuild(values) {
     return new ShapeErrors(values);
   }
+  map(transform) {
+    return this.mapTo(transform, ShapeErrors.of);
+  }
+  combine(other) {
+    return this.combineTo(other, ShapeErrors.of);
+  }
   static parse(values) {
     return parseConstruction(() => new ShapeErrors(values));
   }
@@ -5556,6 +6089,10 @@ class ShapeErrors extends FirstClassCollectionBase {
   }
   *[Symbol.iterator]() {
     yield* this.#values;
+  }
+  recordIn(family, report, artifact) {
+    for (const error of this.#values)
+      error.recordIn(family, report, artifact);
   }
   toArray() {
     return this.#values;
@@ -5579,9 +6116,10 @@ class SiblingUnitIndexEntry {
     return this.#declarations;
   }
   equals(other) {
-    const values = this.#declarations.toArray();
-    const otherValues = other.#declarations.toArray();
-    return this.#unit.equals(other.#unit) && values.length === otherValues.length && values.every((value, index) => value.equals(otherValues[index]));
+    return this.#unit.equals(other.#unit) && this.#declarations.equals(other.#declarations);
+  }
+  hashCode() {
+    return combinedHash([this.#unit.hashCode(), this.#declarations.hashCode()]);
   }
 }
 
@@ -5594,6 +6132,12 @@ class UnitNames extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new UnitNames(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, UnitNames.of);
+  }
+  combine(other) {
+    return this.combineTo(other, UnitNames.of);
   }
   static parse(values) {
     return parseConstruction(() => new UnitNames(values));
@@ -5613,6 +6157,12 @@ class UnitNames extends FirstClassCollectionBase {
   sortedByValue() {
     return new UnitNames([...this.#values].sort((a, b) => a.asString() < b.asString() ? -1 : 1));
   }
+  declaredIn(declared) {
+    return this.#values.filter((name) => declared.declares(name.asString()));
+  }
+  toStrings() {
+    return this.#values.map((name) => name.asString());
+  }
   toArray() {
     return this.#values;
   }
@@ -5622,23 +6172,37 @@ class UnitNames extends FirstClassCollectionBase {
 class SiblingUnitIndex extends FirstClassCollectionBase {
   #units;
   #entries;
-  constructor(units, entries) {
+  constructor(entries) {
     super();
-    if (units.size() > 65536)
-      throw new IllegalArgumentException({ kind: "too-many-sibling-units", raw: units.size() });
+    const owned = [];
+    const unitNames = new Set;
     let count = 0;
-    for (const declarations of units.values())
-      for (const _entity of declarations)
+    for (const entry of entries) {
+      if (owned.length >= 65536)
+        throw new IllegalArgumentException({ kind: "too-many-sibling-units", raw: owned.length + 1 });
+      const unitName = entry.unit().asString();
+      if (unitNames.has(unitName))
+        throw new IllegalArgumentException({ kind: "duplicate-sibling-unit", raw: unitName });
+      unitNames.add(unitName);
+      for (const _entity of entry.declarations())
         if (++count > 65536)
           throw new IllegalArgumentException({ kind: "too-many-sibling-entities", raw: count });
-    this.#entries = Object.freeze(entries ?? [...units].map(([unit, declarations]) => SiblingUnitIndexEntry.of(unit, declarations)));
-    this.#units = KeyedIndex.of([...units].map(([unit, declarations]) => [
-      unit,
-      KeyedIndex.of([...declarations].map((entity) => [entity.name().normalized(), entity]))
+      owned.push(entry);
+    }
+    this.#entries = Object.freeze(owned);
+    this.#units = KeyedIndex.of(owned.map((entry) => [
+      entry.unit(),
+      KeyedIndex.of([...entry.declarations()].map((entity) => [entity.name().normalized(), entity]))
     ]));
   }
   rebuild(values) {
-    return new SiblingUnitIndex(KeyedIndex.of(values.map((entry) => [entry.unit(), entry.declarations()])), values);
+    return new SiblingUnitIndex(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, (values) => this.rebuild(values));
+  }
+  combine(other) {
+    return this.combineTo(other, (values) => this.rebuild(values));
   }
   *[Symbol.iterator]() {
     yield* this.#entries;
@@ -5647,10 +6211,14 @@ class SiblingUnitIndex extends FirstClassCollectionBase {
     return this.#entries;
   }
   static of(units) {
-    return new SiblingUnitIndex(units);
+    return new SiblingUnitIndex(SiblingUnitIndex.entriesOf(units));
   }
   static parse(units) {
-    return parseConstruction(() => new SiblingUnitIndex(units));
+    return parseConstruction(() => new SiblingUnitIndex(SiblingUnitIndex.entriesOf(units)));
+  }
+  static *entriesOf(units) {
+    for (const [unit, declarations] of units)
+      yield SiblingUnitIndexEntry.of(unit, declarations);
   }
   definersOf(normalizedName) {
     return UnitNames.of([...this.#units].filter(([, declarations]) => declarations.has(normalizedName)).map(([unit]) => unit));
@@ -5681,6 +6249,9 @@ class SourceIdentifier {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -5694,6 +6265,12 @@ class SourceIdentifiers extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new SourceIdentifiers(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, SourceIdentifiers.of);
+  }
+  combine(other) {
+    return this.combineTo(other, SourceIdentifiers.of);
   }
   static parse(values) {
     return parseConstruction(() => new SourceIdentifiers(values));
@@ -5747,6 +6324,14 @@ class SpecificationBlockAssessment {
   equals(other) {
     return this.#index.equals(other.#index) && this.#line.equals(other.#line) && this.#issue === other.#issue && this.#error === other.#error;
   }
+  hashCode() {
+    return combinedHash([
+      this.#index.hashCode(),
+      this.#line.hashCode(),
+      hashOfString(this.#issue),
+      hashOfNullable(this.#error, hashOfString)
+    ]);
+  }
   locationLabel() {
     return `yaml fence #${this.#index.asNumber()} (line ${this.#line.asNumber()})`;
   }
@@ -5786,6 +6371,12 @@ class SpecificationBlockAssessments extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new SpecificationBlockAssessments(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, SpecificationBlockAssessments.of);
+  }
+  combine(other) {
+    return this.combineTo(other, SpecificationBlockAssessments.of);
   }
   static parse(values) {
     return parseConstruction(() => new SpecificationBlockAssessments(values));
@@ -5839,9 +6430,20 @@ class StateMachineSketch {
       return false;
     const left = this.#state.declaration;
     const right = other.#state.declaration;
-    const states = left.states.toArray();
-    const otherStates = right.states.toArray();
-    return left.spec.equals(right.spec) && states.length === otherStates.length && states.every((state, index) => state.equals(otherStates[index])) && left.fenceLine.equals(right.fenceLine) && left.unsupported === right.unsupported;
+    return left.spec.equals(right.spec) && left.states.equals(right.states) && left.fenceLine.equals(right.fenceLine) && left.unsupported === right.unsupported;
+  }
+  hashCode() {
+    const state = this.#state;
+    if (state.kind === "unrecognized")
+      return combinedHash([hashOfString(state.kind), state.line.hashCode(), state.reason.hashCode()]);
+    const declaration = state.declaration;
+    return combinedHash([
+      hashOfString(state.kind),
+      declaration.spec.hashCode(),
+      declaration.states.hashCode(),
+      declaration.fenceLine.hashCode(),
+      hashOfNullable(declaration.unsupported, hashOfString)
+    ]);
   }
   check(report, specArtifact, entitiesArtifact, entities) {
     if (this.#state.kind === "unrecognized") {
@@ -5883,6 +6485,12 @@ class StateMachineSketches extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new StateMachineSketches(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, StateMachineSketches.of);
+  }
+  combine(other) {
+    return this.combineTo(other, StateMachineSketches.of);
   }
   static parse(values) {
     return parseConstruction(() => new StateMachineSketches(values));
@@ -5927,6 +6535,9 @@ class StateName {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -5943,6 +6554,12 @@ class StateNames extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new StateNames(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, StateNames.of);
+  }
+  combine(other) {
+    return this.combineTo(other, StateNames.of);
   }
   static parse(values) {
     return parseConstruction(() => new StateNames(values));
@@ -5984,6 +6601,9 @@ class TypeName {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -6018,15 +6638,16 @@ class UnitDeclaration {
     return this.#name;
   }
   equals(other) {
-    const dependencies = this.#dependsOn.toArray();
-    const otherDependencies = other.#dependsOn.toArray();
-    return this.#name.equals(other.#name) && dependencies.length === otherDependencies.length && dependencies.every((dependency, index) => dependency.equals(otherDependencies[index]));
+    return this.#name.equals(other.#name) && this.#dependsOn.equals(other.#dependsOn);
+  }
+  hashCode() {
+    return combinedHash([this.#name.hashCode(), this.#dependsOn.hashCode()]);
   }
   dependsOn() {
     return this.#dependsOn;
   }
   declaredDependencies(declared) {
-    return [...this.#dependsOn.sortedByValue()].filter((dep) => declared.declares(dep.asString()));
+    return this.#dependsOn.sortedByValue().declaredIn(declared);
   }
 }
 // src/refcheck/domain/unit-declarations.ts
@@ -6038,6 +6659,12 @@ class UnitDeclarations extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new UnitDeclarations(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, UnitDeclarations.of);
+  }
+  combine(other) {
+    return this.combineTo(other, UnitDeclarations.of);
   }
   static parse(values) {
     return parseConstruction(() => new UnitDeclarations(values));
