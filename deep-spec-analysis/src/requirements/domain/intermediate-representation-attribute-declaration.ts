@@ -4,8 +4,13 @@ import type {
   DeclaredBound,
   EnumerationMembers,
 } from "@deep-spec-analysis/kernel-domain";
-import { combinedHash, hashOfNullable, hashOfNumber } from "@deep-spec-analysis/kernel-infrastructure";
+import { combinedHash, hashOfNullable } from "@deep-spec-analysis/kernel-infrastructure";
 import type { IntermediateRepresentationAttributeName } from "./intermediate-representation-attribute-name.ts";
+
+// 省略可能な項の同値。両方欠けていれば等しく、片方だけ欠けていれば等しくない。
+function nullableEquals<T extends { equals(other: T): boolean }>(left: T | undefined, right: T | undefined): boolean {
+  return left === undefined ? right === undefined : right !== undefined && left.equals(right);
+}
 
 // 属性宣言。型宣言が欠けた属性は kind: "" として届く（旧実装は type 欠落でも
 // 属性をカタログへ登録した——参照解決の可否がそれで変わるため保存する）。
@@ -72,16 +77,12 @@ export class IntermediateRepresentationAttributeDeclaration {
   }
 
   equals(other: IntermediateRepresentationAttributeDeclaration): boolean {
-    const valuesEqual =
-      this.#values === undefined
-        ? other.#values === undefined
-        : other.#values !== undefined && this.#values.equals(other.#values);
     return (
       this.#name.equals(other.#name) &&
       this.#kind.equals(other.#kind) &&
-      valuesEqual &&
-      this.#min?.asNumber() === other.#min?.asNumber() &&
-      this.#max?.asNumber() === other.#max?.asNumber()
+      nullableEquals(this.#values, other.#values) &&
+      nullableEquals(this.#min, other.#min) &&
+      nullableEquals(this.#max, other.#max)
     );
   }
 
@@ -90,8 +91,8 @@ export class IntermediateRepresentationAttributeDeclaration {
       this.#name.hashCode(),
       this.#kind.hashCode(),
       hashOfNullable(this.#values, (values) => values.hashCode()),
-      hashOfNullable(this.#min, (min) => hashOfNumber(min.asNumber())),
-      hashOfNullable(this.#max, (max) => hashOfNumber(max.asNumber())),
+      hashOfNullable(this.#min, (min) => min.hashCode()),
+      hashOfNullable(this.#max, (max) => max.hashCode()),
     ]);
   }
 }

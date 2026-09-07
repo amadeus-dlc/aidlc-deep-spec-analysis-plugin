@@ -436,6 +436,15 @@ describe("IR 宣言の等価性とハッシュ", () => {
         ["values（不在）", enumerated()],
       ],
     );
+
+    // NaN の上下限は「不適合な数値の宣言も診断対象として有効」の帰結として届く。
+    // 生の `===` で比べていたころは、宣言が自身と等しくならなかった。
+    const nanBounded = bounded("amount", "int", Number.NaN, Number.NaN);
+    expect(nanBounded.equals(nanBounded)).toBe(true);
+    expect(nanBounded.equals(bounded("amount", "int", Number.NaN, Number.NaN))).toBe(true);
+    expect(nanBounded.hashCode()).toBe(bounded("amount", "int", Number.NaN, Number.NaN).hashCode());
+    expect(nanBounded.equals(bounded("amount", "int", 0, Number.NaN))).toBe(false);
+    expect(nanBounded.equals(bounded("amount", "int", undefined, Number.NaN))).toBe(false);
   });
 
   test("RequirementAttributeDeclaration はパス・種別・上下限・enum 値を見る", () => {
