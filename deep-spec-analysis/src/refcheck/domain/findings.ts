@@ -17,7 +17,7 @@ export class Findings extends FirstClassCollectionBase<Finding, Findings> implem
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-findings");
   }
 
-  protected rebuild(values: readonly Finding[]): Findings {
+  protected override rebuild(values: readonly Finding[]): Findings {
     return new Findings(values);
   }
 
@@ -33,7 +33,7 @@ export class Findings extends FirstClassCollectionBase<Finding, Findings> implem
     return new Findings([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<Finding> {
+  override *[Symbol.iterator](): Iterator<Finding> {
     yield* this.#values;
   }
 

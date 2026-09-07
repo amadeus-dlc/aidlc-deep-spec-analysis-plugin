@@ -18,7 +18,7 @@ export class ComponentShapeErrors
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-component-shape-errors");
   }
 
-  protected rebuild(values: readonly ComponentShapeError[]): ComponentShapeErrors {
+  protected override rebuild(values: readonly ComponentShapeError[]): ComponentShapeErrors {
     return new ComponentShapeErrors(values);
   }
 
@@ -34,7 +34,7 @@ export class ComponentShapeErrors
     return new ComponentShapeErrors([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<ComponentShapeError> {
+  override *[Symbol.iterator](): Iterator<ComponentShapeError> {
     yield* this.#values;
   }
 

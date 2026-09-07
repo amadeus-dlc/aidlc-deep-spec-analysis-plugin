@@ -17,7 +17,7 @@ export class DesignIgnores extends FirstClassCollectionBase<DesignIgnore, Design
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-ignores");
   }
 
-  protected rebuild(values: readonly DesignIgnore[]): DesignIgnores {
+  protected override rebuild(values: readonly DesignIgnore[]): DesignIgnores {
     return new DesignIgnores(values);
   }
 
@@ -33,7 +33,7 @@ export class DesignIgnores extends FirstClassCollectionBase<DesignIgnore, Design
     return new DesignIgnores([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<DesignIgnore> {
+  override *[Symbol.iterator](): Iterator<DesignIgnore> {
     yield* this.#values;
   }
 

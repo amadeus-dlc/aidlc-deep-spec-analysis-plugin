@@ -16,7 +16,7 @@ export class DesignObligations extends FirstClassCollectionBase<DesignObligation
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-obligations");
   }
 
-  protected rebuild(values: readonly DesignObligation[]): DesignObligations {
+  protected override rebuild(values: readonly DesignObligation[]): DesignObligations {
     return new DesignObligations(values);
   }
 
@@ -37,7 +37,7 @@ export class DesignObligations extends FirstClassCollectionBase<DesignObligation
     return new DesignObligations([...this.#values].sort((a, b) => a.id().compareTo(b.id())));
   }
 
-  *[Symbol.iterator](): Iterator<DesignObligation> {
+  override *[Symbol.iterator](): Iterator<DesignObligation> {
     yield* this.#values;
   }
 

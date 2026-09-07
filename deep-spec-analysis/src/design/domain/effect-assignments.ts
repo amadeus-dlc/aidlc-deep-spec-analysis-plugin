@@ -31,7 +31,7 @@ export class EffectAssignments extends FirstClassCollectionBase<EffectAssignment
     this.#values = KeyedIndex.of(entries);
   }
 
-  protected rebuild(values: readonly EffectAssignment[]): EffectAssignments {
+  protected override rebuild(values: readonly EffectAssignment[]): EffectAssignments {
     return new EffectAssignments(values);
   }
 
@@ -63,7 +63,7 @@ export class EffectAssignments extends FirstClassCollectionBase<EffectAssignment
     return this.#values.has(path);
   }
 
-  *[Symbol.iterator](): Iterator<EffectAssignment> {
+  override *[Symbol.iterator](): Iterator<EffectAssignment> {
     yield* this.#values.values();
   }
 }

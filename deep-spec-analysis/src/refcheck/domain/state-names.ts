@@ -18,7 +18,7 @@ export class StateNames
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-state-names");
   }
 
-  protected rebuild(values: readonly StateName[]): StateNames {
+  protected override rebuild(values: readonly StateName[]): StateNames {
     return new StateNames(values);
   }
 
@@ -34,7 +34,7 @@ export class StateNames
     return new StateNames([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<StateName> {
+  override *[Symbol.iterator](): Iterator<StateName> {
     yield* this.#values;
   }
 

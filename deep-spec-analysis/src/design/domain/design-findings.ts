@@ -32,7 +32,7 @@ export class DesignFindings extends FirstClassCollectionBase<DesignFinding, Desi
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-findings");
   }
 
-  protected rebuild(values: readonly DesignFinding[]): DesignFindings {
+  protected override rebuild(values: readonly DesignFinding[]): DesignFindings {
     return new DesignFindings(values);
   }
 
@@ -48,7 +48,7 @@ export class DesignFindings extends FirstClassCollectionBase<DesignFinding, Desi
     return new DesignFindings([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<DesignFinding> {
+  override *[Symbol.iterator](): Iterator<DesignFinding> {
     yield* this.#values;
   }
 

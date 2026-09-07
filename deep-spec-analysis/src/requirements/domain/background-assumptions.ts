@@ -19,7 +19,7 @@ export class BackgroundAssumptions
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-background-assumptions");
   }
 
-  protected rebuild(values: readonly BackgroundAssumption[]): BackgroundAssumptions {
+  protected override rebuild(values: readonly BackgroundAssumption[]): BackgroundAssumptions {
     return new BackgroundAssumptions(values);
   }
 
@@ -35,7 +35,7 @@ export class BackgroundAssumptions
     return new BackgroundAssumptions([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<BackgroundAssumption> {
+  override *[Symbol.iterator](): Iterator<BackgroundAssumption> {
     yield* this.#values;
   }
 

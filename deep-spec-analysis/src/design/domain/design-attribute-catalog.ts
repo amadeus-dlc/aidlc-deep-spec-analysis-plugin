@@ -56,7 +56,7 @@ export class DesignAttributeCatalog extends FirstClassCollectionBase<
     );
   }
 
-  protected rebuild(values: readonly DesignAttributeCatalogEntry[]): DesignAttributeCatalog {
+  protected override rebuild(values: readonly DesignAttributeCatalogEntry[]): DesignAttributeCatalog {
     const selectedByOwner = new Map<string, Set<DesignAttributeDeclaration>>();
     for (const entry of values) {
       const selected = selectedByOwner.get(entry.owner().asString()) ?? new Set<DesignAttributeDeclaration>();
@@ -75,7 +75,7 @@ export class DesignAttributeCatalog extends FirstClassCollectionBase<
     return new DesignAttributeCatalog(DesignEntityDeclarations.of(declarations));
   }
 
-  *[Symbol.iterator](): Iterator<DesignAttributeCatalogEntry> {
+  override *[Symbol.iterator](): Iterator<DesignAttributeCatalogEntry> {
     yield* this.#entries;
   }
 

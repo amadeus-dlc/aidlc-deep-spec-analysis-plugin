@@ -28,7 +28,7 @@ export class TargetIdentifiers
     this.#values = boundedCollectionSnapshot(values, MAX_TARGET_IDENTIFIERS, "too-many-target-identifiers");
   }
 
-  protected rebuild(values: readonly TargetIdentifier[]): TargetIdentifiers {
+  protected override rebuild(values: readonly TargetIdentifier[]): TargetIdentifiers {
     return new TargetIdentifiers(values);
   }
 
@@ -56,7 +56,7 @@ export class TargetIdentifiers
     return new TargetIdentifiers([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<TargetIdentifier> {
+  override *[Symbol.iterator](): Iterator<TargetIdentifier> {
     yield* this.#values;
   }
 
@@ -95,7 +95,7 @@ export class TargetIdentifiers
     return this.#values.map((v) => v.asString());
   }
 
-  isEmpty(): boolean {
+  override isEmpty(): boolean {
     return this.#values.length === 0;
   }
 }

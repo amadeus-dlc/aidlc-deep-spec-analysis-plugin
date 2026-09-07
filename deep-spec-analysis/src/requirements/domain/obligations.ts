@@ -24,7 +24,7 @@ export class Obligations
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-obligations");
   }
 
-  protected rebuild(values: readonly Obligation[]): Obligations {
+  protected override rebuild(values: readonly Obligation[]): Obligations {
     return new Obligations(values);
   }
 
@@ -40,7 +40,7 @@ export class Obligations
     return new Obligations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<Obligation> {
+  override *[Symbol.iterator](): Iterator<Obligation> {
     yield* this.#values;
   }
 

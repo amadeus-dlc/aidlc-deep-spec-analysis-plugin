@@ -50,13 +50,13 @@ export class IntermediateRepresentationAttributeCatalog
     this.#byPath = KeyedIndex.of(this.#entries.map((entry) => [entry.path(), entry.attribute()] as const));
   }
 
-  protected rebuild(
+  protected override rebuild(
     values: readonly IntermediateRepresentationAttributeEntry[],
   ): IntermediateRepresentationAttributeCatalog {
     return new IntermediateRepresentationAttributeCatalog(this.#declarations, values);
   }
 
-  *[Symbol.iterator](): Iterator<IntermediateRepresentationAttributeEntry> {
+  override *[Symbol.iterator](): Iterator<IntermediateRepresentationAttributeEntry> {
     yield* this.#entries;
   }
 

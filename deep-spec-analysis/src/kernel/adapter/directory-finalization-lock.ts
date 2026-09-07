@@ -32,6 +32,7 @@ import { err, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure"
 import type { Clock, RepositoryError } from "@deep-spec-analysis/kernel-usecase";
 import { readArtifactText } from "./artifact-io.ts";
 import type { DirectoryFinalizationLockOutcome } from "./directory-finalization-lock-outcome.ts";
+import type { DirectoryFinalizationLockPort } from "./directory-finalization-lock-port.ts";
 import type { ProcessLiveness } from "./process-liveness.ts";
 
 const DESIGN_LOCK_BASENAME = ".deep-spec-design-finalization.lock";
@@ -53,7 +54,7 @@ function causeOf(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-export class DirectoryFinalizationLock {
+export class DirectoryFinalizationLock implements DirectoryFinalizationLockPort {
   readonly #clock: Clock;
   readonly #liveness: ProcessLiveness;
   readonly #lockBasename: string;

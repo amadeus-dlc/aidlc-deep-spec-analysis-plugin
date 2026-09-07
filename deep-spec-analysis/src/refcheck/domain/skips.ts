@@ -17,7 +17,7 @@ export class Skips extends FirstClassCollectionBase<Skipped, Skips> implements F
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-skips");
   }
 
-  protected rebuild(values: readonly Skipped[]): Skips {
+  protected override rebuild(values: readonly Skipped[]): Skips {
     return new Skips(values);
   }
 
@@ -33,7 +33,7 @@ export class Skips extends FirstClassCollectionBase<Skipped, Skips> implements F
     return new Skips([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<Skipped> {
+  override *[Symbol.iterator](): Iterator<Skipped> {
     yield* this.#values;
   }
 

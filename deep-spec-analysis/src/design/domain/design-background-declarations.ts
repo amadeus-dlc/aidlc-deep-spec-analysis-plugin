@@ -18,7 +18,7 @@ export class DesignBackgroundDeclarations extends FirstClassCollectionBase<
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-background-declarations");
   }
 
-  protected rebuild(values: readonly DesignBackgroundDeclaration[]): DesignBackgroundDeclarations {
+  protected override rebuild(values: readonly DesignBackgroundDeclaration[]): DesignBackgroundDeclarations {
     return new DesignBackgroundDeclarations(values);
   }
 
@@ -34,7 +34,7 @@ export class DesignBackgroundDeclarations extends FirstClassCollectionBase<
     return new DesignBackgroundDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<DesignBackgroundDeclaration> {
+  override *[Symbol.iterator](): Iterator<DesignBackgroundDeclaration> {
     yield* this.#values;
   }
 

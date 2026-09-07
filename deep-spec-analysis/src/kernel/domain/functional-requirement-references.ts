@@ -31,7 +31,7 @@ export class FunctionalRequirementReferences
     );
   }
 
-  protected rebuild(values: readonly RequirementIdentifier[]): FunctionalRequirementReferences {
+  protected override rebuild(values: readonly RequirementIdentifier[]): FunctionalRequirementReferences {
     return new FunctionalRequirementReferences(values);
   }
 
@@ -47,11 +47,11 @@ export class FunctionalRequirementReferences
     return new FunctionalRequirementReferences([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<RequirementIdentifier> {
+  override *[Symbol.iterator](): Iterator<RequirementIdentifier> {
     yield* this.#values;
   }
 
-  isEmpty(): boolean {
+  override isEmpty(): boolean {
     return this.#values.length === 0;
   }
 

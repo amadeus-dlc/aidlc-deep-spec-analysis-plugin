@@ -25,7 +25,7 @@ export class IntermediateRepresentationBackgroundDeclarations
     );
   }
 
-  protected rebuild(
+  protected override rebuild(
     values: readonly IntermediateRepresentationBackgroundDeclaration[],
   ): IntermediateRepresentationBackgroundDeclarations {
     return new IntermediateRepresentationBackgroundDeclarations(values);
@@ -47,7 +47,7 @@ export class IntermediateRepresentationBackgroundDeclarations
     return new IntermediateRepresentationBackgroundDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<IntermediateRepresentationBackgroundDeclaration> {
+  override *[Symbol.iterator](): Iterator<IntermediateRepresentationBackgroundDeclaration> {
     yield* this.#values;
   }
 

@@ -16,7 +16,7 @@ export class DesignTransitions extends FirstClassCollectionBase<DesignTransition
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-transitions");
   }
 
-  protected rebuild(values: readonly DesignTransition[]): DesignTransitions {
+  protected override rebuild(values: readonly DesignTransition[]): DesignTransitions {
     return new DesignTransitions(values);
   }
 
@@ -32,7 +32,7 @@ export class DesignTransitions extends FirstClassCollectionBase<DesignTransition
     return new DesignTransitions([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<DesignTransition> {
+  override *[Symbol.iterator](): Iterator<DesignTransition> {
     yield* this.#values;
   }
 

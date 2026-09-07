@@ -24,7 +24,7 @@ export class StateMachineSketches
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-state-machine-sketches");
   }
 
-  protected rebuild(values: readonly StateMachineSketch[]): StateMachineSketches {
+  protected override rebuild(values: readonly StateMachineSketch[]): StateMachineSketches {
     return new StateMachineSketches(values);
   }
 
@@ -40,7 +40,7 @@ export class StateMachineSketches
     return new StateMachineSketches([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<StateMachineSketch> {
+  override *[Symbol.iterator](): Iterator<StateMachineSketch> {
     yield* this.#values;
   }
 

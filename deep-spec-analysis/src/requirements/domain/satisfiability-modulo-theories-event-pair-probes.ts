@@ -22,7 +22,7 @@ export class SatisfiabilityModuloTheoriesEventPairProbes
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-satisfiability-event-pair-probes");
   }
 
-  protected rebuild(
+  protected override rebuild(
     values: readonly SatisfiabilityModuloTheoriesEventPairProbe[],
   ): SatisfiabilityModuloTheoriesEventPairProbes {
     return new SatisfiabilityModuloTheoriesEventPairProbes(values);
@@ -44,7 +44,7 @@ export class SatisfiabilityModuloTheoriesEventPairProbes
     return new SatisfiabilityModuloTheoriesEventPairProbes([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<SatisfiabilityModuloTheoriesEventPairProbe> {
+  override *[Symbol.iterator](): Iterator<SatisfiabilityModuloTheoriesEventPairProbe> {
     yield* this.#values;
   }
 

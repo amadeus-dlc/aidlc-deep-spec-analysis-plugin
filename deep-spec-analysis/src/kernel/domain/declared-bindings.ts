@@ -23,7 +23,7 @@ export class DeclaredBindings
     this.#values = boundedCollectionSnapshot(values, MAX_DECLARED_BINDINGS, "too-many-binding-declarations");
   }
 
-  protected rebuild(values: readonly BindingDeclaration[]): DeclaredBindings {
+  protected override rebuild(values: readonly BindingDeclaration[]): DeclaredBindings {
     return new DeclaredBindings(values);
   }
 
@@ -37,14 +37,14 @@ export class DeclaredBindings
   add(value: BindingDeclaration): DeclaredBindings {
     return new DeclaredBindings([...this.#values, value]);
   }
-  *[Symbol.iterator](): Iterator<BindingDeclaration> {
+  override *[Symbol.iterator](): Iterator<BindingDeclaration> {
     yield* this.#values;
   }
   toArray(): readonly BindingDeclaration[] {
     return this.#values;
   }
 
-  isEmpty(): boolean {
+  override isEmpty(): boolean {
     return this.#values.length === 0;
   }
 }

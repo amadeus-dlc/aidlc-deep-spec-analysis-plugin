@@ -28,7 +28,7 @@ export class DomainEntitySketches
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-domain-entity-sketches");
   }
 
-  protected rebuild(values: readonly DomainEntitySketch[]): DomainEntitySketches {
+  protected override rebuild(values: readonly DomainEntitySketch[]): DomainEntitySketches {
     return new DomainEntitySketches(values);
   }
 
@@ -44,7 +44,7 @@ export class DomainEntitySketches
     return new DomainEntitySketches([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<DomainEntitySketch> {
+  override *[Symbol.iterator](): Iterator<DomainEntitySketch> {
     yield* this.#values;
   }
 

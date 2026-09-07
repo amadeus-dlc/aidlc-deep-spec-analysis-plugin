@@ -32,11 +32,11 @@ export class RefinementQueryVerdicts extends FirstClassCollectionBase<
     return parseConstruction(() => new RefinementQueryVerdicts(values));
   }
 
-  protected rebuild(values: readonly RefinementQueryVerdictEntry[]): RefinementQueryVerdicts {
+  protected override rebuild(values: readonly RefinementQueryVerdictEntry[]): RefinementQueryVerdicts {
     return new RefinementQueryVerdicts(values);
   }
 
-  *[Symbol.iterator](): Iterator<RefinementQueryVerdictEntry> {
+  override *[Symbol.iterator](): Iterator<RefinementQueryVerdictEntry> {
     yield* this.#values.values();
   }
 

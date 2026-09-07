@@ -16,7 +16,7 @@ export class LoweredBackgrounds extends FirstClassCollectionBase<LoweredBackgrou
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-lowered-backgrounds");
   }
 
-  protected rebuild(values: readonly LoweredBackground[]): LoweredBackgrounds {
+  protected override rebuild(values: readonly LoweredBackground[]): LoweredBackgrounds {
     return new LoweredBackgrounds(values);
   }
 
@@ -32,7 +32,7 @@ export class LoweredBackgrounds extends FirstClassCollectionBase<LoweredBackgrou
     return new LoweredBackgrounds([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<LoweredBackground> {
+  override *[Symbol.iterator](): Iterator<LoweredBackground> {
     yield* this.#values;
   }
 

@@ -16,11 +16,11 @@ export class StructuralDebt extends FirstClassCollectionBase<StructuralObservati
     this.#observations = boundedCollectionSnapshot(observations, 65_536, "too-many-structural-observations");
   }
 
-  protected rebuild(values: readonly StructuralObservation[]): StructuralDebt {
+  protected override rebuild(values: readonly StructuralObservation[]): StructuralDebt {
     return new StructuralDebt(values);
   }
 
-  *[Symbol.iterator](): Iterator<StructuralObservation> {
+  override *[Symbol.iterator](): Iterator<StructuralObservation> {
     yield* this.#observations;
   }
   static of(observations: readonly StructuralObservation[]): StructuralDebt {

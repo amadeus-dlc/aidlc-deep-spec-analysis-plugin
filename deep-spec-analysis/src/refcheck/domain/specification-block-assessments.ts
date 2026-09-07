@@ -23,7 +23,7 @@ export class SpecificationBlockAssessments
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-specification-block-assessments");
   }
 
-  protected rebuild(values: readonly SpecificationBlockAssessment[]): SpecificationBlockAssessments {
+  protected override rebuild(values: readonly SpecificationBlockAssessment[]): SpecificationBlockAssessments {
     return new SpecificationBlockAssessments(values);
   }
 
@@ -39,7 +39,7 @@ export class SpecificationBlockAssessments
     return new SpecificationBlockAssessments([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<SpecificationBlockAssessment> {
+  override *[Symbol.iterator](): Iterator<SpecificationBlockAssessment> {
     yield* this.#values;
   }
 

@@ -16,7 +16,7 @@ export class SiblingVerdictFindings extends FirstClassCollectionBase<SiblingVerd
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-sibling-verdict-findings");
   }
 
-  protected rebuild(values: readonly SiblingVerdictFinding[]): SiblingVerdictFindings {
+  protected override rebuild(values: readonly SiblingVerdictFinding[]): SiblingVerdictFindings {
     return new SiblingVerdictFindings(values);
   }
 
@@ -32,7 +32,7 @@ export class SiblingVerdictFindings extends FirstClassCollectionBase<SiblingVerd
     return new SiblingVerdictFindings([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<SiblingVerdictFinding> {
+  override *[Symbol.iterator](): Iterator<SiblingVerdictFinding> {
     yield* this.#values;
   }
 

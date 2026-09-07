@@ -29,7 +29,7 @@ export class ContractRows
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-contract-rows");
   }
 
-  protected rebuild(values: readonly ContractRow[]): ContractRows {
+  protected override rebuild(values: readonly ContractRow[]): ContractRows {
     return new ContractRows(values);
   }
 
@@ -45,7 +45,7 @@ export class ContractRows
     return new ContractRows([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<ContractRow> {
+  override *[Symbol.iterator](): Iterator<ContractRow> {
     yield* this.#values;
   }
 

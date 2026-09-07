@@ -40,7 +40,7 @@ export class Components
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-components");
   }
 
-  protected rebuild(values: readonly Component[]): Components {
+  protected override rebuild(values: readonly Component[]): Components {
     return new Components(values);
   }
 
@@ -56,7 +56,7 @@ export class Components
     return new Components([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<Component> {
+  override *[Symbol.iterator](): Iterator<Component> {
     yield* this.#values;
   }
 

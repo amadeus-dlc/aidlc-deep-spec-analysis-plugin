@@ -23,7 +23,7 @@ export class CheckedUnits extends FirstClassCollectionBase<UnitName, CheckedUnit
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-checked-units");
   }
 
-  protected rebuild(values: readonly UnitName[]): CheckedUnits {
+  protected override rebuild(values: readonly UnitName[]): CheckedUnits {
     return new CheckedUnits(values);
   }
 
@@ -39,7 +39,7 @@ export class CheckedUnits extends FirstClassCollectionBase<UnitName, CheckedUnit
     return new CheckedUnits([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<UnitName> {
+  override *[Symbol.iterator](): Iterator<UnitName> {
     yield* this.#values;
   }
 

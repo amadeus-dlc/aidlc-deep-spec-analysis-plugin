@@ -26,7 +26,7 @@ export class RuleDeclarations
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-rule-declarations");
   }
 
-  protected rebuild(values: readonly RuleDeclaration[]): RuleDeclarations {
+  protected override rebuild(values: readonly RuleDeclaration[]): RuleDeclarations {
     return new RuleDeclarations(values);
   }
 
@@ -42,7 +42,7 @@ export class RuleDeclarations
     return new RuleDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<RuleDeclaration> {
+  override *[Symbol.iterator](): Iterator<RuleDeclaration> {
     yield* this.#values;
   }
 

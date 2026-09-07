@@ -26,11 +26,11 @@ export class ScenarioVerdicts extends FirstClassCollectionBase<ScenarioVerdict, 
     this.#values = [...comparable];
   }
 
-  protected rebuild(values: readonly ScenarioVerdict[]): ScenarioVerdicts {
+  protected override rebuild(values: readonly ScenarioVerdict[]): ScenarioVerdicts {
     return new ScenarioVerdicts(values);
   }
 
-  *[Symbol.iterator](): Iterator<ScenarioVerdict> {
+  override *[Symbol.iterator](): Iterator<ScenarioVerdict> {
     yield* this.#values;
   }
   static of(values: readonly ScenarioVerdict[]): ScenarioVerdicts {
@@ -49,7 +49,7 @@ export class ScenarioVerdicts extends FirstClassCollectionBase<ScenarioVerdict, 
       }
   }
 
-  isEmpty(): boolean {
+  override isEmpty(): boolean {
     return this.#values.length === 0;
   }
 }

@@ -18,7 +18,7 @@ export class WitnessReferences
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-witness-references");
   }
 
-  protected rebuild(values: readonly WitnessReference[]): WitnessReferences {
+  protected override rebuild(values: readonly WitnessReference[]): WitnessReferences {
     return new WitnessReferences(values);
   }
 
@@ -34,7 +34,7 @@ export class WitnessReferences
     return new WitnessReferences([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<WitnessReference> {
+  override *[Symbol.iterator](): Iterator<WitnessReference> {
     yield* this.#values;
   }
 

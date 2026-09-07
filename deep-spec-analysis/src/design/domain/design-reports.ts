@@ -27,7 +27,7 @@ export class DesignReports extends FirstClassCollectionBase<DesignReport, Design
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-reports");
   }
 
-  protected rebuild(values: readonly DesignReport[]): DesignReports {
+  protected override rebuild(values: readonly DesignReport[]): DesignReports {
     return new DesignReports(values);
   }
 
@@ -39,7 +39,7 @@ export class DesignReports extends FirstClassCollectionBase<DesignReport, Design
     return parseConstruction(() => new DesignReports(values));
   }
 
-  *[Symbol.iterator](): Iterator<DesignReport> {
+  override *[Symbol.iterator](): Iterator<DesignReport> {
     yield* this.#values;
   }
 

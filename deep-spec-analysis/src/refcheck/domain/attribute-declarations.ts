@@ -21,7 +21,7 @@ export class AttributeDeclarations
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-attribute-declarations");
   }
 
-  protected rebuild(values: readonly AttributeDeclaration[]): AttributeDeclarations {
+  protected override rebuild(values: readonly AttributeDeclaration[]): AttributeDeclarations {
     return new AttributeDeclarations(values);
   }
 
@@ -37,7 +37,7 @@ export class AttributeDeclarations
     return new AttributeDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<AttributeDeclaration> {
+  override *[Symbol.iterator](): Iterator<AttributeDeclaration> {
     yield* this.#values;
   }
 

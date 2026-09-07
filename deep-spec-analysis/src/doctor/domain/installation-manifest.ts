@@ -24,7 +24,7 @@ export class InstallationManifest
     this.#entries = Object.freeze([...entries]);
   }
 
-  protected rebuild(values: readonly ManifestEntry[]): ImmutableFirstClassCollection<ManifestEntry> {
+  protected override rebuild(values: readonly ManifestEntry[]): ImmutableFirstClassCollection<ManifestEntry> {
     return ImmutableFirstClassCollection.of(values);
   }
 
@@ -59,7 +59,7 @@ export class InstallationManifest
     ]);
   }
 
-  *[Symbol.iterator](): Iterator<ManifestEntry> {
+  override *[Symbol.iterator](): Iterator<ManifestEntry> {
     yield* this.#entries;
   }
 }

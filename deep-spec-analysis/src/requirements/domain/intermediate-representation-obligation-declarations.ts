@@ -25,7 +25,7 @@ export class IntermediateRepresentationObligationDeclarations
     );
   }
 
-  protected rebuild(
+  protected override rebuild(
     values: readonly IntermediateRepresentationObligationDeclaration[],
   ): IntermediateRepresentationObligationDeclarations {
     return new IntermediateRepresentationObligationDeclarations(values);
@@ -47,7 +47,7 @@ export class IntermediateRepresentationObligationDeclarations
     return new IntermediateRepresentationObligationDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<IntermediateRepresentationObligationDeclaration> {
+  override *[Symbol.iterator](): Iterator<IntermediateRepresentationObligationDeclaration> {
     yield* this.#values;
   }
 

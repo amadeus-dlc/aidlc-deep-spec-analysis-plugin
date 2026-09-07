@@ -27,11 +27,11 @@ export class ScenarioBindings extends FirstClassCollectionBase<ScenarioBinding, 
     this.#values = snapshot;
   }
 
-  protected rebuild(values: readonly ScenarioBinding[]): ScenarioBindings {
+  protected override rebuild(values: readonly ScenarioBinding[]): ScenarioBindings {
     return new ScenarioBindings(values);
   }
 
-  *[Symbol.iterator](): Iterator<ScenarioBinding> {
+  override *[Symbol.iterator](): Iterator<ScenarioBinding> {
     yield* this.#values;
   }
 
@@ -67,7 +67,7 @@ export class ScenarioBindings extends FirstClassCollectionBase<ScenarioBinding, 
     );
   }
 
-  isEmpty(): boolean {
+  override isEmpty(): boolean {
     return this.#values.length === 0;
   }
 }

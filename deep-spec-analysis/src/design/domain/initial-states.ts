@@ -14,7 +14,7 @@ export class InitialStates extends FirstClassCollectionBase<InitialState, Initia
     this.#values = boundedCollectionSnapshot(values, 10_000, "too-many-initial-states");
   }
 
-  protected rebuild(values: readonly InitialState[]): InitialStates {
+  protected override rebuild(values: readonly InitialState[]): InitialStates {
     return new InitialStates(values);
   }
 
@@ -30,7 +30,7 @@ export class InitialStates extends FirstClassCollectionBase<InitialState, Initia
     return new InitialStates([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<InitialState> {
+  override *[Symbol.iterator](): Iterator<InitialState> {
     yield* this.#values;
   }
 

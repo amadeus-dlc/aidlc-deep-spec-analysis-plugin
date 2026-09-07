@@ -18,7 +18,7 @@ export class DesignScenarioDeclarations extends FirstClassCollectionBase<
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-scenario-declarations");
   }
 
-  protected rebuild(values: readonly DesignScenarioDeclaration[]): DesignScenarioDeclarations {
+  protected override rebuild(values: readonly DesignScenarioDeclaration[]): DesignScenarioDeclarations {
     return new DesignScenarioDeclarations(values);
   }
 
@@ -34,7 +34,7 @@ export class DesignScenarioDeclarations extends FirstClassCollectionBase<
     return new DesignScenarioDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<DesignScenarioDeclaration> {
+  override *[Symbol.iterator](): Iterator<DesignScenarioDeclaration> {
     yield* this.#values;
   }
 

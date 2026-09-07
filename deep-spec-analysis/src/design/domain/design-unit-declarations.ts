@@ -15,7 +15,7 @@ export class DesignUnitDeclarations extends FirstClassCollectionBase<DesignUnitD
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-unit-declarations");
   }
 
-  protected rebuild(values: readonly DesignUnitDeclaration[]): DesignUnitDeclarations {
+  protected override rebuild(values: readonly DesignUnitDeclaration[]): DesignUnitDeclarations {
     return new DesignUnitDeclarations(values);
   }
 
@@ -31,7 +31,7 @@ export class DesignUnitDeclarations extends FirstClassCollectionBase<DesignUnitD
     return new DesignUnitDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<DesignUnitDeclaration> {
+  override *[Symbol.iterator](): Iterator<DesignUnitDeclaration> {
     yield* this.#values;
   }
 

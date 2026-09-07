@@ -58,11 +58,11 @@ class ProbeCollection extends FirstClassCollectionBase<NumberValue, ImmutableFir
     this.#iteratorFactory = iteratorFactory;
   }
 
-  [Symbol.iterator](): Iterator<NumberValue> {
+  override [Symbol.iterator](): Iterator<NumberValue> {
     return this.#iteratorFactory();
   }
 
-  protected rebuild(values: readonly NumberValue[]): ImmutableFirstClassCollection<NumberValue> {
+  protected override rebuild(values: readonly NumberValue[]): ImmutableFirstClassCollection<NumberValue> {
     return ImmutableFirstClassCollection.of(values);
   }
 }

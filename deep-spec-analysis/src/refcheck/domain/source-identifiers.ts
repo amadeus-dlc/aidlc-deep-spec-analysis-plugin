@@ -23,7 +23,7 @@ export class SourceIdentifiers
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-source-identifiers");
   }
 
-  protected rebuild(values: readonly SourceIdentifier[]): SourceIdentifiers {
+  protected override rebuild(values: readonly SourceIdentifier[]): SourceIdentifiers {
     return new SourceIdentifiers(values);
   }
 
@@ -39,7 +39,7 @@ export class SourceIdentifiers
     return new SourceIdentifiers([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<SourceIdentifier> {
+  override *[Symbol.iterator](): Iterator<SourceIdentifier> {
     yield* this.#values;
   }
 

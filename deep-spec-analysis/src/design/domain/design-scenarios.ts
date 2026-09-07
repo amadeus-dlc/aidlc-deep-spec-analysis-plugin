@@ -16,7 +16,7 @@ export class DesignScenarios extends FirstClassCollectionBase<DesignScenario, De
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-scenarios");
   }
 
-  protected rebuild(values: readonly DesignScenario[]): DesignScenarios {
+  protected override rebuild(values: readonly DesignScenario[]): DesignScenarios {
     return new DesignScenarios(values);
   }
 
@@ -37,7 +37,7 @@ export class DesignScenarios extends FirstClassCollectionBase<DesignScenario, De
     return new DesignScenarios([...this.#values].sort((a, b) => a.id().compareTo(b.id())));
   }
 
-  *[Symbol.iterator](): Iterator<DesignScenario> {
+  override *[Symbol.iterator](): Iterator<DesignScenario> {
     yield* this.#values;
   }
 

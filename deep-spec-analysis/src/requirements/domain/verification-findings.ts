@@ -23,7 +23,7 @@ export class VerificationFindings
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-verification-findings");
   }
 
-  protected rebuild(values: readonly VerificationFinding[]): VerificationFindings {
+  protected override rebuild(values: readonly VerificationFinding[]): VerificationFindings {
     return new VerificationFindings(values);
   }
 
@@ -39,7 +39,7 @@ export class VerificationFindings
     return new VerificationFindings([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<VerificationFinding> {
+  override *[Symbol.iterator](): Iterator<VerificationFinding> {
     yield* this.#values;
   }
 

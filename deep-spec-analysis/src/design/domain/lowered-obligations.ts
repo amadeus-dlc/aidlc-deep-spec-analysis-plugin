@@ -17,7 +17,7 @@ export class LoweredObligations extends FirstClassCollectionBase<LoweredObligati
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-lowered-obligations");
   }
 
-  protected rebuild(values: readonly LoweredObligation[]): LoweredObligations {
+  protected override rebuild(values: readonly LoweredObligation[]): LoweredObligations {
     return new LoweredObligations(values);
   }
 
@@ -33,7 +33,7 @@ export class LoweredObligations extends FirstClassCollectionBase<LoweredObligati
     return new LoweredObligations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<LoweredObligation> {
+  override *[Symbol.iterator](): Iterator<LoweredObligation> {
     yield* this.#values;
   }
 

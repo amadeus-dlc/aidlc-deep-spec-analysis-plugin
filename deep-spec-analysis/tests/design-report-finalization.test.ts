@@ -42,7 +42,7 @@ import {
   DesignSkips,
   type DesignVerifyDirectory,
 } from "@deep-spec-analysis/design-domain";
-import type { ProcessLiveness } from "@deep-spec-analysis/kernel-adapter";
+import type { DirectoryFinalizationLockPort, ProcessLiveness } from "@deep-spec-analysis/kernel-adapter";
 import { DirectoryFinalizationLock, readContractSchema } from "@deep-spec-analysis/kernel-adapter";
 import { ArtifactPath, FindingsSchema } from "@deep-spec-analysis/kernel-domain";
 import type { Result } from "@deep-spec-analysis/kernel-infrastructure";
@@ -126,20 +126,33 @@ class StubLiveness implements ProcessLiveness {
 }
 
 // 公開直前の fencing を落とす lock（allowed 回だけ所有を認める）。
-class FencedLock extends DirectoryFinalizationLock {
+class FencedLock implements DirectoryFinalizationLockPort {
+  readonly #delegate: DirectoryFinalizationLock;
   #allowed: number;
   #afterLast: (() => void) | null;
 
   constructor(clock: Clock, liveness: ProcessLiveness, allowed: number, afterLast: (() => void) | null = null) {
-    super(clock, liveness);
+    this.#delegate = new DirectoryFinalizationLock(clock, liveness);
     this.#allowed = allowed;
     this.#afterLast = afterLast;
   }
 
-  override holdsOwnership(directory: ArtifactPath): boolean {
+  canonicalPathOf(directory: ArtifactPath): string {
+    return this.#delegate.canonicalPathOf(directory);
+  }
+
+  acquire(directory: ArtifactPath) {
+    return this.#delegate.acquire(directory);
+  }
+
+  release(directory: ArtifactPath) {
+    return this.#delegate.release(directory);
+  }
+
+  holdsOwnership(directory: ArtifactPath): boolean {
     if (this.#allowed <= 0) return false;
     this.#allowed -= 1;
-    const held = super.holdsOwnership(directory);
+    const held = this.#delegate.holdsOwnership(directory);
     const after = this.#afterLast;
     if (this.#allowed === 0 && after !== null) {
       this.#afterLast = null;

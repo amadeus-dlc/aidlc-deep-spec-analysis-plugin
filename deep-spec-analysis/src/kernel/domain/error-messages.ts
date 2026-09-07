@@ -23,7 +23,7 @@ export class ErrorMessages
     this.#values = boundedCollectionSnapshot(values, MAX_MESSAGES, "too-many-error-messages");
   }
 
-  protected rebuild(values: readonly ErrorMessage[]): ErrorMessages {
+  protected override rebuild(values: readonly ErrorMessage[]): ErrorMessages {
     return new ErrorMessages(values);
   }
 
@@ -59,11 +59,11 @@ export class ErrorMessages
     return new ErrorMessages([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<ErrorMessage> {
+  override *[Symbol.iterator](): Iterator<ErrorMessage> {
     yield* this.#values;
   }
 
-  isEmpty(): boolean {
+  override isEmpty(): boolean {
     return this.#values.length === 0;
   }
 

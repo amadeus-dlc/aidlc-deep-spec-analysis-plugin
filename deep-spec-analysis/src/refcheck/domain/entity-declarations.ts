@@ -39,7 +39,7 @@ export class EntityDeclarations
     this.#names = KeySet.of(this.#values.map((e) => e.name()));
   }
 
-  protected rebuild(values: readonly EntityDeclaration[]): EntityDeclarations {
+  protected override rebuild(values: readonly EntityDeclaration[]): EntityDeclarations {
     return new EntityDeclarations(values);
   }
 
@@ -55,7 +55,7 @@ export class EntityDeclarations
     return new EntityDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<EntityDeclaration> {
+  override *[Symbol.iterator](): Iterator<EntityDeclaration> {
     yield* this.#values;
   }
 

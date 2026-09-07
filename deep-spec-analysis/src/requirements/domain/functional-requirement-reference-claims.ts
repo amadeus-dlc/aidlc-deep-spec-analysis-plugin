@@ -19,7 +19,9 @@ export class FunctionalRequirementReferenceClaims
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-functional-requirement-reference-claims");
   }
 
-  protected rebuild(values: readonly FunctionalRequirementReferenceClaim[]): FunctionalRequirementReferenceClaims {
+  protected override rebuild(
+    values: readonly FunctionalRequirementReferenceClaim[],
+  ): FunctionalRequirementReferenceClaims {
     return new FunctionalRequirementReferenceClaims(values);
   }
 
@@ -37,7 +39,7 @@ export class FunctionalRequirementReferenceClaims
     return new FunctionalRequirementReferenceClaims([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<FunctionalRequirementReferenceClaim> {
+  override *[Symbol.iterator](): Iterator<FunctionalRequirementReferenceClaim> {
     yield* this.#values;
   }
 

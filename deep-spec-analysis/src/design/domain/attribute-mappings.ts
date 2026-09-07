@@ -38,7 +38,7 @@ export class AttributeMappings extends FirstClassCollectionBase<AttributeMapping
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-attribute-mappings");
   }
 
-  protected rebuild(values: readonly AttributeMapping[]): AttributeMappings {
+  protected override rebuild(values: readonly AttributeMapping[]): AttributeMappings {
     return new AttributeMappings(values);
   }
 
@@ -54,7 +54,7 @@ export class AttributeMappings extends FirstClassCollectionBase<AttributeMapping
     return new AttributeMappings([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<AttributeMapping> {
+  override *[Symbol.iterator](): Iterator<AttributeMapping> {
     yield* this.#values;
   }
 

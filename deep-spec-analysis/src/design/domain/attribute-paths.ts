@@ -14,7 +14,7 @@ export class AttributePaths extends FirstClassCollectionBase<AttributePath, Attr
     this.#values = KeySet.of(boundedCollectionSnapshot(values, 65_536, "too-many-attribute-paths"));
   }
 
-  protected rebuild(values: readonly AttributePath[]): AttributePaths {
+  protected override rebuild(values: readonly AttributePath[]): AttributePaths {
     return new AttributePaths(values);
   }
 
@@ -31,7 +31,7 @@ export class AttributePaths extends FirstClassCollectionBase<AttributePath, Attr
     return new AttributePaths([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<AttributePath> {
+  override *[Symbol.iterator](): Iterator<AttributePath> {
     yield* this.#values;
   }
 

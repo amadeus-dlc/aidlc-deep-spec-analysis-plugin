@@ -16,11 +16,11 @@ export class RuleSubsumptions extends FirstClassCollectionBase<RuleSubsumption, 
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-subsumptions");
   }
 
-  protected rebuild(values: readonly RuleSubsumption[]): RuleSubsumptions {
+  protected override rebuild(values: readonly RuleSubsumption[]): RuleSubsumptions {
     return new RuleSubsumptions(values);
   }
 
-  *[Symbol.iterator](): Iterator<RuleSubsumption> {
+  override *[Symbol.iterator](): Iterator<RuleSubsumption> {
     yield* this.#values;
   }
   static of(values: readonly RuleSubsumption[]): RuleSubsumptions {

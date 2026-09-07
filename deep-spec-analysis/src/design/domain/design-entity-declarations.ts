@@ -19,7 +19,7 @@ export class DesignEntityDeclarations extends FirstClassCollectionBase<
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-entity-declarations");
   }
 
-  protected rebuild(values: readonly DesignEntityDeclaration[]): DesignEntityDeclarations {
+  protected override rebuild(values: readonly DesignEntityDeclaration[]): DesignEntityDeclarations {
     return new DesignEntityDeclarations(values);
   }
 
@@ -35,7 +35,7 @@ export class DesignEntityDeclarations extends FirstClassCollectionBase<
     return new DesignEntityDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<DesignEntityDeclaration> {
+  override *[Symbol.iterator](): Iterator<DesignEntityDeclaration> {
     yield* this.#values;
   }
 

@@ -26,7 +26,7 @@ export class CheckFamilies
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-check-families");
   }
 
-  protected rebuild(values: readonly CheckFamily[]): CheckFamilies {
+  protected override rebuild(values: readonly CheckFamily[]): CheckFamilies {
     return new CheckFamilies(values);
   }
 
@@ -42,7 +42,7 @@ export class CheckFamilies
     return new CheckFamilies([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<CheckFamily> {
+  override *[Symbol.iterator](): Iterator<CheckFamily> {
     yield* this.#values;
   }
 

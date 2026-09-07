@@ -16,7 +16,7 @@ export class LoweredScenarios extends FirstClassCollectionBase<LoweredScenario, 
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-lowered-scenarios");
   }
 
-  protected rebuild(values: readonly LoweredScenario[]): LoweredScenarios {
+  protected override rebuild(values: readonly LoweredScenario[]): LoweredScenarios {
     return new LoweredScenarios(values);
   }
 
@@ -32,7 +32,7 @@ export class LoweredScenarios extends FirstClassCollectionBase<LoweredScenario, 
     return new LoweredScenarios([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<LoweredScenario> {
+  override *[Symbol.iterator](): Iterator<LoweredScenario> {
     yield* this.#values;
   }
 

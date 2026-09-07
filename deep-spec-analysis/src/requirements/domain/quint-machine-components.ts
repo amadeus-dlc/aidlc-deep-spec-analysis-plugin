@@ -22,7 +22,7 @@ export class QuintMachineComponents
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-quint-machine-components");
   }
 
-  protected rebuild(values: readonly QuintMachineComponent[]): QuintMachineComponents {
+  protected override rebuild(values: readonly QuintMachineComponent[]): QuintMachineComponents {
     return new QuintMachineComponents(values);
   }
 
@@ -38,7 +38,7 @@ export class QuintMachineComponents
     return new QuintMachineComponents([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<QuintMachineComponent> {
+  override *[Symbol.iterator](): Iterator<QuintMachineComponent> {
     yield* this.#values;
   }
 

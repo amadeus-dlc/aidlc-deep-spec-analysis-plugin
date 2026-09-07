@@ -18,7 +18,7 @@ export class StageScopes
     this.#values = boundedCollectionSnapshot(values, 1_024, "too-many-stage-scopes");
   }
 
-  protected rebuild(values: readonly StageScope[]): StageScopes {
+  protected override rebuild(values: readonly StageScope[]): StageScopes {
     return new StageScopes(values);
   }
   static of(values: readonly StageScope[]): StageScopes {
@@ -27,7 +27,7 @@ export class StageScopes
   static parse(values: readonly StageScope[]): Result<StageScopes, ParseError> {
     return parseConstruction(() => new StageScopes(values));
   }
-  *[Symbol.iterator](): Iterator<StageScope> {
+  override *[Symbol.iterator](): Iterator<StageScope> {
     yield* this.#values;
   }
 }

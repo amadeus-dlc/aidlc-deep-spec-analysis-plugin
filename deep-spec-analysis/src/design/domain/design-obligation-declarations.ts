@@ -18,7 +18,7 @@ export class DesignObligationDeclarations extends FirstClassCollectionBase<
     this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-obligation-declarations");
   }
 
-  protected rebuild(values: readonly DesignObligationDeclaration[]): DesignObligationDeclarations {
+  protected override rebuild(values: readonly DesignObligationDeclaration[]): DesignObligationDeclarations {
     return new DesignObligationDeclarations(values);
   }
 
@@ -34,7 +34,7 @@ export class DesignObligationDeclarations extends FirstClassCollectionBase<
     return new DesignObligationDeclarations([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<DesignObligationDeclaration> {
+  override *[Symbol.iterator](): Iterator<DesignObligationDeclaration> {
     yield* this.#values;
   }
 
