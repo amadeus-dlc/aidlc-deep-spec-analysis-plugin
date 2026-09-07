@@ -1019,6 +1019,12 @@ class DeclaredBound {
   exceeds(other) {
     return this.#value > other.#value;
   }
+  equals(other) {
+    return Number.isNaN(this.#value) ? Number.isNaN(other.#value) : this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfNumber(this.#value);
+  }
 }
 // src/kernel/domain/declared-digest.ts
 class DeclaredDigest {
@@ -3296,6 +3302,10 @@ class IntermediateRepresentationAttributeCatalog extends FirstClassCollectionBas
   }
 }
 // src/requirements/domain/intermediate-representation-attribute-declaration.ts
+function nullableEquals(left, right) {
+  return left === undefined ? right === undefined : right !== undefined && left.equals(right);
+}
+
 class IntermediateRepresentationAttributeDeclaration {
   #name;
   #kind;
@@ -3331,16 +3341,15 @@ class IntermediateRepresentationAttributeDeclaration {
     return this.#kind.asString();
   }
   equals(other) {
-    const valuesEqual = this.#values === undefined ? other.#values === undefined : other.#values !== undefined && this.#values.equals(other.#values);
-    return this.#name.equals(other.#name) && this.#kind.equals(other.#kind) && valuesEqual && this.#min?.asNumber() === other.#min?.asNumber() && this.#max?.asNumber() === other.#max?.asNumber();
+    return this.#name.equals(other.#name) && this.#kind.equals(other.#kind) && nullableEquals(this.#values, other.#values) && nullableEquals(this.#min, other.#min) && nullableEquals(this.#max, other.#max);
   }
   hashCode() {
     return combinedHash([
       this.#name.hashCode(),
       this.#kind.hashCode(),
       hashOfNullable(this.#values, (values) => values.hashCode()),
-      hashOfNullable(this.#min, (min) => hashOfNumber(min.asNumber())),
-      hashOfNullable(this.#max, (max) => hashOfNumber(max.asNumber()))
+      hashOfNullable(this.#min, (min) => min.hashCode()),
+      hashOfNullable(this.#max, (max) => max.hashCode())
     ]);
   }
 }
@@ -5091,18 +5100,12 @@ class QuintMachineRunVerdict {
   skipsFor(targets, bounded) {
     const kind = this.#kind;
     if (kind === "missing")
-      return this.#skipEach(targets, SkipReason.unavailable(), "quint returned no machine run: the event machine was not decided");
+      return VerificationSkips.coveringAll(targets, SkipReason.unavailable(), "quint returned no machine run: the event machine was not decided");
     if (kind === "timeout")
-      return this.#skipEach(targets, SkipReason.of("timeout"), "machine invariant check exceeded its budget");
+      return VerificationSkips.coveringAll(targets, SkipReason.of("timeout"), "machine invariant check exceeded its budget");
     if (kind === "run-failed")
-      return this.#skipEach(targets, SkipReason.of("unavailable"), `quint ${bounded ? "verify" : "run"} failed unexpectedly: ${this.#outputTail}`);
-    return [];
-  }
-  #skipEach(targets, reason, detail) {
-    return targets.foldLeft([], (skips, target) => {
-      skips.push(VerificationSkipped.of({ target, reason, detail }));
-      return skips;
-    });
+      return VerificationSkips.coveringAll(targets, SkipReason.of("unavailable"), `quint ${bounded ? "verify" : "run"} failed unexpectedly: ${this.#outputTail}`);
+    return VerificationSkips.of([]);
   }
   interpret(model, components, events, method) {
     const findings = [];
@@ -5141,7 +5144,7 @@ class QuintMachineRunVerdict {
     }
     return ok({
       findings: VerificationFindings.of(findings),
-      skipped: VerificationSkips.of(this.skipsFor(machineTargets, method.isBounded()))
+      skipped: this.skipsFor(machineTargets, method.isBounded())
     });
   }
   isDeadlock() {

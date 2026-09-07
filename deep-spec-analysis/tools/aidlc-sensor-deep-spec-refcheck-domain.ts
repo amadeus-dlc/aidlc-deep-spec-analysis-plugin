@@ -1016,6 +1016,12 @@ class DeclaredBound {
   exceeds(other) {
     return this.#value > other.#value;
   }
+  equals(other) {
+    return Number.isNaN(this.#value) ? Number.isNaN(other.#value) : this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfNumber(this.#value);
+  }
 }
 // src/kernel/domain/declared-digest.ts
 class DeclaredDigest {
@@ -3611,8 +3617,7 @@ class Component {
     this.#entities.checkReferenceOwners(components, report, artifact);
   }
   checkSelfReferences(report, artifact) {
-    for (const reference of this.selfReferences())
-      report.finding(DD_3, FindingKind.structureInvalid(), FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", this.#name.asString())), []), [WitnessReference.at(artifact.asString(), reference.element().asString(), this.#name.asString())], `component "${this.#name.asString()}" lists itself as a dependency`);
+    this.#allReferences().checkSelfReferences(this.#name, report, artifact);
   }
   checkIdentifiers(report, artifact) {
     this.#entities.checkIdentifiers(report, artifact);
@@ -3950,7 +3955,11 @@ class ComponentReferences extends FirstClassCollectionBase {
     }
   }
   pointingAt(name) {
-    return this.#values.filter((reference) => reference.pointsAt(name));
+    return this.filter((reference) => reference.pointsAt(name));
+  }
+  checkSelfReferences(owner, report, artifact) {
+    for (const reference of this.pointingAt(owner).#values)
+      report.finding(DD_3, FindingKind.structureInvalid(), FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", owner.asString())), []), [WitnessReference.at(artifact.asString(), reference.element().asString(), owner.asString())], `component "${owner.asString()}" lists itself as a dependency`);
   }
   toArray() {
     return this.#values;
@@ -6158,7 +6167,7 @@ class UnitNames extends FirstClassCollectionBase {
     return new UnitNames([...this.#values].sort((a, b) => a.asString() < b.asString() ? -1 : 1));
   }
   declaredIn(declared) {
-    return this.#values.filter((name) => declared.declares(name.asString()));
+    return this.filter((name) => declared.declares(name.asString()));
   }
   toStrings() {
     return this.#values.map((name) => name.asString());

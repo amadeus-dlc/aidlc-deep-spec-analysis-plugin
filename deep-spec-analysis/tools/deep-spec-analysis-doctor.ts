@@ -1137,6 +1137,12 @@ class DeclaredBound {
   exceeds(other) {
     return this.#value > other.#value;
   }
+  equals(other) {
+    return Number.isNaN(this.#value) ? Number.isNaN(other.#value) : this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfNumber(this.#value);
+  }
 }
 // src/kernel/domain/declared-digest.ts
 class DeclaredDigest {
