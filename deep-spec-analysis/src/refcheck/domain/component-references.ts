@@ -94,7 +94,7 @@ export class ComponentReferences
 
   // DD-3: owner 自身を指す依存参照を、走査順のまま報告する。
   checkSelfReferences(owner: ComponentName, report: ReferenceCheckReport, artifact: ArtifactPath): void {
-    for (const reference of this.pointingAt(owner).#values)
+    for (const reference of this.pointingAt(owner))
       report.finding(
         DD_3,
         FindingKind.structureInvalid(),

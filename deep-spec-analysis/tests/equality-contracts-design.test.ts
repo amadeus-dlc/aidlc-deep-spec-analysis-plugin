@@ -401,6 +401,21 @@ describe("契約3 設計 IR の宣言", () => {
           min: DeclaredBound.of(0),
         }),
     });
+
+    // NaN の境界は診断対象として有効な宣言。生の `===` で比べていたころは、
+    // この宣言が自身と等しくならなかった。
+    const nanBounded = () =>
+      DesignAttributeDeclaration.of({
+        name: DesignAttributeName.of("total"),
+        kind: AttributeKind.of("int"),
+        min: DeclaredBound.of(Number.NaN),
+        max: DeclaredBound.of(Number.NaN),
+      });
+    const declaration = nanBounded();
+    expect(declaration.equals(declaration)).toBe(true);
+    expect(declaration.equals(nanBounded())).toBe(true);
+    expect(declaration.hashCode()).toBe(nanBounded().hashCode());
+    expect(declaration.equals(build())).toBe(false);
   });
 
   test("DesignEntityDeclaration の等価性とハッシュは名前・説明・属性宣言の列で決まる", () => {

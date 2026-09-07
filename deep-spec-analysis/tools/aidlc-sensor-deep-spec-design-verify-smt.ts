@@ -6941,7 +6941,7 @@ class DesignAttributeDeclaration {
     const leftValues = this.#values;
     const rightValues = other.#values;
     const sameValues = leftValues === undefined || rightValues === undefined ? leftValues === rightValues : leftValues.equals(rightValues);
-    return this.#name.equals(other.#name) && this.#kind.equals(other.#kind) && this.#description === other.#description && this.#min?.asNumber() === other.#min?.asNumber() && this.#max?.asNumber() === other.#max?.asNumber() && sameValues;
+    return this.#name.equals(other.#name) && this.#kind.equals(other.#kind) && this.#description === other.#description && sameOptional(this.#min, other.#min, (left, right) => left.equals(right)) && sameOptional(this.#max, other.#max, (left, right) => left.equals(right)) && sameValues;
   }
   hashCode() {
     const values = this.#values;
@@ -6950,8 +6950,8 @@ class DesignAttributeDeclaration {
       this.#name.hashCode(),
       this.#kind.hashCode(),
       hashOfNullable(this.#description, hashOfString),
-      hashOfNullable(this.#min, (bound) => hashOfNumber(bound.asNumber())),
-      hashOfNullable(this.#max, (bound) => hashOfNumber(bound.asNumber())),
+      hashOfNullable(this.#min, (bound) => bound.hashCode()),
+      hashOfNullable(this.#max, (bound) => bound.hashCode()),
       valuesHash
     ]);
   }

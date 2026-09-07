@@ -3958,7 +3958,7 @@ class ComponentReferences extends FirstClassCollectionBase {
     return this.filter((reference) => reference.pointsAt(name));
   }
   checkSelfReferences(owner, report, artifact) {
-    for (const reference of this.pointingAt(owner).#values)
+    for (const reference of this.pointingAt(owner))
       report.finding(DD_3, FindingKind.structureInvalid(), FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", owner.asString())), []), [WitnessReference.at(artifact.asString(), reference.element().asString(), owner.asString())], `component "${owner.asString()}" lists itself as a dependency`);
   }
   toArray() {

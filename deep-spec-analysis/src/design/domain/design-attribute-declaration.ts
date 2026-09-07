@@ -4,9 +4,10 @@ import type {
   DeclaredBound,
   EnumerationMembers,
 } from "@deep-spec-analysis/kernel-domain";
-import { combinedHash, hashOfNullable, hashOfNumber, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
+import { combinedHash, hashOfNullable, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 
 import type { DesignAttributeName } from "./design-attribute-name.ts";
+import { sameOptional } from "./value-equality.ts";
 
 // 属性宣言（bool / 有界 int / enum）。型宣言が欠けた属性は kind: "" で届く
 //（旧実装はカタログへ登録した——参照解決の可否が変わるため保存）。
@@ -58,8 +59,9 @@ export class DesignAttributeDeclaration {
       this.#name.equals(other.#name) &&
       this.#kind.equals(other.#kind) &&
       this.#description === other.#description &&
-      this.#min?.asNumber() === other.#min?.asNumber() &&
-      this.#max?.asNumber() === other.#max?.asNumber() &&
+      // 境界の同値は DeclaredBound が所有する（NaN の宣言でも反射性を保つ）。
+      sameOptional(this.#min, other.#min, (left, right) => left.equals(right)) &&
+      sameOptional(this.#max, other.#max, (left, right) => left.equals(right)) &&
       sameValues
     );
   }
@@ -71,8 +73,8 @@ export class DesignAttributeDeclaration {
       this.#name.hashCode(),
       this.#kind.hashCode(),
       hashOfNullable(this.#description, hashOfString),
-      hashOfNullable(this.#min, (bound) => hashOfNumber(bound.asNumber())),
-      hashOfNullable(this.#max, (bound) => hashOfNumber(bound.asNumber())),
+      hashOfNullable(this.#min, (bound) => bound.hashCode()),
+      hashOfNullable(this.#max, (bound) => bound.hashCode()),
       valuesHash,
     ]);
   }
