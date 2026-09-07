@@ -11,16 +11,25 @@ import {
   DeclaredBindings,
   DeclaredBindingValue,
   EnumerationMember,
+  EnumerationMembers,
   ErrorMessage,
+  ErrorMessages,
   IntermediateRepresentationVersion,
   NormalizedName,
   QueryLabel,
   RequirementIdentifier,
+  RequirementIdentifiers,
   ScenarioBinding,
+  ScenarioBindings,
+  ScenarioVerdict,
+  ScenarioVerdicts,
+  TargetIdentifier,
+  TargetIdentifiers,
   TriggerName,
   UnitName,
   VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
+import { type Schema, validateSchema } from "@deep-spec-analysis/kernel-infrastructure";
 
 // このファイルは kernel/domain の全 DP・小さなエンティティが守る equals/hashCode
 // 契約を表明する。「等しい値は必ず等しいハッシュ（逆は要求しない）」「同じ値は
@@ -311,6 +320,32 @@ describe("ScenarioBinding", () => {
   });
 });
 
+describe("ScenarioVerdict", () => {
+  test("等価性とハッシュはbackend・modelHash・state・target・unitのすべてで対になる", () => {
+    const backend = BackendName.of("smt");
+    const modelHash = ContentHash.ofText("model");
+    const target = TargetIdentifier.of("SC-1");
+    const unit = UnitName.of("billing-unit");
+
+    const a = ScenarioVerdict.clean(backend, modelHash, target, unit);
+    const same = ScenarioVerdict.clean(backend, modelHash, target, unit);
+    // state だけを変えた相手
+    const diffState = ScenarioVerdict.violated(backend, modelHash, target, unit);
+    // backend だけを変えた相手
+    const diffBackend = ScenarioVerdict.clean(BackendName.of("quint"), modelHash, target, unit);
+    // unit だけを変えた相手（null との非対称性も見る）
+    const diffUnit = ScenarioVerdict.clean(backend, modelHash, target, null);
+
+    expect(a.equals(same)).toBe(true);
+    expect(a.equals(diffState)).toBe(false);
+    expect(a.equals(diffBackend)).toBe(false);
+    expect(a.equals(diffUnit)).toBe(false);
+    expect(diffUnit.equals(a)).toBe(false);
+    expect(a.hashCode()).toBe(same.hashCode());
+    expect(a.hashCode()).toBe(a.hashCode());
+  });
+});
+
 describe("TriggerName", () => {
   test("等価性とハッシュは対で成り立つ", () => {
     const a = TriggerName.of("OrderPlaced");
@@ -347,5 +382,128 @@ describe("VerificationMethod", () => {
     expect(a.equals(other)).toBe(false);
     expect(a.hashCode()).toBe(same.hashCode());
     expect(a.hashCode()).toBe(a.hashCode());
+  });
+});
+
+// 以降はファーストクラスコレクションの combine 契約（左のあとに右を並べ、元は
+// 不変）と、schema.ts の型不一致フォールバックを表明する。等価性契約が主旨の
+// 本ファイルとは焦点が異なるが、kernel の未カバー行を意味のある契約表明で
+// 埋めるためにここへ追記する。
+
+describe("EnumerationMembers", () => {
+  test("combineは左のあとに右を並べた新しいコレクションを返し、元は変えない", () => {
+    const left = EnumerationMembers.of([EnumerationMember.of("Active")]);
+    const right = EnumerationMembers.of([EnumerationMember.of("Inactive")]);
+
+    const combined = left.combine(right);
+
+    expect(combined.count()).toBe(2);
+    const combinedValues = combined.toArray();
+    expect(combinedValues[0]?.equals(EnumerationMember.of("Active"))).toBe(true);
+    expect(combinedValues[1]?.equals(EnumerationMember.of("Inactive"))).toBe(true);
+    // 元のコレクションは不変
+    expect(left.count()).toBe(1);
+    expect(right.count()).toBe(1);
+  });
+});
+
+describe("ErrorMessages", () => {
+  test("combineは左のあとに右を並べた新しいコレクションを返し、元は変えない", () => {
+    const left = ErrorMessages.of([ErrorMessage.of("boom")]);
+    const right = ErrorMessages.of([ErrorMessage.of("bang")]);
+
+    const combined = left.combine(right);
+
+    const combinedValues = combined.toArray();
+    expect(combinedValues.length).toBe(2);
+    expect(combinedValues[0]?.equals(ErrorMessage.of("boom"))).toBe(true);
+    expect(combinedValues[1]?.equals(ErrorMessage.of("bang"))).toBe(true);
+    // 元のコレクションは不変
+    expect(left.toArray().length).toBe(1);
+    expect(right.toArray().length).toBe(1);
+  });
+});
+
+describe("RequirementIdentifiers", () => {
+  test("combineは左のあとに右を並べた新しいコレクションを返し、元は変えない", () => {
+    const left = RequirementIdentifiers.of([RequirementIdentifier.of("FR-1")]);
+    const right = RequirementIdentifiers.of([RequirementIdentifier.of("FR-2")]);
+
+    const combined = left.combine(right);
+
+    const combinedValues = combined.toArray();
+    expect(combinedValues.length).toBe(2);
+    expect(combinedValues[0]?.equals(RequirementIdentifier.of("FR-1"))).toBe(true);
+    expect(combinedValues[1]?.equals(RequirementIdentifier.of("FR-2"))).toBe(true);
+    // 元のコレクションは不変
+    expect(left.toArray().length).toBe(1);
+    expect(right.toArray().length).toBe(1);
+  });
+});
+
+describe("ScenarioBindings", () => {
+  test("combineは左のあとに右を並べた新しいコレクションを返し、元は変えない", () => {
+    const left = ScenarioBindings.of([ScenarioBinding.of(AttributePath.of("Entity.a"), BindingValue.of(true))]);
+    const right = ScenarioBindings.of([ScenarioBinding.of(AttributePath.of("Entity.b"), BindingValue.of(1))]);
+
+    const combined = left.combine(right);
+
+    expect(combined.count()).toBe(2);
+    const combinedValues = [...combined];
+    expect(combinedValues[0]?.equals(ScenarioBinding.of(AttributePath.of("Entity.a"), BindingValue.of(true)))).toBe(
+      true,
+    );
+    expect(combinedValues[1]?.equals(ScenarioBinding.of(AttributePath.of("Entity.b"), BindingValue.of(1)))).toBe(true);
+    // 元のコレクションは不変
+    expect(left.count()).toBe(1);
+    expect(right.count()).toBe(1);
+  });
+});
+
+describe("ScenarioVerdicts", () => {
+  test("combineは左のあとに右を並べた新しいコレクションを返し、元は変えない", () => {
+    const modelHash = ContentHash.ofText("model");
+    const target = TargetIdentifier.of("SC-1");
+    const smt = ScenarioVerdict.clean(BackendName.of("smt"), modelHash, target, null);
+    const quint = ScenarioVerdict.violated(BackendName.of("quint"), modelHash, target, null);
+
+    const left = ScenarioVerdicts.of([smt]);
+    const right = ScenarioVerdicts.of([quint]);
+
+    const combined = left.combine(right);
+
+    const combinedValues = [...combined];
+    expect(combinedValues.length).toBe(2);
+    expect(combinedValues[0]?.equals(smt)).toBe(true);
+    expect(combinedValues[1]?.equals(quint)).toBe(true);
+    // 元のコレクションは不変
+    expect([...left].length).toBe(1);
+    expect([...right].length).toBe(1);
+  });
+});
+
+describe("TargetIdentifiers", () => {
+  test("toArrayは要素をそのままの順で、コピーとして公開する", () => {
+    const first = TargetIdentifier.of("SC-1");
+    const second = TargetIdentifier.of("SC-2");
+    const targets = TargetIdentifiers.of([first, second]);
+
+    const values = targets.toArray();
+
+    expect(values.length).toBe(2);
+    expect(values[0]?.equals(first)).toBe(true);
+    expect(values[1]?.equals(second)).toBe(true);
+  });
+});
+
+describe("schema.ts の typeMatches", () => {
+  test("未知のtype文字列は既知の型のどれにも一致せず、型不一致の診断を1件だけ出す", () => {
+    const schema: Schema = { type: "unsupported-type" };
+    const errors: string[] = [];
+
+    const valid = validateSchema(schema, schema, "some value", "/foo", errors);
+
+    expect(valid).toBe(false);
+    expect(errors).toEqual(["/foo: expected type unsupported-type"]);
   });
 });

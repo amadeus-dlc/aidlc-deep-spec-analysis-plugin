@@ -22,20 +22,33 @@ import {
 } from "@deep-spec-analysis/kernel-domain";
 import {
   AllowedValue,
+  AllowedValues,
+  AppliesTo,
+  AttributeDeclaration,
   AttributeDeclarations,
+  AttributeDefault,
   AttributeName,
+  AttributeNames,
   BlockIndex,
   BusinessRuleIdentifier,
   CardinalityNotation,
+  CheckFamilies,
   CheckFamily,
+  Component,
+  ComponentEntities,
   ComponentEntity,
   ComponentName,
   ComponentReference,
+  ComponentReferences,
   ComponentShapeError,
+  Components,
   ContractIdentifier,
   ContractParty,
   ContractRow,
+  DeclaredRuleIdentifier,
   DesignRecordIdentifier,
+  DomainEntitySketch,
+  DomainEntitySketches,
   ElementPath,
   EntityDeclaration,
   EntityDeclarations,
@@ -52,14 +65,22 @@ import {
   RelationshipDeclaration,
   RelationshipDeclarations,
   RuleCategory,
+  RuleDeclaration,
+  RuleDeclarations,
   ShapeError,
+  ShapeErrors,
   SiblingUnitIndexEntry,
   Skipped,
   SourceIdentifier,
+  SourceIdentifiers,
+  SpecificationBlockAssessment,
   StateMachineSketch,
+  StateMachineSketches,
   StateName,
   StateNames,
+  TypeName,
   UnitDeclaration,
+  UnitDeclarations,
   UnitName,
   UnitNames,
   WitnessReference,
@@ -121,6 +142,11 @@ describe("単一値の値オブジェクト", () => {
     "AllowedValue",
     () => AllowedValue.of("draft"),
     () => AllowedValue.of("published"),
+  );
+  testSingleValueObject(
+    "AppliesTo",
+    () => AppliesTo.of("Order.status"),
+    () => AppliesTo.of("Payment.status"),
   );
   testSingleValueObject(
     "BlockIndex",
@@ -202,6 +228,45 @@ describe("単一値の値オブジェクト", () => {
     () => StateName.of("draft"),
     () => StateName.of("paid"),
   );
+  testSingleValueObject(
+    "TypeName",
+    () => TypeName.of("string"),
+    () => TypeName.of("int"),
+  );
+
+  test("TypeName の等価性は宣言された表記そのもので、型区分の分類だけが正規化を経る", () => {
+    const upper = TypeName.of("Int");
+    const lower = TypeName.of("int");
+    expect(upper.equals(lower)).toBe(false);
+    expect(upper.hashCode()).not.toBe(lower.hashCode());
+    expect(upper.classifiesNumeric()).toBe(true);
+    expect(lower.classifiesNumeric()).toBe(true);
+  });
+
+  test("AttributeDefault は文字列宣言と数値宣言を別の値として区別する", () => {
+    assertEqualityContract(
+      () => AttributeDefault.of("draft"),
+      [
+        ["別の文字列", () => AttributeDefault.of("paid")],
+        // 文書上 `1` と `"1"` は別の宣言——描画は同じでもハッシュまで分かれる。
+        ["同じ描画の数値", () => AttributeDefault.of(1)],
+      ],
+    );
+    assertEqualityContract(
+      () => AttributeDefault.of(1),
+      [
+        ["別の数値", () => AttributeDefault.of(2)],
+        ["同じ描画の文字列", () => AttributeDefault.of("1")],
+      ],
+    );
+  });
+
+  test("AttributeDefault の NaN 宣言どうしは等しく、ハッシュも一致する", () => {
+    // NaN !== NaN なので、この等価性は equals の明示的な取り決めでしか成り立たない。
+    expect(AttributeDefault.of(Number.NaN).equals(AttributeDefault.of(Number.NaN))).toBe(true);
+    expect(AttributeDefault.of(Number.NaN).hashCode()).toBe(AttributeDefault.of(Number.NaN).hashCode());
+    expect(AttributeDefault.of(Number.NaN).equals(AttributeDefault.of(0))).toBe(false);
+  });
 
   test("ContractParty はマークアップと前後の空白を落とした宣言で等価性が決まる", () => {
     const plain = ContractParty.of("Sales");
@@ -616,4 +681,351 @@ describe("InputAnchor の凍結描画と成果物名順", () => {
     expect(anchor.artifact()).toBe("components.md");
     expect(anchor.sha256().asString()).toBe(SHA_A);
   });
+});
+
+const componentReference = (component: string, index = 0): ComponentReference =>
+  ComponentReference.of({
+    component: ComponentName.of(component),
+    element: ElementPath.of(`components[0].depends_on[${index}]`),
+  });
+
+const componentEntity = (name: string): ComponentEntity =>
+  ComponentEntity.of({
+    name: EntityName.of(name),
+    element: ElementPath.of("components[0].entities[0]"),
+    identifier: AttributeName.of("id"),
+    references: EntityReferences.of([]),
+  });
+
+const component = (name: string): Component =>
+  Component.of({
+    name: ComponentName.of(name),
+    element: ElementPath.of("components[0]"),
+    dependsOn: ComponentReferences.of([componentReference("Billing")]),
+    dependents: ComponentReferences.of([]),
+    entities: ComponentEntities.of([componentEntity("Order")]),
+  });
+
+const attributeDeclaration = (name: string): AttributeDeclaration =>
+  AttributeDeclaration.of({
+    name: AttributeName.of(name),
+    element: ElementPath.of("entities[0].attributes[0]"),
+    type: TypeName.of("string"),
+    uniqueIsTrue: false,
+    references: null,
+    allowed: null,
+    def: null,
+    minDeclared: false,
+    maxDeclared: false,
+    min: null,
+    max: null,
+  });
+
+const ruleDeclaration = (id: string): RuleDeclaration =>
+  RuleDeclaration.of({
+    id: DeclaredRuleIdentifier.of(id),
+    element: ElementPath.of("rules[0]"),
+    category: RuleCategory.of("validation"),
+    appliesTo: AppliesTo.of("Order.status"),
+    sourceIds: SourceIdentifiers.of([SourceIdentifier.of("FR-1")]),
+    missing: [],
+  });
+
+const domainEntitySketch = (name: string): DomainEntitySketch =>
+  DomainEntitySketch.of({
+    name: EntityName.of(name),
+    component: ComponentName.of("Sales"),
+    attributes: AttributeNames.of([AttributeName.of("status")]),
+  });
+
+const stateMachineSketch = (spec: string): StateMachineSketch =>
+  StateMachineSketch.of({
+    spec: MachineSpecification.of(spec),
+    states: StateNames.of([StateName.of("draft")]),
+    fenceLine: LineNumber.of(7),
+    unsupported: null,
+  });
+
+describe("宣言エンティティの等価性", () => {
+  test("AttributeDeclaration は名前・位置・型・unique・参照・許容値・既定値・境界の宣言有無と値の 11 つで等価性が決まる", () => {
+    const base = {
+      name: AttributeName.of("status"),
+      element: ElementPath.of("entities[0].attributes[0]"),
+      type: TypeName.of("string"),
+      uniqueIsTrue: true,
+      references: ReferenceTarget.of("Order.status"),
+      allowed: AllowedValues.of([AllowedValue.of("draft")]),
+      def: AttributeDefault.of("draft"),
+      minDeclared: true,
+      maxDeclared: true,
+      min: NumericBound.of(1),
+      max: NumericBound.of(10),
+    };
+    assertEqualityContract(
+      () => AttributeDeclaration.of(base),
+      [
+        ["name", () => AttributeDeclaration.of({ ...base, name: AttributeName.of("total") })],
+        ["element", () => AttributeDeclaration.of({ ...base, element: ElementPath.of("entities[0].attributes[1]") })],
+        ["type", () => AttributeDeclaration.of({ ...base, type: TypeName.of("int") })],
+        ["type が無い", () => AttributeDeclaration.of({ ...base, type: null })],
+        ["uniqueIsTrue", () => AttributeDeclaration.of({ ...base, uniqueIsTrue: false })],
+        ["references", () => AttributeDeclaration.of({ ...base, references: ReferenceTarget.of("Order.total") })],
+        ["references が無い", () => AttributeDeclaration.of({ ...base, references: null })],
+        [
+          "allowed",
+          () => AttributeDeclaration.of({ ...base, allowed: AllowedValues.of([AllowedValue.of("published")]) }),
+        ],
+        ["allowed が無い", () => AttributeDeclaration.of({ ...base, allowed: null })],
+        ["def", () => AttributeDeclaration.of({ ...base, def: AttributeDefault.of("published") })],
+        ["def が無い", () => AttributeDeclaration.of({ ...base, def: null })],
+        ["minDeclared", () => AttributeDeclaration.of({ ...base, minDeclared: false })],
+        ["maxDeclared", () => AttributeDeclaration.of({ ...base, maxDeclared: false })],
+        ["min", () => AttributeDeclaration.of({ ...base, min: NumericBound.of(2) })],
+        ["min が無い", () => AttributeDeclaration.of({ ...base, min: null })],
+        ["max", () => AttributeDeclaration.of({ ...base, max: NumericBound.of(11) })],
+        ["max が無い", () => AttributeDeclaration.of({ ...base, max: null })],
+      ],
+    );
+  });
+
+  test("宣言の無い任意欄をすべて欠いた AttributeDeclaration どうしは等しい", () => {
+    expect(attributeDeclaration("status").equals(attributeDeclaration("status"))).toBe(true);
+    expect(attributeDeclaration("status").hashCode()).toBe(attributeDeclaration("status").hashCode());
+  });
+
+  test("RuleDeclaration は id・位置・区分・対象・出典集合・欠落キー列の 6 つで等価性が決まる", () => {
+    const base = {
+      id: DeclaredRuleIdentifier.of("BR1.1"),
+      element: ElementPath.of("rules[0]"),
+      category: RuleCategory.of("validation"),
+      appliesTo: AppliesTo.of("Order.status"),
+      sourceIds: SourceIdentifiers.of([SourceIdentifier.of("FR-1")]),
+      missing: [] as readonly string[],
+    };
+    assertEqualityContract(
+      () => RuleDeclaration.of(base),
+      [
+        ["id", () => RuleDeclaration.of({ ...base, id: DeclaredRuleIdentifier.of("BR1.2") })],
+        ["id が無い", () => RuleDeclaration.of({ ...base, id: null })],
+        ["element", () => RuleDeclaration.of({ ...base, element: ElementPath.of("rules[1]") })],
+        ["category", () => RuleDeclaration.of({ ...base, category: RuleCategory.of("policy") })],
+        ["category が無い", () => RuleDeclaration.of({ ...base, category: null })],
+        ["appliesTo", () => RuleDeclaration.of({ ...base, appliesTo: AppliesTo.of("Payment.status") })],
+        ["appliesTo が無い", () => RuleDeclaration.of({ ...base, appliesTo: null })],
+        [
+          "sourceIds",
+          () => RuleDeclaration.of({ ...base, sourceIds: SourceIdentifiers.of([SourceIdentifier.of("FR-2")]) }),
+        ],
+        ["missing", () => RuleDeclaration.of({ ...base, missing: ["category"] })],
+      ],
+    );
+  });
+
+  test("RuleDeclaration の欠落キー列は宣言順まで含めて等価性を決める", () => {
+    const base = {
+      id: DeclaredRuleIdentifier.of("BR1.1"),
+      element: ElementPath.of("rules[0]"),
+      category: null,
+      appliesTo: null,
+      sourceIds: SourceIdentifiers.of([]),
+      missing: ["category", "applies_to"] as readonly string[],
+    };
+    const reordered = RuleDeclaration.of({ ...base, missing: ["applies_to", "category"] });
+    expect(RuleDeclaration.of(base).equals(reordered)).toBe(false);
+    expect(RuleDeclaration.of(base).hashCode()).not.toBe(reordered.hashCode());
+  });
+
+  test("Component は名前・位置・依存先・被依存・所有エンティティの 5 つで等価性が決まる", () => {
+    const base = {
+      name: ComponentName.of("Sales"),
+      element: ElementPath.of("components[0]"),
+      dependsOn: ComponentReferences.of([componentReference("Billing")]),
+      dependents: ComponentReferences.of([componentReference("Shipping", 1)]),
+      entities: ComponentEntities.of([componentEntity("Order")]),
+    };
+    assertEqualityContract(
+      () => Component.of(base),
+      [
+        ["name", () => Component.of({ ...base, name: ComponentName.of("Shipping") })],
+        ["element", () => Component.of({ ...base, element: ElementPath.of("components[1]") })],
+        ["dependsOn", () => Component.of({ ...base, dependsOn: ComponentReferences.of([]) })],
+        ["dependents", () => Component.of({ ...base, dependents: ComponentReferences.of([]) })],
+        ["entities", () => Component.of({ ...base, entities: ComponentEntities.of([componentEntity("Payment")]) })],
+      ],
+    );
+  });
+
+  test("DomainEntitySketch は名前・所属コンポーネント・属性名集合の 3 つで等価性が決まる", () => {
+    const base = {
+      name: EntityName.of("Order"),
+      component: ComponentName.of("Sales"),
+      attributes: AttributeNames.of([AttributeName.of("status")]),
+    };
+    assertEqualityContract(
+      () => DomainEntitySketch.of(base),
+      [
+        ["name", () => DomainEntitySketch.of({ ...base, name: EntityName.of("Payment") })],
+        ["component", () => DomainEntitySketch.of({ ...base, component: ComponentName.of("Shipping") })],
+        ["attributes", () => DomainEntitySketch.of({ ...base, attributes: AttributeNames.of([]) })],
+      ],
+    );
+  });
+});
+
+describe("SpecificationBlockAssessment の判別共用体", () => {
+  test("sound は fence 位置と行番号で等価性が決まる", () => {
+    assertEqualityContract(
+      () => SpecificationBlockAssessment.sound(BlockIndex.of(1), LineNumber.of(7)),
+      [
+        ["index", () => SpecificationBlockAssessment.sound(BlockIndex.of(2), LineNumber.of(7))],
+        ["line", () => SpecificationBlockAssessment.sound(BlockIndex.of(1), LineNumber.of(8))],
+      ],
+    );
+  });
+
+  test("unparseable は解析エラー文言まで含めて等価性が決まる", () => {
+    assertEqualityContract(
+      () => SpecificationBlockAssessment.unparseable(BlockIndex.of(1), LineNumber.of(7), "unexpected token"),
+      [
+        [
+          "index",
+          () => SpecificationBlockAssessment.unparseable(BlockIndex.of(2), LineNumber.of(7), "unexpected token"),
+        ],
+        [
+          "line",
+          () => SpecificationBlockAssessment.unparseable(BlockIndex.of(1), LineNumber.of(8), "unexpected token"),
+        ],
+        ["error", () => SpecificationBlockAssessment.unparseable(BlockIndex.of(1), LineNumber.of(7), "tab in indent")],
+      ],
+    );
+  });
+
+  test("同じ位置でも査定の種別が違えば等しくなく、ハッシュにも種別が畳み込まれる", () => {
+    const index = BlockIndex.of(1);
+    const line = LineNumber.of(7);
+    const assessments = [
+      ["sound", SpecificationBlockAssessment.sound(index, line)],
+      ["unparseable", SpecificationBlockAssessment.unparseable(index, line, "unexpected token")],
+      ["not-a-mapping", SpecificationBlockAssessment.notAMapping(index, line)],
+      ["openapi-without-paths", SpecificationBlockAssessment.openapiWithoutPaths(index, line)],
+    ] as const;
+    for (const [leftLabel, left] of assessments)
+      for (const [rightLabel, right] of assessments) {
+        if (leftLabel === rightLabel) continue;
+        expect([leftLabel, rightLabel, left.equals(right)]).toEqual([leftLabel, rightLabel, false]);
+        expect([leftLabel, rightLabel, left.hashCode() === right.hashCode()]).toEqual([leftLabel, rightLabel, false]);
+      }
+  });
+
+  test("matchIssue は種別ごとの分岐を選び、unparseable にだけ解析エラー文言を渡す", () => {
+    const handlers = {
+      sound: () => "sound",
+      unparseable: (error: string) => `unparseable:${error}`,
+      notAMapping: () => "not-a-mapping",
+      openapiWithoutPaths: () => "openapi-without-paths",
+    };
+    const index = BlockIndex.of(3);
+    const line = LineNumber.of(12);
+    expect(SpecificationBlockAssessment.sound(index, line).matchIssue(handlers)).toBe("sound");
+    expect(SpecificationBlockAssessment.unparseable(index, line, "tab in indent").matchIssue(handlers)).toBe(
+      "unparseable:tab in indent",
+    );
+    expect(SpecificationBlockAssessment.notAMapping(index, line).matchIssue(handlers)).toBe("not-a-mapping");
+    expect(SpecificationBlockAssessment.openapiWithoutPaths(index, line).matchIssue(handlers)).toBe(
+      "openapi-without-paths",
+    );
+  });
+
+  test("blockId と locationLabel は fence 位置と行番号から凍結された書式を作る", () => {
+    const assessment = SpecificationBlockAssessment.sound(BlockIndex.of(3), LineNumber.of(12));
+    expect(assessment.blockId()).toBe("contract:block-3");
+    expect(assessment.locationLabel()).toBe("yaml fence #3 (line 12)");
+  });
+});
+
+/** 境界の脱出口。宣言順のまま、反復と同じ並びを、凍結した写しで返す。 */
+type BoundaryCollection<E> = Iterable<E> & { toArray(): readonly E[] };
+
+function assertBoundarySnapshot<E>(
+  name: string,
+  build: (values: readonly E[]) => BoundaryCollection<E>,
+  declared: readonly E[],
+): void {
+  test(`${name}.toArray は宣言順のまま、反復と同じ並びを凍結した写しで返す`, () => {
+    const source = [...declared];
+    const collection = build(source);
+    const escaped = collection.toArray();
+
+    // 描画・アダプタが読む並びは宣言順そのもので、要素は同一（写し直さない）。
+    expect(escaped).toHaveLength(declared.length);
+    for (const [index, element] of declared.entries()) expect(escaped[index]).toBe(element);
+
+    // 反復の並びと一致する——境界の外と中で順序が食い違わない。
+    const iterated = [...collection];
+    expect(iterated).toHaveLength(declared.length);
+    for (const [index, element] of declared.entries()) expect(iterated[index]).toBe(element);
+
+    // 構築時に写しを取っているので、渡した配列を後から縮めても影響しない。
+    source.pop();
+    expect(collection.toArray()).toHaveLength(declared.length);
+
+    // 脱出口は凍結されている——境界の外から中身を差し替えられない。
+    expect(Object.isFrozen(escaped)).toBe(true);
+  });
+}
+
+describe("コレクションの境界（toArray）", () => {
+  assertBoundarySnapshot("AllowedValues", AllowedValues.of, [AllowedValue.of("draft"), AllowedValue.of("published")]);
+  assertBoundarySnapshot("AttributeDeclarations", AttributeDeclarations.of, [
+    attributeDeclaration("status"),
+    attributeDeclaration("total"),
+  ]);
+  assertBoundarySnapshot("AttributeNames", AttributeNames.of, [AttributeName.of("status"), AttributeName.of("total")]);
+  assertBoundarySnapshot("CheckFamilies", CheckFamilies.of, [CheckFamily.of("DD-0"), CheckFamily.of("CD-1")]);
+  assertBoundarySnapshot("ComponentEntities", ComponentEntities.of, [
+    componentEntity("Order"),
+    componentEntity("Payment"),
+  ]);
+  assertBoundarySnapshot("Components", Components.of, [component("Sales"), component("Shipping")]);
+  assertBoundarySnapshot("DomainEntitySketches", DomainEntitySketches.of, [
+    domainEntitySketch("Order"),
+    domainEntitySketch("Payment"),
+  ]);
+  assertBoundarySnapshot("EntityReferences", EntityReferences.of, [
+    entityReference("Customer"),
+    entityReference("Invoice"),
+  ]);
+  assertBoundarySnapshot("RelationshipDeclarations", RelationshipDeclarations.of, [
+    RelationshipDeclaration.of({
+      element: ElementPath.of("entities[0].relationships[0]"),
+      from: EntityName.of("Order"),
+      to: EntityName.of("Customer"),
+      cardinality: CardinalityNotation.of("1:N"),
+      hasDirection: true,
+    }),
+    RelationshipDeclaration.of({
+      element: ElementPath.of("entities[0].relationships[1]"),
+      from: EntityName.of("Order"),
+      to: EntityName.of("Invoice"),
+      cardinality: CardinalityNotation.of("N:1"),
+      hasDirection: false,
+    }),
+  ]);
+  assertBoundarySnapshot("RuleDeclarations", RuleDeclarations.of, [ruleDeclaration("BR1.1"), ruleDeclaration("BR1.2")]);
+  assertBoundarySnapshot("ShapeErrors", ShapeErrors.of, [
+    ShapeError.of({ element: ElementPath.of("entities[0]"), detail: "missing name" }),
+    ShapeError.of({ element: ElementPath.of("entities[1]"), detail: "missing element" }),
+  ]);
+  assertBoundarySnapshot("SourceIdentifiers", SourceIdentifiers.of, [
+    SourceIdentifier.of("FR-1"),
+    SourceIdentifier.of("FR-2"),
+  ]);
+  assertBoundarySnapshot("StateMachineSketches", StateMachineSketches.of, [
+    stateMachineSketch("Order.status"),
+    stateMachineSketch("Payment.status"),
+  ]);
+  assertBoundarySnapshot("UnitDeclarations", UnitDeclarations.of, [
+    UnitDeclaration.of({ name: UnitName.of("sales"), dependsOn: UnitNames.of([UnitName.of("billing")]) }),
+    UnitDeclaration.of({ name: UnitName.of("shipping"), dependsOn: UnitNames.of([]) }),
+  ]);
 });

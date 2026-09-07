@@ -3,18 +3,27 @@ import {
   AttributeMapping,
   AttributeMappings,
   BusinessRuleReference,
+  BusinessRuleReferenceIndex,
   BusinessRuleReferences,
+  CheckedUnits,
   DesignAssignment,
+  DesignAttributeCatalog,
   DesignAttributeCatalogEntry,
   DesignAttributeDeclaration,
   DesignAttributeDeclarations,
   DesignAttributeName,
+  DesignBackgroundAssumption,
+  DesignBackgroundAssumptions,
   DesignBackgroundDeclaration,
+  DesignBackgroundDeclarations,
   DesignBackgroundIdentifier,
+  DesignCrossCheckedEntry,
   DesignEntityDeclaration,
+  DesignEntityDeclarations,
   DesignEntityName,
   DesignEventRule,
   DesignFinding,
+  DesignFindings,
   DesignIgnore,
   DesignIgnoreDeclaration,
   DesignIgnoreDeclarations,
@@ -23,24 +32,35 @@ import {
   DesignIntermediateRepresentationValidationMaterialsIdentifier,
   DesignMachine,
   DesignMachineDeclaration,
+  DesignMachineDeclarations,
   DesignMachineIdentifier,
+  DesignMachines,
   DesignModelIdentifier,
   DesignObligation,
   DesignObligationDeclaration,
+  DesignObligationDeclarations,
   DesignObligationIdentifier,
   DesignObligationOrigin,
+  DesignObligations,
+  DesignReport,
   DesignReportIdentifier,
   DesignScenario,
   DesignScenarioDeclaration,
+  DesignScenarioDeclarations,
   DesignScenarioIdentifier,
+  DesignScenarios,
   DesignSkipped,
+  DesignSkips,
   DesignTransition,
   DesignTransitionDeclaration,
   DesignTransitionDeclarations,
   DesignTransitionIdentifier,
   DesignTransitions,
+  DesignUnit,
+  DesignUnitDeclaration,
   DesignUnitIdentifier,
   DesignWitness,
+  EffectAssignment,
   EventMapping,
   EventMappings,
   InitialState,
@@ -51,16 +71,23 @@ import {
   LoweredOrigin,
   LoweredOriginReference,
   LoweredScenario,
+  MachineReachability,
+  ReachabilityProbe,
   ReachabilityVerdict,
   RefinementAttribute,
+  RefinementAttributes,
   RefinementMapIdentifier,
   RefinementMaterialsIdentifier,
   RefinementObligation,
+  RefinementObligations,
   RefinementQueryVerdict,
   RefinementQueryVerdictEntry,
   RefinementQuintInvariant,
+  RefinementRequirements,
   RefinementScenario,
+  RefinementScenarios,
   RefinementUnitMap,
+  RefinementUnitMaps,
   RuleSubsumption,
   RuleSubsumptionProbe,
   RuleSubsumptionVerdict,
@@ -68,6 +95,8 @@ import {
   SiblingVerdictSkip,
   TransitionReference,
   TransitionReferences,
+  UnformalizedTargets,
+  UnitRefinementPlan,
   UnmappedDeclarations,
   UnmappedTarget,
   UnmappedTargetReference,
@@ -76,6 +105,7 @@ import {
   ArtifactPath,
   AttributeKind,
   AttributePath,
+  BackendName,
   BindingDeclaration,
   ContentHash,
   Declaration,
@@ -89,16 +119,22 @@ import {
   FindingKind,
   FindingTargets,
   FunctionalRequirementReferences,
+  IntermediateRepresentationVersion,
   ObligationNature,
   QueryLabel,
   RequirementIdentifier,
   ScenarioExpectation,
   SkipReason,
   TargetIdentifier,
+  TargetIdentifiers,
   TriggerName,
   UnitName,
 } from "@deep-spec-analysis/kernel-domain";
-import { ObligationIdentifier, ScenarioIdentifier } from "@deep-spec-analysis/requirements-domain";
+import {
+  FormalModelIdentifier,
+  ObligationIdentifier,
+  ScenarioIdentifier,
+} from "@deep-spec-analysis/requirements-domain";
 import { scenarioBindings } from "./binding-fixtures.ts";
 
 // design 文脈のドメインオブジェクトが守る等価性の契約。equals と hashCode は
@@ -1056,5 +1092,455 @@ describe("契約4 refinement の語彙", () => {
           RefinementQueryVerdictEntry.of(QueryLabel.of("q1"), RefinementQueryVerdict.of({ status: "unsat" })),
       },
     );
+  });
+});
+
+// 実行用の設計ユニットとその材料。属性カタログは Ticket.status（enum）と
+// Ticket.flag（bool）を宣言する——状態機械の生涯属性と精緻化写像の写像先。
+const ticketEntity = DesignEntityDeclaration.of({
+  name: DesignEntityName.of("Ticket"),
+  attributes: DesignAttributeDeclarations.of([
+    DesignAttributeDeclaration.of({
+      name: DesignAttributeName.of("status"),
+      kind: AttributeKind.of("enum"),
+      values: members("open", "closed", "cancelled"),
+    }),
+    attributeDeclaration("flag", "bool"),
+  ]),
+});
+const ticketCatalog = DesignAttributeCatalog.of(DesignEntityDeclarations.of([ticketEntity]));
+
+const designMachineOf = (id: string): DesignMachine =>
+  DesignMachine.of({
+    id: DesignMachineIdentifier.of(id),
+    entity: DesignEntityName.of("Ticket"),
+    attribute: DesignAttributeName.of("status"),
+    initial: InitialStates.of([InitialState.of("open")]),
+    transitions: DesignTransitions.of([]),
+    ignores: DesignIgnores.of([]),
+    deterministic: true,
+  });
+
+const designObligationOf = (id: string): DesignObligation =>
+  DesignObligation.of({
+    id: DesignObligationIdentifier.of(id),
+    nature: ObligationNature.of("invariant"),
+    origin: DesignObligationOrigin.of("rules"),
+    businessRuleReferences: brRefs("BR1.1"),
+    functionalRequirementReferences: frRefs("FR-1"),
+    assert: expr(true),
+  });
+
+const designScenarioOf = (id: string): DesignScenario =>
+  DesignScenario.of({
+    id: DesignScenarioIdentifier.of(id),
+    expectation: ScenarioExpectation.of("accept"),
+    businessRuleReferences: brRefs("BR1.1"),
+    functionalRequirementReferences: frRefs("FR-1"),
+    bindings: scenarioBindings({ "Ticket.flag": 1 }),
+  });
+
+const backgroundAssumptionOf = (id: string): DesignBackgroundAssumption =>
+  DesignBackgroundAssumption.of({ id: DesignBackgroundIdentifier.of(id), assert: expr(true) });
+
+const designReportOf = (path: string): DesignReport =>
+  DesignReport.compose({
+    id: DesignReportIdentifier.of(ArtifactPath.of(path), "smt"),
+    irVersion: IntermediateRepresentationVersion.of("1.0.0"),
+    irHash: ContentHash.ofText("design"),
+    method: "exhaustive",
+    findings: DesignFindings.of([]),
+    skipped: DesignSkips.of([]),
+  });
+
+// 到達可能性の問いを組める最小のユニット（義務ひとつ・遷移のない機械ひとつ）。
+const reachabilityUnit = (unitName: string, machineId: string): DesignUnit =>
+  DesignUnit.of({
+    unit: UnitName.of(unitName),
+    catalog: ticketCatalog,
+    obligations: DesignObligations.of([designObligationOf("DOB-1")]),
+    machines: DesignMachines.of([designMachineOf(machineId)]),
+    scenarios: DesignScenarios.of([]),
+    background: DesignBackgroundAssumptions.of([]),
+  });
+
+const reachabilityOf = (options: {
+  unit?: string;
+  machine?: string;
+  bounded?: boolean;
+  state?: string;
+  verdict?: ReachabilityVerdict | null;
+}): MachineReachability => {
+  const unit = reachabilityUnit(options.unit ?? "u1", options.machine ?? "SM-1");
+  const lowered = unit.lowered({ synthetics: false });
+  if (!lowered.ok) throw new Error(lowered.error.kind);
+  const machine = unit.machines().toArray()[0];
+  if (machine === undefined) throw new Error("fixture machine is missing");
+  const probe = ReachabilityProbe.of(
+    unit,
+    lowered.value,
+    machine,
+    AttributePath.of("Ticket.status"),
+    EnumerationMember.of(options.state ?? "closed"),
+  );
+  const verdict = options.verdict === undefined ? ReachabilityVerdict.reached() : options.verdict;
+  const observations = new Map<ReachabilityProbe, ReachabilityVerdict>();
+  if (verdict !== null) observations.set(probe, verdict);
+  return MachineReachability.of({
+    unit,
+    machine,
+    probes: [probe],
+    bounded: options.bounded ?? true,
+    observations,
+  });
+};
+
+describe("設計ユニットと検証計画の等価性", () => {
+  test("DesignEventRule の等価性とハッシュは由来参照・トリガ・ガード・効果で決まる", () => {
+    const assignment = (value: boolean): Expression => ({
+      op: "eq",
+      args: [{ op: "ref", path: "Ticket.flag", prime: true }, expr(value)],
+    });
+    const base = {
+      reference: DesignObligationIdentifier.of("DOB-1"),
+      trigger: TriggerName.of("submit"),
+      guard: expr(true) as Expression,
+      effect: assignment(true),
+    };
+    assertEqualityContract(() => DesignEventRule.of({ ...base }), {
+      reference: () => DesignEventRule.of({ ...base, reference: DesignObligationIdentifier.of("DOB-2") }),
+      trigger: () => DesignEventRule.of({ ...base, trigger: TriggerName.of("close") }),
+      guard: () => DesignEventRule.of({ ...base, guard: expr(false) }),
+      effect: () => DesignEventRule.of({ ...base, effect: assignment(false) }),
+    });
+  });
+
+  test("DesignBackgroundAssumption の等価性とハッシュは id と表明式で決まる", () => {
+    assertEqualityContract(
+      () => DesignBackgroundAssumption.of({ id: DesignBackgroundIdentifier.of("DBG-1"), assert: expr(true) }),
+      {
+        id: () => DesignBackgroundAssumption.of({ id: DesignBackgroundIdentifier.of("DBG-2"), assert: expr(true) }),
+        assert: () =>
+          DesignBackgroundAssumption.of({ id: DesignBackgroundIdentifier.of("DBG-1"), assert: expr(false) }),
+      },
+    );
+  });
+
+  test("EffectAssignment の等価性とハッシュは代入先の座標と等式で決まる", () => {
+    const assignment = (path: string, value: boolean): EffectAssignment =>
+      EffectAssignment.of(
+        AttributePath.of(path),
+        ExpressionTree.of({ op: "eq", args: [{ op: "ref", path, prime: true }, expr(value)] }),
+      );
+    assertEqualityContract(() => assignment("Ticket.flag", true), {
+      代入先: () => assignment("Ticket.status", true),
+      等式: () => assignment("Ticket.flag", false),
+    });
+  });
+
+  test("DesignUnit の等価性とハッシュはユニット名・属性カタログ・義務・機械・シナリオ・背景で決まる", () => {
+    const base = {
+      unit: UnitName.of("u1"),
+      catalog: ticketCatalog,
+      obligations: DesignObligations.of([designObligationOf("DOB-1")]),
+      machines: DesignMachines.of([designMachineOf("SM-1")]),
+      scenarios: DesignScenarios.of([designScenarioOf("DSC-1")]),
+      background: DesignBackgroundAssumptions.of([backgroundAssumptionOf("DBG-1")]),
+    };
+    assertEqualityContract(() => DesignUnit.of({ ...base }), {
+      unit: () => DesignUnit.of({ ...base, unit: UnitName.of("u2") }),
+      catalog: () => DesignUnit.of({ ...base, catalog: DesignAttributeCatalog.of(DesignEntityDeclarations.of([])) }),
+      obligations: () => DesignUnit.of({ ...base, obligations: DesignObligations.of([designObligationOf("DOB-2")]) }),
+      machines: () => DesignUnit.of({ ...base, machines: DesignMachines.of([designMachineOf("SM-2")]) }),
+      scenarios: () => DesignUnit.of({ ...base, scenarios: DesignScenarios.of([designScenarioOf("DSC-2")]) }),
+      background: () =>
+        DesignUnit.of({ ...base, background: DesignBackgroundAssumptions.of([backgroundAssumptionOf("DBG-2")]) }),
+    });
+  });
+
+  test("DesignUnitDeclaration の等価性とハッシュは宣言の五つ組・未形式化対象・成果物の存在・規則索引で決まる", () => {
+    const base = {
+      unit: DesignUnitIdentifier.of("u1"),
+      entities: DesignEntityDeclarations.of([ticketEntity]),
+      obligations: DesignObligationDeclarations.of([
+        DesignObligationDeclaration.of({
+          id: DesignObligationIdentifier.of("DOB-1"),
+          origin: DesignObligationOrigin.of("rules"),
+          businessRuleReferences: brRefs("BR1.1"),
+          assert: expr(true),
+        }),
+      ]),
+      stateMachines: DesignMachineDeclarations.of([
+        DesignMachineDeclaration.of({
+          id: DesignMachineIdentifier.of("SM-1"),
+          attrPath: "Ticket.status",
+          initial: InitialStates.of([InitialState.of("open")]),
+          transitions: DesignTransitionDeclarations.of([]),
+          ignores: DesignIgnoreDeclarations.of([]),
+        }),
+      ]),
+      scenarios: DesignScenarioDeclarations.of([
+        DesignScenarioDeclaration.of({
+          id: DesignScenarioIdentifier.of("DSC-1"),
+          bindings: declaredBindings("Ticket.flag", 1),
+          hasEvent: false,
+          expect: expr(true),
+          businessRuleReferences: brRefs("BR1.1"),
+        }),
+      ]),
+      background: DesignBackgroundDeclarations.of([
+        DesignBackgroundDeclaration.of({ id: DesignBackgroundIdentifier.of("DBG-1"), assert: expr(true) }),
+      ]),
+      unformalizedTargets: UnformalizedTargets.of([TargetIdentifier.of("BR1.1")]),
+      directoryExists: true,
+      rules: BusinessRuleReferenceIndex.of(brRefs("BR1.1")),
+    };
+    assertEqualityContract(() => DesignUnitDeclaration.of({ ...base }), {
+      unit: () => DesignUnitDeclaration.of({ ...base, unit: DesignUnitIdentifier.of("u2") }),
+      entities: () => DesignUnitDeclaration.of({ ...base, entities: DesignEntityDeclarations.of([]) }),
+      obligations: () => DesignUnitDeclaration.of({ ...base, obligations: DesignObligationDeclarations.of([]) }),
+      stateMachines: () => DesignUnitDeclaration.of({ ...base, stateMachines: DesignMachineDeclarations.of([]) }),
+      scenarios: () => DesignUnitDeclaration.of({ ...base, scenarios: DesignScenarioDeclarations.of([]) }),
+      background: () => DesignUnitDeclaration.of({ ...base, background: DesignBackgroundDeclarations.of([]) }),
+      unformalizedTargets: () =>
+        DesignUnitDeclaration.of({
+          ...base,
+          unformalizedTargets: UnformalizedTargets.of([TargetIdentifier.of("BR2.1")]),
+        }),
+      directoryExists: () => DesignUnitDeclaration.of({ ...base, directoryExists: false }),
+      rules: () => DesignUnitDeclaration.of({ ...base, rules: BusinessRuleReferenceIndex.of(brRefs("BR2.1")) }),
+      "rules 欠落": () => DesignUnitDeclaration.of({ ...base, rules: null }),
+    });
+  });
+
+  test("MachineReachability の等価性とハッシュはユニット・機械・探索範囲・問いの状態・観測で決まる", () => {
+    assertEqualityContract(() => reachabilityOf({}), {
+      unit: () => reachabilityOf({ unit: "u2" }),
+      machine: () => reachabilityOf({ machine: "SM-2" }),
+      bounded: () => reachabilityOf({ bounded: false }),
+      問いの状態: () => reachabilityOf({ state: "cancelled" }),
+      観測: () => reachabilityOf({ verdict: ReachabilityVerdict.notReachedWithinBound() }),
+      未観測: () => reachabilityOf({ verdict: null }),
+    });
+  });
+
+  test("SiblingVerdictFinding の等価性とハッシュは種別・FR 参照・lowered 対象・証拠・文言で決まる", () => {
+    const base = {
+      kind: FindingKind.conflict(),
+      functionalRequirementReferences: frRefs("FR-1"),
+      targets: [LoweredIdentifier.of("OB-1")],
+      witness: DesignWitness.core(["OB-1"]),
+      detail: "solver evidence",
+    };
+    assertEqualityContract(() => SiblingVerdictFinding.of({ ...base }), {
+      kind: () => SiblingVerdictFinding.of({ ...base, kind: FindingKind.redundancy() }),
+      functionalRequirementReferences: () =>
+        SiblingVerdictFinding.of({ ...base, functionalRequirementReferences: frRefs("FR-2") }),
+      targets: () => SiblingVerdictFinding.of({ ...base, targets: [LoweredIdentifier.of("OB-2")] }),
+      witness: () => SiblingVerdictFinding.of({ ...base, witness: DesignWitness.core(["OB-9"]) }),
+      detail: () => SiblingVerdictFinding.of({ ...base, detail: "別の文言" }),
+    });
+  });
+
+  test("SiblingVerdictFinding の kind は保持した種別の語をそのまま返す", () => {
+    const kindOf = (kind: FindingKind): string =>
+      SiblingVerdictFinding.of({
+        kind,
+        functionalRequirementReferences: frRefs("FR-1"),
+        targets: [LoweredIdentifier.of("OB-1")],
+        witness: DesignWitness.core([]),
+        detail: "solver evidence",
+      }).kind();
+    expect(kindOf(FindingKind.conflict())).toBe("conflict");
+    expect(kindOf(FindingKind.redundancy())).toBe("redundancy");
+  });
+
+  test("DesignReport の恒等は報告 id だけで決まり、証拠を積んでも変わらない", () => {
+    assertEqualityContract(() => designReportOf("construction/verify.md"), {
+      id: () => designReportOf("construction/verify-quint.md"),
+    });
+    const empty = designReportOf("construction/verify.md");
+    const withEvidence = empty.withEvidence(
+      DesignFindings.of([]),
+      DesignSkips.of([
+        DesignSkipped.of({
+          target: TargetIdentifier.of("DOB-1"),
+          reason: SkipReason.timeout(),
+          unit: UnitName.of("u1"),
+        }),
+      ]),
+    );
+    expect(withEvidence.skippedCount()).toBe(1);
+    expect(empty.equals(withEvidence)).toBe(true);
+    expect(empty.hashCode()).toBe(withEvidence.hashCode());
+  });
+});
+
+describe("突き合わせ済みシナリオの記録", () => {
+  test("DesignCrossCheckedEntry の等価性とハッシュはバックエンド・ユニット・突き合わせ対象で決まる", () => {
+    const targets = (...ids: readonly string[]): TargetIdentifiers =>
+      TargetIdentifiers.of(ids.map((id) => TargetIdentifier.of(id)));
+    const base = { backend: BackendName.of("smt"), unit: UnitName.of("u1"), targets: targets("DSC-1") };
+    assertEqualityContract(() => DesignCrossCheckedEntry.of({ ...base }), {
+      backend: () => DesignCrossCheckedEntry.of({ ...base, backend: BackendName.of("quint") }),
+      unit: () => DesignCrossCheckedEntry.of({ ...base, unit: UnitName.of("u2") }),
+      targets: () => DesignCrossCheckedEntry.of({ ...base, targets: targets("DSC-2") }),
+    });
+  });
+});
+
+// toArray は境界（描画・アダプタ）への取り出し口。正準順を持つコレクション
+// でも並べ替えず、宣言順のまま渡す——整列は sorted* 側の責務。
+describe("コレクションの取り出しは宣言順を保つ", () => {
+  test("CheckedUnits.toArray は検査済みユニット名を宣言順のまま返す", () => {
+    const units = CheckedUnits.of([UnitName.of("unit:u2"), UnitName.of("unit:u1")]);
+    expect(units.toArray().map((unit) => unit.asString())).toEqual(["unit:u2", "unit:u1"]);
+    expect(units.sortedUniqueCanonically().toStrings()).toEqual(["unit:u1", "unit:u2"]);
+  });
+
+  test("DesignObligations.toArray は設計義務を宣言順のまま返す", () => {
+    const obligations = DesignObligations.of([designObligationOf("DOB-2"), designObligationOf("DOB-1")]);
+    expect(obligations.toArray().map((obligation) => obligation.id().asString())).toEqual(["DOB-2", "DOB-1"]);
+    expect(obligations.sortedCanonically().ids()).toEqual(["DOB-1", "DOB-2"]);
+  });
+
+  test("DesignScenarios.toArray は設計シナリオを宣言順のまま返す", () => {
+    const scenarios = DesignScenarios.of([designScenarioOf("DSC-2"), designScenarioOf("DSC-1")]);
+    expect(scenarios.toArray().map((scenario) => scenario.id().asString())).toEqual(["DSC-2", "DSC-1"]);
+    expect(scenarios.sortedCanonically().ids()).toEqual(["DSC-1", "DSC-2"]);
+  });
+
+  test("RefinementScenarios.toArray は要件側シナリオを宣言順のまま返す", () => {
+    const scenario = (id: string): RefinementScenario =>
+      RefinementScenario.of({
+        id: ScenarioIdentifier.of(id),
+        expectation: ScenarioExpectation.of("accept"),
+        functionalRequirementReferences: frRefs("FR-1"),
+        bindings: scenarioBindings({ "Ticket.flag": 1 }),
+        event: { trigger: TriggerName.of("submit") },
+      });
+    const scenarios = RefinementScenarios.of([scenario("SC-2"), scenario("SC-1")]);
+    expect(scenarios.toArray().map((value) => value.id().asString())).toEqual(["SC-2", "SC-1"]);
+    expect(scenarios.sortedCanonically().targetIds().toStrings()).toEqual(["SC-1", "SC-2"]);
+  });
+
+  test("RefinementUnitMaps.toArray は写像を宣言順のまま返す", () => {
+    const unitMap = (unit: string): RefinementUnitMap =>
+      RefinementUnitMap.of({
+        unit: DesignUnitIdentifier.of(unit),
+        attrMap: AttributeMappings.of([]),
+        eventMap: EventMappings.of([]),
+        unmapped: UnmappedDeclarations.of([]),
+      });
+    const maps = RefinementUnitMaps.of([unitMap("u2"), unitMap("u1")]);
+    expect(maps.toArray().map((map) => map.isForUnit(DesignUnitIdentifier.of("u2")))).toEqual([true, false]);
+    expect(maps.mapOf(DesignUnitIdentifier.of("u1"))).toBe(maps.toArray()[1]);
+  });
+
+  test("UnmappedDeclarations.toArray は unmapped 宣言を宣言順のまま返す", () => {
+    const unmapped = UnmappedDeclarations.of([
+      UnmappedTarget.of({ target: UnmappedTargetReference.of("OB-2"), reason: "後続で写像する" }),
+      UnmappedTarget.of({ target: UnmappedTargetReference.of("OB-1"), reason: "v1 の対象外" }),
+    ]);
+    expect(unmapped.toArray().map((target) => target.reason())).toEqual(["後続で写像する", "v1 の対象外"]);
+    expect(unmapped.toArray().map((target) => target.isFor("OB-2"))).toEqual([true, false]);
+  });
+});
+
+describe("診断と再解釈の分岐", () => {
+  test("machine decl は遷移のガード・効果の式診断を属性カタログに問うて積む", () => {
+    const declaration = DesignMachineDeclaration.of({
+      id: DesignMachineIdentifier.of("SM-1"),
+      attrPath: "Ticket.status",
+      initial: InitialStates.of([InitialState.of("open")]),
+      transitions: DesignTransitionDeclarations.of([
+        DesignTransitionDeclaration.of({
+          id: DesignTransitionIdentifier.of("TR-1"),
+          from: "open",
+          to: "closed",
+          trigger: TriggerName.of("close"),
+          guard: { op: "ref", path: "Ticket.missing" },
+          effect: { op: "ref", path: "Ticket.absent", prime: true },
+        }),
+      ]),
+      ignores: DesignIgnoreDeclarations.of([]),
+    });
+    expect(
+      declaration
+        .diagnostics(ticketCatalog)
+        .toArray()
+        .map((message) => message.asString()),
+    ).toEqual([
+      'transition TR-1: unresolvable reference "Ticket.missing"',
+      'transition TR-1: unresolvable reference "Ticket.absent"',
+    ]);
+  });
+
+  test("conflict の refinement 再解釈は届いた要件 id をすべて対象に残し、届かない設計 id を落とす", () => {
+    const finding = DesignFinding.of({
+      kind: FindingKind.conflict(),
+      functionalRequirementReferences: frRefs("FR-1"),
+      targets: FindingTargets.of(TargetIdentifier.of("OB-1"), [
+        TargetIdentifier.of("DOB-9"),
+        TargetIdentifier.of("OB-2"),
+      ]),
+      witness: DesignWitness.core(["OB-1"]),
+      unit: UnitName.of("u1"),
+      detail: "設計だけの conflict",
+    });
+    const violation = finding.asRefinementViolation(new Set(["OB-1", "OB-2"]), UnitName.of("u2"));
+    if (violation === null) throw new Error("refinement violation was expected");
+    expect(violation.kind()).toBe("refinement-violation");
+    expect(violation.targets().toStrings()).toEqual(["OB-1", "OB-2"]);
+    expect(violation.unit()).toBe("u2");
+    expect(violation.witness().equals(finding.witness())).toBe(true);
+    expect(violation.detail()).toBe(
+      "The design machine of unit u2 reaches a state that violates requirements obligation OB-1, OB-2 under the refinement map (step trace attached): the design can execute its way out of the verified requirements.",
+    );
+    expect(finding.targets().toStrings()).toEqual(["OB-1", "DOB-9", "OB-2"]);
+  });
+
+  test("refinement lowering の失敗は要件対象すべてを compile-error として skip に積む", () => {
+    const unit = reachabilityUnit("u1", "SM-1");
+    const plan = UnitRefinementPlan.of(
+      unit,
+      RefinementUnitMap.of({
+        unit: unit.id(),
+        attrMap: AttributeMappings.of([
+          AttributeMapping.of(AttributePath.of("R.flag"), {
+            kind: "expression",
+            expr: { op: "ref", path: "Ticket.flag" },
+          }),
+        ]),
+        eventMap: EventMappings.of([]),
+        unmapped: UnmappedDeclarations.of([]),
+      }),
+      RefinementRequirements.of({
+        id: FormalModelIdentifier.of(ArtifactPath.of("requirements.md")),
+        hash: ContentHash.ofText("requirements"),
+        attributes: RefinementAttributes.of([
+          RefinementAttribute.of({ path: AttributePath.of("R.flag"), kind: "bool" }),
+        ]),
+        obligations: RefinementObligations.of([
+          RefinementObligation.of({
+            id: ObligationIdentifier.of("OB-1"),
+            nature: ObligationNature.of("invariant"),
+            functionalRequirementReferences: frRefs("FR-1"),
+            assert: { op: "ref", path: "R.flag" },
+          }),
+        ]),
+        scenarios: RefinementScenarios.of([]),
+      }),
+      ArtifactPath.of("map.md"),
+    );
+    const recorded = plan.loweringFailedIn(designReportOf("construction/verify.md"), {
+      kind: "effect-not-assignment-conjunction",
+    });
+    expect(
+      recorded
+        .skipped()
+        .toArray()
+        .map((skip) => [skip.target().asString(), skip.reason(), skip.unit(), skip.detail()]),
+    ).toEqual([["OB-1", "compile-error", "u1", "refinement lowering failed: effect-not-assignment-conjunction"]]);
   });
 });

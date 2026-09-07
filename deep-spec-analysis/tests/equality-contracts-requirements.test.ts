@@ -13,7 +13,10 @@ import {
   AttributeBound,
   AttributeKind,
   AttributePath,
+  BackendName,
   BindingDeclaration,
+  BindingValue,
+  ContentHash,
   Declaration,
   DeclaredBindings,
   DeclaredBindingValue,
@@ -24,25 +27,36 @@ import {
   FindingKind,
   FindingTargets,
   FunctionalRequirementReferences,
+  IntermediateRepresentationVersion,
   ObligationNature,
   QueryLabel,
   RequirementIdentifier,
+  ScenarioBinding,
+  ScenarioBindings,
+  ScenarioExpectation,
   SkipReason,
   TargetIdentifier,
+  TargetIdentifiers,
   TriggerName,
+  VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
 import type { Json } from "@deep-spec-analysis/kernel-infrastructure";
 import {
   BackgroundAssumption,
   BackgroundAssumptionIdentifier,
+  CrossCheckedEntries,
+  CrossCheckedEntry,
   FormalModelIdentifier,
   FunctionalRequirementReferenceClaim,
+  FunctionalRequirementReferenceIndex,
+  IntermediateRepresentationAttributeCatalog,
   IntermediateRepresentationAttributeDeclaration,
   IntermediateRepresentationAttributeDeclarations,
   IntermediateRepresentationAttributeEntry,
   IntermediateRepresentationAttributeName,
   IntermediateRepresentationBackgroundDeclaration,
   IntermediateRepresentationEntityDeclaration,
+  IntermediateRepresentationEntityDeclarations,
   IntermediateRepresentationEntityName,
   IntermediateRepresentationObligationDeclaration,
   IntermediateRepresentationScenarioDeclaration,
@@ -50,18 +64,26 @@ import {
   IntermediateRepresentationValidationMaterialsIdentifier,
   Obligation,
   ObligationIdentifier,
+  QuintMachineComponent,
+  QuintMachineComponents,
   RequirementAttributeDeclaration,
   RequirementsSourceIdentifier,
   SatisfiabilityModuloTheoriesEventPairProbe,
   SatisfiabilityModuloTheoriesQueryVerdict,
   SatisfiabilityModuloTheoriesQueryVerdictEntry,
+  Scenario,
   ScenarioIdentifier,
+  Scenarios,
   TraceState,
   TraceStateEntry,
   TraceValue,
   VerificationFinding,
+  VerificationFindings,
+  VerificationReport,
   VerificationReportIdentifier,
+  VerificationReports,
   VerificationSkipped,
+  VerificationSkips,
   VerificationWitness,
 } from "@deep-spec-analysis/requirements-domain";
 
@@ -122,6 +144,86 @@ function attributeDeclaration(name: string, kind: string): IntermediateRepresent
   return IntermediateRepresentationAttributeDeclaration.of({
     name: IntermediateRepresentationAttributeName.of(name),
     kind: AttributeKind.of(kind),
+  });
+}
+
+function scenarioBindings(values: Readonly<Record<string, boolean | number | string>>): ScenarioBindings {
+  return ScenarioBindings.of(
+    Object.entries(values).map(([path, value]) => ScenarioBinding.of(AttributePath.of(path), BindingValue.of(value))),
+  );
+}
+
+function scenario(
+  overrides: {
+    id?: string;
+    expectation?: "accept" | "reject";
+    functionalRequirementReferences?: FunctionalRequirementReferences;
+    bindings?: ScenarioBindings;
+    event?: { readonly trigger: TriggerName };
+    expect?: Expression;
+  } = {},
+): Scenario {
+  return Scenario.of({
+    id: ScenarioIdentifier.of(overrides.id ?? "SC-1"),
+    expectation: ScenarioExpectation.of(overrides.expectation ?? "accept"),
+    functionalRequirementReferences: overrides.functionalRequirementReferences ?? requirementReferences("FR-1"),
+    bindings: overrides.bindings ?? scenarioBindings({ "Order.status": "open" }),
+    event: "event" in overrides ? overrides.event : { trigger: TriggerName.of("submit") },
+    expect: "expect" in overrides ? overrides.expect : lit(true),
+  });
+}
+
+function verificationFindingsWith(detail: string): VerificationFindings {
+  return VerificationFindings.of([
+    VerificationFinding.of({
+      kind: FindingKind.conflict(),
+      functionalRequirementReferences: requirementReferences("FR-1"),
+      targets: FindingTargets.of(TargetIdentifier.of("OB-1"), []),
+      witness: VerificationWitness.core(["g1"]),
+      detail,
+    }),
+  ]);
+}
+
+function verificationSkipsFor(target: string): VerificationSkips {
+  return VerificationSkips.of([
+    VerificationSkipped.of({ target: TargetIdentifier.of(target), reason: SkipReason.capability() }),
+  ]);
+}
+
+function crossCheckedEntries(backend: string): CrossCheckedEntries {
+  return CrossCheckedEntries.of([
+    CrossCheckedEntry.of({
+      backend: BackendName.of(backend),
+      targets: TargetIdentifiers.of([TargetIdentifier.of("SC-1")]),
+    }),
+  ]);
+}
+
+// crossChecked と unavailableReason は `T | null`（非 optional）を持つので、
+// 「未指定なら既定値、null 明示なら不在」を区別するのに `?? 既定値` は使えない
+// （null が既定値へすり替わってしまう）。undefined 判定で明示的に分岐する。
+function verificationReport(
+  overrides: {
+    id?: VerificationReportIdentifier;
+    irVersion?: string;
+    irHash?: string;
+    method?: string;
+    findings?: VerificationFindings;
+    skipped?: VerificationSkips;
+    crossChecked?: CrossCheckedEntries | null;
+    unavailableReason?: string | null;
+  } = {},
+): VerificationReport {
+  return VerificationReport.of({
+    id: overrides.id ?? VerificationReportIdentifier.of(ArtifactPath.of("deep-spec-verify"), "smt"),
+    irVersion: IntermediateRepresentationVersion.of(overrides.irVersion ?? "1.0.0"),
+    irHash: ContentHash.ofText(overrides.irHash ?? "model"),
+    method: VerificationMethod.of(overrides.method ?? "exhaustive"),
+    findings: overrides.findings ?? verificationFindingsWith("guards overlap but effects contradict"),
+    skipped: overrides.skipped ?? verificationSkipsFor("OB-2"),
+    crossChecked: overrides.crossChecked === undefined ? crossCheckedEntries("smt") : overrides.crossChecked,
+    unavailableReason: overrides.unavailableReason === undefined ? null : overrides.unavailableReason,
   });
 }
 
@@ -594,5 +696,195 @@ describe("トレース状態の等価性とハッシュ", () => {
       ],
       ["件数", traceState([["Order.status", "open"]])],
     ]);
+  });
+});
+
+describe("検証記録集約・シナリオ・クロスチェック項目・Quint機械成分の等価性とハッシュ", () => {
+  test("VerificationReport は id・irVersion・irHash・method・findings・skipped・crossChecked・unavailableReason の全てを見る", () => {
+    assertEqualityContract(verificationReport(), verificationReport(), [
+      ["id", verificationReport({ id: VerificationReportIdentifier.of(ArtifactPath.of("other-verify"), "smt") })],
+      ["irVersion", verificationReport({ irVersion: "2.0.0" })],
+      ["irHash", verificationReport({ irHash: "other-model" })],
+      ["method", verificationReport({ method: "simulation" })],
+      ["findings", verificationReport({ findings: verificationFindingsWith("effects agree") })],
+      ["skipped", verificationReport({ skipped: verificationSkipsFor("OB-3") })],
+      ["crossChecked", verificationReport({ crossChecked: crossCheckedEntries("quint") })],
+      ["crossChecked（不在）", verificationReport({ crossChecked: null })],
+      ["unavailableReason", verificationReport({ unavailableReason: "solver unavailable" })],
+    ]);
+  });
+
+  test("Scenario は id・expectation・要件参照・binding・event trigger・expect の全てを見る", () => {
+    assertEqualityContract(scenario(), scenario(), [
+      ["id", scenario({ id: "SC-2" })],
+      ["expectation", scenario({ expectation: "reject" })],
+      ["functionalRequirementReferences", scenario({ functionalRequirementReferences: requirementReferences("FR-2") })],
+      ["bindings", scenario({ bindings: scenarioBindings({ "Order.status": "closed" }) })],
+      ["eventTrigger", scenario({ event: { trigger: TriggerName.of("cancel") } })],
+      ["eventTrigger（不在）", scenario({ event: undefined })],
+      ["expect", scenario({ expect: lit(false) })],
+      ["expect（不在）", scenario({ expect: undefined })],
+    ]);
+  });
+
+  test("CrossCheckedEntry は backend と対象列の両方を見る", () => {
+    const entry = (backend: string, targets: readonly string[]) =>
+      CrossCheckedEntry.of({
+        backend: BackendName.of(backend),
+        targets: TargetIdentifiers.of(targets.map((t) => TargetIdentifier.of(t))),
+      });
+    assertEqualityContract(entry("smt", ["SC-1"]), entry("smt", ["SC-1"]), [
+      ["backend", entry("quint", ["SC-1"])],
+      ["targets", entry("smt", ["SC-2"])],
+    ]);
+  });
+
+  test("QuintMachineComponent は id と式の正準等価の両方を見る", () => {
+    const component = (id: string, expression: Expression) =>
+      QuintMachineComponent.of({ id: ObligationIdentifier.of(id), expression });
+    assertEqualityContract(component("OB-1", ref("Order.status")), component("OB-1", ref("Order.status")), [
+      ["id", component("OB-2", ref("Order.status"))],
+      ["expression", component("OB-1", ref("Order.state"))],
+    ]);
+  });
+});
+
+describe("IR 診断ラッパーは文字列版と同じ診断を ErrorMessages で返す", () => {
+  const catalog = IntermediateRepresentationAttributeCatalog.of(
+    IntermediateRepresentationEntityDeclarations.of([
+      IntermediateRepresentationEntityDeclaration.of({
+        name: IntermediateRepresentationEntityName.of("Order"),
+        attributes: IntermediateRepresentationAttributeDeclarations.of([attributeDeclaration("status", "bool")]),
+      }),
+    ]),
+  );
+
+  test("IntermediateRepresentationAttributeCatalog#bindingDiagnostics は型不一致と不明属性の両方を報告する", () => {
+    const bindings = declaredBindings([
+      ["Order.status", 1],
+      ["Order.missing", true],
+    ]);
+    expect(
+      catalog
+        .bindingDiagnostics(bindings, "scenario SC-1")
+        .toArray()
+        .map((message) => message.asString()),
+    ).toEqual([
+      'scenario SC-1: binding value 1 does not fit bool attribute "Order.status"',
+      'scenario SC-1: binding for unknown attribute "Order.missing"',
+    ]);
+    expect(catalog.bindingDiagnostics(declaredBindings([["Order.status", true]]), "scenario SC-2").isEmpty()).toBe(
+      true,
+    );
+  });
+
+  test("IntermediateRepresentationEntityDeclarations#diagnostics は重複エンティティ名を報告する", () => {
+    const order = (attributes: readonly IntermediateRepresentationAttributeDeclaration[]) =>
+      IntermediateRepresentationEntityDeclaration.of({
+        name: IntermediateRepresentationEntityName.of("Order"),
+        attributes: IntermediateRepresentationAttributeDeclarations.of(attributes),
+      });
+    const duplicated = IntermediateRepresentationEntityDeclarations.of([
+      order([attributeDeclaration("status", "bool")]),
+      order([]),
+    ]);
+    expect(
+      duplicated
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
+    ).toEqual(['schema: duplicate entity "Order"']);
+    expect(
+      IntermediateRepresentationEntityDeclarations.of([order([attributeDeclaration("status", "bool")])])
+        .diagnostics()
+        .isEmpty(),
+    ).toBe(true);
+  });
+
+  test("IntermediateRepresentationObligationDeclaration#diagnostics は解決できない参照を報告する", () => {
+    const unresolved = IntermediateRepresentationObligationDeclaration.of({
+      id: ObligationIdentifier.of("OB-1"),
+      assert: ref("Order.missing"),
+    });
+    expect(
+      unresolved
+        .diagnostics(catalog)
+        .toArray()
+        .map((message) => message.asString()),
+    ).toEqual(['obligation OB-1: unresolvable reference "Order.missing"']);
+    const clean = IntermediateRepresentationObligationDeclaration.of({
+      id: ObligationIdentifier.of("OB-2"),
+      assert: ref("Order.status"),
+    });
+    expect(clean.diagnostics(catalog).isEmpty()).toBe(true);
+  });
+
+  test("IntermediateRepresentationScenarioDeclaration#diagnostics は不明な属性への束縛を報告する", () => {
+    const unresolved = IntermediateRepresentationScenarioDeclaration.of({
+      id: ScenarioIdentifier.of("SC-1"),
+      bindings: declaredBindings([["Order.missing", true]]),
+      hasEvent: false,
+    });
+    expect(
+      unresolved
+        .diagnostics(catalog)
+        .toArray()
+        .map((message) => message.asString()),
+    ).toEqual(['scenario SC-1: binding for unknown attribute "Order.missing"']);
+    const clean = IntermediateRepresentationScenarioDeclaration.of({
+      id: ScenarioIdentifier.of("SC-2"),
+      bindings: declaredBindings([["Order.status", true]]),
+      hasEvent: false,
+    });
+    expect(clean.diagnostics(catalog).isEmpty()).toBe(true);
+  });
+});
+
+describe("コレクションの直接アクセッサ", () => {
+  test("FunctionalRequirementReferenceIndex#toArray は宣言順の主張列をそのまま返す", () => {
+    const claimA = FunctionalRequirementReferenceClaim.of("obligation OB-1", requirementReferences("FR-1"));
+    const claimB = FunctionalRequirementReferenceClaim.of("scenario SC-1", requirementReferences("FR-2"));
+    const index = FunctionalRequirementReferenceIndex.of([claimA, claimB]);
+    // toEqual は private フィールドを見ないので、要素は同一性で確かめる。
+    expect([...index.toArray()]).toEqual([claimA, claimB]);
+    expect(index.toArray()[0]).toBe(claimA);
+    expect(index.toArray()[1]).toBe(claimB);
+    expect([...index]).toEqual([...index.toArray()]);
+  });
+
+  test("QuintMachineComponents#toArray は追加順の成分列をそのまま返す", () => {
+    const a = QuintMachineComponent.of({ id: ObligationIdentifier.of("OB-1"), expression: ref("Order.status") });
+    const b = QuintMachineComponent.of({ id: ObligationIdentifier.of("OB-2"), expression: ref("Order.paid") });
+    const components = QuintMachineComponents.of([a]).add(b);
+    expect([...components.toArray()]).toEqual([a, b]);
+    expect(components.toArray()[0]).toBe(a);
+    expect(components.toArray()[1]).toBe(b);
+  });
+
+  test("Scenarios#toArray は追加順のシナリオ列をそのまま返す", () => {
+    const a = scenario({ id: "SC-1" });
+    const b = scenario({ id: "SC-2" });
+    const scenarios = Scenarios.of([a]).add(b);
+    expect(scenarios.toArray()[0]).toBe(a);
+    expect(scenarios.toArray()[1]).toBe(b);
+    expect(scenarios.ids()).toEqual(["SC-1", "SC-2"]);
+    expect(scenarios.byId("SC-2")).toBe(b);
+    expect(scenarios.byId("SC-3")).toBeUndefined();
+  });
+
+  test("VerificationReports#add は末尾へ1件追加し、元のコレクションは変えない", () => {
+    const first = verificationReport({
+      id: VerificationReportIdentifier.of(ArtifactPath.of("deep-spec-verify"), "smt"),
+    });
+    const second = verificationReport({
+      id: VerificationReportIdentifier.of(ArtifactPath.of("deep-spec-verify"), "quint"),
+    });
+    const original = VerificationReports.of([first]);
+    const appended = original.add(second);
+    expect(appended.toArray()[0]).toBe(first);
+    expect(appended.toArray()[1]).toBe(second);
+    expect(appended.count()).toBe(2);
+    expect(original.toArray()[0]).toBe(first);
+    expect(original.count()).toBe(1);
   });
 });
