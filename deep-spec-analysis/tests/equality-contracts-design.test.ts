@@ -981,21 +981,26 @@ describe("契約4 refinement の語彙", () => {
     });
   });
 
-  test("RefinementQuintInvariant の等価性とハッシュは要件義務 id と表明式で決まる", () => {
+  test("RefinementQuintInvariant の等価性とハッシュは要件義務 id・FR 参照・表明式で決まる", () => {
     assertEqualityContract(
       () => RefinementQuintInvariant.of(ObligationIdentifier.of("OB-1"), frRefs("FR-1"), expr(true)),
       {
         reqId: () => RefinementQuintInvariant.of(ObligationIdentifier.of("OB-2"), frRefs("FR-1"), expr(true)),
+        functionalRequirementReferences: () =>
+          RefinementQuintInvariant.of(ObligationIdentifier.of("OB-1"), frRefs("FR-2"), expr(true)),
         expr: () => RefinementQuintInvariant.of(ObligationIdentifier.of("OB-1"), frRefs("FR-1"), expr(false)),
       },
     );
   });
 
-  test("RefinementQuintInvariant の恒等は FR 参照を含まない——運ぶだけの帰属は同一視される", () => {
+  test("FR 参照だけが違う不変量は、異なる lowered obligation を生む——だから等しくない", () => {
+    const loweredId = LoweredIdentifier.of("OB-9");
     const invariant = RefinementQuintInvariant.of(ObligationIdentifier.of("OB-1"), frRefs("FR-1"), expr(true));
     const otherReferences = RefinementQuintInvariant.of(ObligationIdentifier.of("OB-1"), frRefs("FR-2"), expr(true));
-    expect(invariant.equals(otherReferences)).toBe(true);
-    expect(invariant.hashCode()).toBe(otherReferences.hashCode());
+    expect(invariant.equals(otherReferences)).toBe(false);
+    // 同一性が出力の差を見落としていないこと——これが等しくない理由。
+    expect(invariant.loweredAs(loweredId).equals(otherReferences.loweredAs(loweredId))).toBe(false);
+    // 兄弟の RefinementScenario と同じ扱い（FR 参照は帰属であって、運ぶだけの飾りではない）。
   });
 
   test("EventMapping の等価性とハッシュは要件トリガ・写像先の遷移・免除理由で決まる", () => {

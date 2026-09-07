@@ -55,12 +55,22 @@ export class RefinementQuintInvariant {
     return new RefinementQuintInvariant(reqId, functionalRequirementReferences, expr);
   }
 
+  // 要件参照は loweredAs が生む義務に逐語で載るので、同一性の一部。これを外すと
+  // 「等しい」2つの不変量が異なる lowered obligation を生む。
   equals(other: RefinementQuintInvariant): boolean {
-    return this.#reqId.equals(other.#reqId) && sameExpression(this.#expr, other.#expr);
+    return (
+      this.#reqId.equals(other.#reqId) &&
+      this.#functionalRequirementReferences.equals(other.#functionalRequirementReferences) &&
+      sameExpression(this.#expr, other.#expr)
+    );
   }
 
   hashCode(): number {
-    return combinedHash([this.#reqId.hashCode(), hashOfString(canonicalStringify(this.#expr))]);
+    return combinedHash([
+      this.#reqId.hashCode(),
+      this.#functionalRequirementReferences.hashCode(),
+      hashOfString(canonicalStringify(this.#expr)),
+    ]);
   }
 
   reqId(): ObligationIdentifier {
