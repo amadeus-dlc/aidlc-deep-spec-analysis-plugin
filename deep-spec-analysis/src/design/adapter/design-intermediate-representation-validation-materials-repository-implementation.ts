@@ -33,8 +33,10 @@ import {
   decodeDeclaredBindings,
   extractFences,
   findRecordRoot,
+  readArtifactBytes,
+  readArtifactStat,
+  readArtifactText,
   readContractSchema,
-  readIfExists,
   writeFileAtomically,
 } from "@deep-spec-analysis/kernel-adapter";
 import {
@@ -68,7 +70,6 @@ import { parseBusinessRuleReferenceIndex } from "./parse-business-rule-reference
 // ディレクトリ検査を出さない（directoryExists: true）——旧実装の
 // `recordRoot !== null &&` ガードの保存。
 
-import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { DesignIntermediateRepresentationValidationMaterialsRepository } from "@deep-spec-analysis/design-usecase";
 
@@ -99,7 +100,8 @@ function businessRuleReferencesOrUndefined(v: Json) {
 function buildUnitView(
   rawUnit: { [k: string]: Json },
   unitName: string,
-  recordRoot: string | null,
+  directoryExists: boolean,
+  rulesMarkdown: string | null,
 ): Result<DesignUnitDeclaration, string> {
   const unit = DesignUnitIdentifier.parse(unitName);
   if (!unit.ok) return err(JSON.stringify(unit.error));
@@ -227,10 +229,6 @@ function buildUnitView(
     }
   }
 
-  const directoryExists = recordRoot === null ? true : existsSync(join(recordRoot, "construction", unitName));
-  const rulesPath =
-    recordRoot === null ? null : join(recordRoot, "construction", unitName, "functional-design", "rules.md");
-  const rulesMarkdown = rulesPath === null ? null : readIfExists(rulesPath);
   const rules = rulesMarkdown === null ? ok(null) : parseBusinessRuleReferenceIndex(rulesMarkdown);
   if (!rules.ok) return err(JSON.stringify(rules.error));
 
@@ -270,27 +268,18 @@ export class DesignIntermediateRepresentationValidationMaterialsRepositoryImplem
     const outputPath = id.modelId().artifactPath().asString();
     // 機能形式モデル以外・不在はこの Repository の収蔵外（not-found——use case
     // が pass-through へ写像する旧 not-applicable の凍結挙動）。
-    if (basename(outputPath) !== DESIGN_MODEL_BASENAME || !existsSync(outputPath)) {
+    if (basename(outputPath) !== DESIGN_MODEL_BASENAME) {
       return repoErr({ kind: "not-found", path: outputPath });
     }
 
     const corrupt = (cause: string): Result<DesignIntermediateRepresentationValidationMaterials, RepositoryError> =>
       repoErr({ kind: "corrupt", path: outputPath, cause });
 
-    // existsSync 後の競合（削除・権限変更・ディレクトリ）でも Result 契約を
-    // 守る——読取失敗は io-failed（use case は corrupt と同じ verdict 写像）。
-    let bytes: Buffer;
-    try {
-      bytes = readFileSync(outputPath);
-    } catch (e) {
-      return repoErr({
-        kind: "io-failed",
-        operation: "read",
-        path: outputPath,
-        cause: e instanceof Error ? e.message : String(e),
-      });
-    }
-    const md = bytes.toString("utf-8");
+    // 実際の読取結果で不在と I/O 障害を区別し、RepositoryError をそのまま返す。
+    const read = readArtifactBytes(outputPath);
+    if (!read.ok) return repoErr(read.error);
+    const bytes = read.value;
+    const md = Buffer.from(bytes).toString("utf-8");
     const fences = extractFences(md, "json");
     if (fences.length !== 1) {
       return corrupt("formal model must contain exactly one ```json fence");
@@ -306,8 +295,13 @@ export class DesignIntermediateRepresentationValidationMaterialsRepositoryImplem
       return corrupt("design IR fence must contain a JSON object");
     }
 
-    if (!existsSync(this.#schemaPath)) {
-      return corrupt(`design IR schema not installed at ${this.#schemaPath} — run plugin sync`);
+    const schemaStat = readArtifactStat(this.#schemaPath);
+    if (!schemaStat.ok) {
+      return corrupt(
+        schemaStat.error.kind === "not-found"
+          ? `design IR schema not installed at ${this.#schemaPath} — run plugin sync`
+          : `design IR schema unreadable: ${schemaStat.error.cause}`,
+      );
     }
     const schema = readContractSchema(this.#schemaPath);
     if (!schema.ok) {
@@ -323,7 +317,7 @@ export class DesignIntermediateRepresentationValidationMaterialsRepositoryImplem
     if (!irVersion.ok) return corrupt(JSON.stringify(irVersion.error));
 
     // 旧 main は「バージョン一致かつスキーマ妥当」のときだけ semanticErrors を
-    // 呼んだ——unit view の構築（construction/<unit>/ の existsSync と rules.md
+    // 呼んだ——unit view の構築（construction/<unit>/ の取得と rules.md
     // 読み）はその内側の I/O なので、同じゲートで組む。ゲートが閉じている間は
     // ユニット名がスキーマの ^[a-z0-9][a-z0-9-]{0,63}$ 制約を通過していない
     // 可能性があり、生の名前を join へ渡さない（レガシーの I/O プロファイルと
@@ -334,10 +328,19 @@ export class DesignIntermediateRepresentationValidationMaterialsRepositoryImplem
 
     const units: DesignUnitDeclaration[] = [];
     if (semanticGateOpen) {
-      const recordRoot = findRecordRoot(dirname(outputPath));
+      const foundRecordRoot = findRecordRoot(dirname(outputPath));
+      if (!foundRecordRoot.ok) return repoErr(foundRecordRoot.error);
+      const recordRoot = foundRecordRoot.value;
       for (const rawUnit of Array.isArray(ir.units) ? ir.units : []) {
         if (!isObject(rawUnit) || typeof rawUnit.unit !== "string") continue;
-        const parsed = buildUnitView(rawUnit, rawUnit.unit, recordRoot);
+        const unitMaterials = this.#readUnitMaterials(recordRoot, rawUnit.unit);
+        if (!unitMaterials.ok) return repoErr(unitMaterials.error);
+        const parsed = buildUnitView(
+          rawUnit,
+          rawUnit.unit,
+          unitMaterials.value.directoryExists,
+          unitMaterials.value.rulesMarkdown,
+        );
         if (!parsed.ok) return corrupt(parsed.error);
         units.push(parsed.value);
       }
@@ -351,9 +354,25 @@ export class DesignIntermediateRepresentationValidationMaterialsRepositoryImplem
         irVersion: irVersion.value,
         schemaErrors: messages.value,
         units: declarations.value,
-        sourceDocument: new Uint8Array(bytes),
+        sourceDocument: bytes,
       }),
     );
+  }
+
+  #readUnitMaterials(
+    recordRoot: string | null,
+    unitName: string,
+  ): Result<{ directoryExists: boolean; rulesMarkdown: string | null }, RepositoryError> {
+    if (recordRoot === null) return ok({ directoryExists: true, rulesMarkdown: null });
+    const unitDirectory = join(recordRoot, "construction", unitName);
+    const directory = readArtifactStat(unitDirectory);
+    if (!directory.ok && directory.error.kind !== "not-found") return repoErr(directory.error);
+    const rules = readArtifactText(join(unitDirectory, "functional-design", "rules.md"));
+    if (!rules.ok && rules.error.kind !== "not-found") return repoErr(rules.error);
+    return ok({
+      directoryExists: directory.ok && directory.value.isDirectory(),
+      rulesMarkdown: rules.ok ? rules.value : null,
+    });
   }
 
   // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。

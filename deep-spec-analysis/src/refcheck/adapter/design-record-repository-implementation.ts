@@ -1,8 +1,9 @@
 import {
   findRecordRoot,
-  listSubdirectories,
   parseRequirementIdentifiers,
-  readIfExists,
+  readArtifactBytes,
+  readArtifactText,
+  readDirectory,
   relArtifact,
   writeFileAtomically,
 } from "@deep-spec-analysis/kernel-adapter";
@@ -13,9 +14,8 @@ import {
 //   - requirements.md は rules が extracted のときだけ読む
 //   - 兄弟ユニットは components カタログが解析できたときだけ読む
 //   - 自ユニットの entities.md は兄弟 inputs に重複記録しない
-// 対象が読めないときは not-found（呼び手が not-applicable を選ぶ）。
+// 対象の不在だけを not-found とし、読取障害は RepositoryError で呼び手へ返す。
 
-import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { ArtifactPath, ContentHash } from "@deep-spec-analysis/kernel-domain";
 import { err, ok, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
@@ -42,19 +42,17 @@ import {
 export class DesignRecordRepositoryImplementation implements DesignRecordRepository {
   findById(id: DesignRecordIdentifier): Result<DesignRecord, RepositoryError> {
     const artifactPath = id.artifactPath().asString();
-    // 錨成果物は生バイト列で一度だけ読む（UTF-8 復号は解析・ダイジェスト専用。
-    // 旧 readIfExists と同じく読めない対象は理由を問わず not-found）。
-    let sourceBytes: Uint8Array;
-    try {
-      sourceBytes = new Uint8Array(readFileSync(artifactPath));
-    } catch {
-      return err({ kind: "not-found", path: artifactPath });
-    }
+    // 錨成果物は生バイト列で一度だけ読む（UTF-8 復号は解析・ダイジェスト専用）。
+    const source = readArtifactBytes(artifactPath);
+    if (!source.ok) return source;
+    const sourceBytes = source.value;
     const md = Buffer.from(sourceBytes).toString("utf-8");
     const targetBase = basename(artifactPath);
     const fdDir = dirname(artifactPath);
     const isFunctional = basename(fdDir) === "functional-design";
-    const recordRoot = findRecordRoot(isFunctional ? fdDir : dirname(artifactPath));
+    const foundRecordRoot = findRecordRoot(isFunctional ? fdDir : dirname(artifactPath));
+    if (!foundRecordRoot.ok) return err(foundRecordRoot.error);
+    const recordRoot = foundRecordRoot.value;
     const rel = (p: string): string => relArtifact(recordRoot, p);
     const input = (p: string, text: string): InputAnchor =>
       InputAnchor.of({ artifact: rel(p), sha256: ContentHash.ofText(text) });
@@ -63,10 +61,12 @@ export class DesignRecordRepositoryImplementation implements DesignRecordReposit
     if (targetBase === "contract-summary.md") {
       const specBlocks = assessSpecBlocks(md);
       if (!specBlocks.ok) return err({ kind: "corrupt", path: artifactPath, cause: JSON.stringify(specBlocks.error) });
+      const declaredUnits = this.#declaredUnits(recordRoot);
+      if (!declaredUnits.ok) return declaredUnits;
       contractSummary = {
         contractsTable: parseContractsTable(md),
         specBlocks: specBlocks.value,
-        declaredUnits: this.#declaredUnits(recordRoot),
+        declaredUnits: declaredUnits.value,
       };
     }
     const functional = isFunctional ? this.#functional(recordRoot, fdDir) : ok(null);
@@ -96,25 +96,31 @@ export class DesignRecordRepositoryImplementation implements DesignRecordReposit
 
   #declaredUnits(
     recordRoot: string | null,
-  ): NonNullable<Parameters<typeof DesignRecord.of>[0]["contractSummary"]>["declaredUnits"] {
+  ): Result<NonNullable<Parameters<typeof DesignRecord.of>[0]["contractSummary"]>["declaredUnits"], RepositoryError> {
     const depPath =
       recordRoot === null ? null : join(recordRoot, "inception", "units-generation", "unit-of-work-dependency.md");
-    const depMd = depPath === null ? null : readIfExists(depPath);
-    if (depPath === null || depMd === null) {
-      return {
-        artifactName: ArtifactPath.of(
-          depPath === null ? "unit-of-work-dependency.md" : relArtifact(recordRoot, depPath),
-        ),
+    if (depPath === null) {
+      return ok({
+        artifactName: ArtifactPath.of("unit-of-work-dependency.md"),
         document: null,
-      };
+      });
     }
-    return {
+    const depMd = readArtifactText(depPath);
+    if (!depMd.ok) {
+      if (depMd.error.kind === "not-found")
+        return ok({
+          artifactName: ArtifactPath.of(relArtifact(recordRoot, depPath)),
+          document: null,
+        });
+      return depMd;
+    }
+    return ok({
       artifactName: ArtifactPath.of(relArtifact(recordRoot, depPath)),
       document: {
-        input: InputAnchor.of({ artifact: relArtifact(recordRoot, depPath), sha256: ContentHash.ofText(depMd) }),
-        outcome: parseDeclaredUnits(depMd),
+        input: InputAnchor.of({ artifact: relArtifact(recordRoot, depPath), sha256: ContentHash.ofText(depMd.value) }),
+        outcome: parseDeclaredUnits(depMd.value),
       },
-    };
+    });
   }
 
   #functional(
@@ -122,10 +128,16 @@ export class DesignRecordRepositoryImplementation implements DesignRecordReposit
     fdDir: string,
   ): Result<NonNullable<Parameters<typeof DesignRecord.of>[0]["functional"]>, RepositoryError> {
     const rel = (p: string): string => relArtifact(recordRoot, p);
-    const load = <T>(path: string, parse: (text: string) => T): { input: InputAnchor; outcome: T } | null => {
-      const text = readIfExists(path);
-      if (text === null) return null;
-      return { input: InputAnchor.of({ artifact: rel(path), sha256: ContentHash.ofText(text) }), outcome: parse(text) };
+    const load = <T>(
+      path: string,
+      parse: (text: string) => T,
+    ): Result<{ input: InputAnchor; outcome: T } | null, RepositoryError> => {
+      const text = readArtifactText(path);
+      if (!text.ok) return text.error.kind === "not-found" ? ok(null) : text;
+      return ok({
+        input: InputAnchor.of({ artifact: rel(path), sha256: ContentHash.ofText(text.value) }),
+        outcome: parse(text.value),
+      });
     };
 
     const unitDir = dirname(fdDir);
@@ -138,40 +150,60 @@ export class DesignRecordRepositoryImplementation implements DesignRecordReposit
     if (!parsedUnit.ok) return err({ kind: "corrupt", path: fdDir, cause: JSON.stringify(parsedUnit.error) });
 
     const entitiesPath = join(fdDir, "entities.md");
-    const entities = load(entitiesPath, (t) => parseEntitiesDocument(t));
+    const entitiesResult = load(entitiesPath, (t) => parseEntitiesDocument(t));
+    if (!entitiesResult.ok) return entitiesResult;
+    const entities = entitiesResult.value;
     const rulesPath = join(fdDir, "rules.md");
-    const rules = load(rulesPath, (t) => parseRulesDocument(t));
+    const rulesResult = load(rulesPath, (t) => parseRulesDocument(t));
+    if (!rulesResult.ok) return rulesResult;
+    const rules = rulesResult.value;
     const specPath = join(fdDir, "functional-spec.md");
-    const spec = load(specPath, (t) => parseFunctionalSpecDocument(t));
+    const specResult = load(specPath, (t) => parseFunctionalSpecDocument(t));
+    if (!specResult.ok) return specResult;
+    const spec = specResult.value;
 
     // requirements.md は rules が使えるときだけ読む（凍結された取得条件）。
     const reqPath =
       recordRoot === null ? null : join(recordRoot, "inception", "requirements-analysis", "requirements.md");
     let requirements: NonNullable<Parameters<typeof DesignRecord.of>[0]["functional"]>["requirements"] = null;
     if (rules?.outcome.isExtracted() && reqPath !== null) {
-      const text = readIfExists(reqPath);
-      if (text !== null) {
-        const parsed = parseRequirementIdentifiers(text);
+      const text = readArtifactText(reqPath);
+      if (!text.ok) {
+        if (text.error.kind !== "not-found") return text;
+      } else {
+        const parsed = parseRequirementIdentifiers(text.value);
         if (!parsed.ok) return err({ kind: "corrupt", path: reqPath, cause: JSON.stringify(parsed.error) });
         requirements = {
-          input: InputAnchor.of({ artifact: rel(reqPath), sha256: ContentHash.ofText(text) }),
+          input: InputAnchor.of({ artifact: rel(reqPath), sha256: ContentHash.ofText(text.value) }),
           outcome: parsed.value,
         };
       }
     }
 
     const componentsPath = recordRoot === null ? null : join(recordRoot, "inception", "domain-design", "components.md");
-    const components = componentsPath === null ? null : load(componentsPath, (t) => parseDomainEntitiesDocument(t));
+    const componentsResult =
+      componentsPath === null ? ok(null) : load(componentsPath, (t) => parseDomainEntitiesDocument(t));
+    if (!componentsResult.ok) return componentsResult;
+    const components = componentsResult.value;
 
     // 兄弟ユニットは components カタログが解析できたときだけ読む。
     const siblingTexts: { unit: string; path: string; text: string }[] = [];
     if (components?.outcome.isExtracted() && recordRoot !== null) {
       const constructionDir = join(recordRoot, "construction");
-      for (const u of listSubdirectories(constructionDir)) {
-        const p = join(constructionDir, u, "functional-design", "entities.md");
-        const text = readIfExists(p);
-        if (text !== null) siblingTexts.push({ unit: u, path: p, text });
-      }
+      const construction = readDirectory(constructionDir);
+      if (!construction.ok) {
+        if (construction.error.kind !== "not-found") return construction;
+      } else
+        for (const u of construction.value
+          .filter((entry) => entry.isDirectory())
+          .map((entry) => entry.name)
+          .sort()) {
+          const p = join(constructionDir, u, "functional-design", "entities.md");
+          const text = readArtifactText(p);
+          if (!text.ok) {
+            if (text.error.kind !== "not-found") return text;
+          } else siblingTexts.push({ unit: u, path: p, text: text.value });
+        }
     }
 
     const siblingInputs = InputAnchors.parse(

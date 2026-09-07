@@ -216,7 +216,10 @@ describe("契約2 の適合は finalization ごとに 1 つの値が運ぶ", () 
 
       const published = repository.findByDirectory(ap(ws.verifyDir));
       expect(published.ok).toBe(true);
-      if (published.ok) expect(published.value.crossCheck()?.isUnavailable()).toBe(false);
+      if (published.ok) {
+        const crossCheck = published.value.crossCheck();
+        expect(crossCheck.ok && crossCheck.value?.isUnavailable()).toBe(false);
+      }
 
       // 対照：同じ path をいま読む値は「読めない」変種になり、両文書を降格させる。
       const degraded = new VerificationReportFinalizer(repository, schemaOf(schemaCopy)).finalize(
@@ -228,9 +231,10 @@ describe("契約2 の適合は finalization ごとに 1 つの値が運ぶ", () 
         "findings schema unreadable: ",
       );
       const reloaded = repository.findByDirectory(ap(ws.verifyDir));
-      expect(reloaded.ok && reloaded.value.crossCheck()?.unavailableReason()).toStartWith(
-        "findings schema unreadable: ",
-      );
+      if (reloaded.ok) {
+        const crossCheck = reloaded.value.crossCheck();
+        expect(crossCheck.ok && crossCheck.value?.unavailableReason()).toStartWith("findings schema unreadable: ");
+      }
     } finally {
       rmSync(ws.record, { recursive: true, force: true });
     }
@@ -280,7 +284,7 @@ describe("finalization の失敗は成功に化けない", () => {
       chmodSync(quintPath, 0o644);
 
       expect(finalized.ok).toBe(false);
-      if (!finalized.ok) expect(finalized.error.kind).toBe("corrupt");
+      if (!finalized.ok) expect(finalized.error.kind).toBe("io-failed");
       expect(existsSync(join(ws.verifyDir, "smt.json"))).toBe(false);
       expect(readFileSync(quintPath, "utf-8")).toBe(quintBefore);
       expect(readFileSync(crossPath, "utf-8")).toBe(crossBefore);
@@ -484,7 +488,7 @@ describe("古い cross-check を最新として扱わない", () => {
             .toArray()
             .map((r) => r.id().fileName()),
         ).toEqual(["smt.json"]);
-        expect(reloaded.value.crossCheck()).toBe(null);
+        expect(reloaded.value.crossCheck()).toEqual({ ok: true, value: null });
       }
     } finally {
       rmSync(ws.record, { recursive: true, force: true });

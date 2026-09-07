@@ -9,7 +9,9 @@
   "dependencies": {
     "@deep-spec-analysis/doctor-domain": "workspace:*",
     "@deep-spec-analysis/doctor-usecase": "workspace:*",
+    "@deep-spec-analysis/kernel-adapter": "workspace:*",
     "@deep-spec-analysis/kernel-domain": "workspace:*",
-    "@deep-spec-analysis/kernel-infrastructure": "workspace:*"
+    "@deep-spec-analysis/kernel-infrastructure": "workspace:*",
+    "@deep-spec-analysis/kernel-usecase": "workspace:*"
   }
 }

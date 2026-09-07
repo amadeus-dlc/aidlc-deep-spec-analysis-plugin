@@ -7,6 +7,8 @@ import type {
   VersionAdvisory,
 } from "@deep-spec-analysis/doctor-domain";
 import { Check, CheckSeverity } from "@deep-spec-analysis/doctor-domain";
+import type { Result } from "@deep-spec-analysis/kernel-infrastructure";
+import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
 
 // doctor 検査行の presenter——label/fix の凍結文言はすべてここに封じる
 //（移行 PR9、#22）。installer（scripts/install.ts）が grep する部分文字列
@@ -20,8 +22,9 @@ export class DoctorPresenter {
     this.#harnessDir = config.harnessDir;
   }
 
-  installation(statuses: readonly InstalledStatus[]): Check[] {
-    return statuses.map((s) =>
+  installation(result: Result<readonly InstalledStatus[], RepositoryError>): Check[] {
+    if (!result.ok) return [this.#acquisitionFailure("installation manifest", result.error, CheckSeverity.error())];
+    return result.value.map((s) =>
       Check.of({
         pass: s.isPresent(),
         label: `deep-spec-analysis: ${s.entry().rel()} installed`,
@@ -69,7 +72,9 @@ export class DoctorPresenter {
     });
   }
 
-  solvers(availability: SolverAvailability): Check[] {
+  solvers(result: Result<SolverAvailability, RepositoryError>): Check[] {
+    if (!result.ok) return [this.#acquisitionFailure("solver availability", result.error)];
+    const availability = result.value;
     return [
       Check.of({
         pass: availability.hasZ3Package(),
@@ -102,7 +107,9 @@ export class DoctorPresenter {
     ];
   }
 
-  verificationCoverage(assessment: CoverageAssessment): Check[] {
+  verificationCoverage(result: Result<CoverageAssessment, RepositoryError>): Check[] {
+    if (!result.ok) return [this.#acquisitionFailure("verification coverage", result.error)];
+    const assessment = result.value;
     const rows: Check[] = assessment.problems().map((row) => {
       const noun = row.problemState()?.match({
         unverified: () => "has requirements with no deep-spec verification",
@@ -132,11 +139,20 @@ export class DoctorPresenter {
     return rows;
   }
 
-  structuralDebt(debt: StructuralDebt): Check[] {
+  structuralDebt(result: Result<StructuralDebt, RepositoryError>): Check[] {
+    if (!result.ok) return [this.#acquisitionFailure("design refcheck", result.error)];
+    const debt = result.value;
     const rows: Check[] = debt.rows().map((row) =>
       Check.of({
         pass: false,
-        label: `deep-spec-analysis: ${row.artifact().location().space().asString()}/${row.artifact().location().intent().asString()} ${row.artifact().relativePath().asString()} has ${row.findingCount()} reference-integrity finding(s)`,
+        label: `deep-spec-analysis: ${row.artifact().location().space().asString()}/${row.artifact().location().intent().asString()} ${row.artifact().relativePath().asString()} ${row.match(
+          {
+            complete: (findings) => `has ${findings.asNumber()} reference-integrity finding(s)`,
+            partial: (findings, reason) =>
+              `has ${findings.asNumber()} reference-integrity finding(s); inspection incomplete (${reason.asString()})`,
+            unavailable: (reason) => `could not be inspected (${reason.asString()})`,
+          },
+        )}`,
         fix:
           "Open the artifact and fix (or record as an accepted risk) each finding; " +
           "the deep-spec-refcheck sensors re-check on every write and write the detail next to the artifact under deep-spec-refcheck/.",
@@ -146,7 +162,7 @@ export class DoctorPresenter {
     if (debt.hasScans()) {
       rows.push(
         Check.of({
-          pass: debt.totalFindings() === 0,
+          pass: debt.isComplete() && debt.totalFindings() === 0,
           label: `deep-spec-analysis: design refcheck — ${debt.totalFindings()} structural finding(s) across ${debt.scannedCount()} design artifact(s) scanned (report-only)`,
           fix: "See the per-artifact rows above.",
           severity: CheckSeverity.advisory(),
@@ -156,18 +172,10 @@ export class DoctorPresenter {
     return rows;
   }
 
-  functionalCoverage(coverage: UnitCoverage): Check[] {
+  functionalCoverage(result: Result<UnitCoverage, RepositoryError>): Check[] {
     // 凍結順: refinement 失効行（走査順）→ unit 問題行 → 要約行。
-    const unavailable = coverage.unavailableReason();
-    if (unavailable !== null)
-      return [
-        Check.of({
-          pass: false,
-          label: `deep-spec-analysis: design verification coverage unavailable — ${unavailable.asString()}`,
-          fix: "Reduce the workspace's functional-design scope and run the doctor again.",
-          severity: CheckSeverity.advisory(),
-        }),
-      ];
+    if (!result.ok) return [this.#acquisitionFailure("design verification coverage", result.error)];
+    const coverage = result.value;
     const rows: Check[] = coverage.refinementStale().map((row) =>
       Check.of({
         pass: false,
@@ -216,5 +224,18 @@ export class DoctorPresenter {
       );
     }
     return rows;
+  }
+
+  #acquisitionFailure(
+    subject: string,
+    error: RepositoryError,
+    severity: CheckSeverity = CheckSeverity.advisory(),
+  ): Check {
+    return Check.of({
+      pass: false,
+      label: `deep-spec-analysis: ${subject} unavailable — ${error.path}: ${error.kind}${"cause" in error ? ` (${error.cause})` : ""}`,
+      fix: "Restore the artifact or directory and its read permissions, then run the doctor again.",
+      severity,
+    });
   }
 }

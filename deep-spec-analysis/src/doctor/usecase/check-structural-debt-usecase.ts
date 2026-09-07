@@ -1,4 +1,6 @@
 import { StructuralDebt, type StructuralObservation } from "@deep-spec-analysis/doctor-domain";
+import { err, matchResult, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
 import type { DoctorWorkspaceClient } from "./port/doctor-workspace-client.ts";
 import type { ReferenceCheckBackendClient } from "./port/reference-check-backend-client.ts";
 
@@ -9,9 +11,14 @@ export class CheckStructuralDebtUseCase {
     this.#workspace = workspace;
     this.#backend = backend;
   }
-  execute(): StructuralDebt {
-    const observations: StructuralObservation[] = [];
-    for (const artifact of this.#workspace.designArtifacts()) observations.push(this.#backend.observe(artifact));
-    return StructuralDebt.of(observations);
+  execute(): Result<StructuralDebt, RepositoryError> {
+    return matchResult(this.#workspace.designArtifacts(), {
+      err: (error): Result<StructuralDebt, RepositoryError> => err(error),
+      ok: (artifacts) => {
+        const observations: StructuralObservation[] = [];
+        for (const artifact of artifacts) observations.push(this.#backend.observe(artifact));
+        return ok(StructuralDebt.of(observations));
+      },
+    });
   }
 }

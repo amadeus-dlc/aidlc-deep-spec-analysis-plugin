@@ -1,6 +1,9 @@
 // @bun
 // src/entries/deep-spec-analysis-doctor.ts
-import { join as join6 } from "path";
+import { join as join8 } from "path";
+
+// src/doctor/adapter/backend-evidence-reader.ts
+import { join as join2 } from "path";
 
 // src/kernel/infrastructure/illegal-argument-exception.ts
 class IllegalArgumentException extends Error {
@@ -153,6 +156,40 @@ function parseConstruction(construct) {
     }
     throw error;
   }
+}
+// src/kernel/infrastructure/result-composition.ts
+function matchResult(result, cases) {
+  return result.ok ? cases.ok(result.value) : cases.err(result.error);
+}
+function flatMapResult(result, next) {
+  return result.ok ? next(result.value) : result;
+}
+function combineResults(fields) {
+  const values = Array.isArray(fields) ? new Array(fields.length) : {};
+  for (const key of Reflect.ownKeys(fields)) {
+    if (Array.isArray(fields) && key === "length")
+      continue;
+    const field = fields[key];
+    if (!field.ok)
+      return err(field.error);
+    Object.defineProperty(values, key, {
+      configurable: true,
+      enumerable: true,
+      value: field.value,
+      writable: true
+    });
+  }
+  return ok(values);
+}
+function traverseResult(values, parse) {
+  const parsed = [];
+  for (const value of values) {
+    const result = parse(value);
+    if (!result.ok)
+      return err(result.error);
+    parsed.push(result.value);
+  }
+  return ok(parsed);
 }
 // src/kernel/infrastructure/schema.ts
 function typeMatches(t, v) {
@@ -2709,93 +2746,154 @@ class StructuralDebt extends FirstClassCollectionBase {
   hasScans() {
     return this.#observations.some((observation) => observation.wasScanned());
   }
+  isComplete() {
+    return this.#observations.every((observation) => observation.isComplete());
+  }
   scannedCount() {
     return this.#observations.filter((observation) => observation.wasScanned()).length;
   }
   totalFindings() {
-    return this.#observations.reduce((sum, observation) => sum + observation.findingCount(), 0);
+    return this.#observations.reduce((sum, observation) => sum + observation.match({
+      complete: (findings) => findings.asNumber(),
+      partial: (findings) => findings.asNumber(),
+      unavailable: () => 0
+    }), 0);
   }
   rows() {
-    return this.#observations.filter((observation) => observation.hasDebt());
+    return this.#observations.filter((observation) => !observation.isComplete() || observation.hasDebt());
   }
 }
 // src/doctor/domain/structural-observation.ts
 class StructuralObservation {
   #artifact;
-  #findings;
-  constructor(artifact, findings) {
+  #state;
+  constructor(artifact, state) {
     this.#artifact = artifact;
-    this.#findings = findings;
+    this.#state = state;
   }
   static of(artifact, findings) {
-    return new StructuralObservation(artifact, findings);
+    return new StructuralObservation(artifact, { kind: "complete", findings });
+  }
+  static partial(artifact, findings, reason) {
+    return new StructuralObservation(artifact, { kind: "partial", findings, reason });
+  }
+  static unavailable(artifact, reason) {
+    return new StructuralObservation(artifact, { kind: "unavailable", reason });
   }
   wasScanned() {
-    return this.#findings !== null;
+    return this.#state.kind !== "unavailable";
+  }
+  isComplete() {
+    return this.#state.kind === "complete";
   }
   hasDebt() {
-    return this.#findings !== null && !this.#findings.isEmpty();
-  }
-  findingCount() {
-    return this.#findings?.asNumber() ?? 0;
+    return this.#state.kind !== "unavailable" && !this.#state.findings.isEmpty();
   }
   artifact() {
     return this.#artifact;
   }
+  match(handlers) {
+    if (this.#state.kind === "complete")
+      return handlers.complete(this.#state.findings);
+    if (this.#state.kind === "partial")
+      return handlers.partial(this.#state.findings, this.#state.reason);
+    return handlers.unavailable(this.#state.reason);
+  }
   equals(other) {
-    return this.#artifact.equals(other.#artifact) && (this.#findings === null ? other.#findings === null : other.#findings !== null && this.#findings.asNumber() === other.#findings.asNumber());
+    if (!this.#artifact.equals(other.#artifact) || this.#state.kind !== other.#state.kind)
+      return false;
+    if (this.#state.kind === "unavailable" && other.#state.kind === "unavailable")
+      return this.#state.reason.equals(other.#state.reason);
+    if (this.#state.kind === "complete" && other.#state.kind === "complete")
+      return this.#state.findings.asNumber() === other.#state.findings.asNumber();
+    if (this.#state.kind === "partial" && other.#state.kind === "partial")
+      return this.#state.findings.asNumber() === other.#state.findings.asNumber() && this.#state.reason.equals(other.#state.reason);
+    return false;
   }
 }
 // src/doctor/domain/unit-coverage.ts
 class UnitCoverage {
-  #state;
-  constructor(state) {
-    if (state.kind === "unavailable") {
-      this.#state = state;
-      return;
-    }
-    const snapshot = boundedCollectionSnapshot(state.observations, 65536, "too-many-functional-observations");
-    const invalidSnapshot = boundedCollectionSnapshot(state.invalidProblems, 65536, "too-many-invalid-functional-units");
+  #observations;
+  #scopes;
+  #invalidProblems;
+  constructor(observations, scopes, invalidProblems) {
+    const snapshot = boundedCollectionSnapshot(observations, 65536, "too-many-functional-observations");
+    const invalidSnapshot = boundedCollectionSnapshot(invalidProblems, 65536, "too-many-invalid-functional-units");
     let units = invalidSnapshot.length;
     for (const observation of snapshot) {
       units += observation.eligibleCount();
       if (units > 65536)
         throw new IllegalArgumentException({ kind: "too-many-covered-units", raw: units });
     }
-    this.#state = { kind: "ready", observations: snapshot, scopes: state.scopes, invalidProblems: invalidSnapshot };
+    this.#observations = snapshot;
+    this.#scopes = scopes;
+    this.#invalidProblems = invalidSnapshot;
   }
   static of(observations, scopes, invalidProblems) {
-    return new UnitCoverage({ kind: "ready", observations, scopes, invalidProblems });
-  }
-  static unavailable(scopes, reason) {
-    return new UnitCoverage({ kind: "unavailable", scopes, reason });
+    return new UnitCoverage(observations, scopes, invalidProblems);
   }
   static parse(observations, scopes, invalidProblems) {
-    return parseConstruction(() => new UnitCoverage({ kind: "ready", observations, scopes, invalidProblems }));
+    return parseConstruction(() => new UnitCoverage(observations, scopes, invalidProblems));
   }
   hasEligible() {
-    return this.#state.kind === "ready" && this.eligibleCount() > 0;
+    return this.eligibleCount() > 0;
   }
   isClean() {
-    return this.#state.kind === "ready" && this.problems().length === 0;
+    return this.problems().length === 0;
   }
   verifiedCount() {
-    return this.#state.kind === "ready" ? this.eligibleCount() - this.#state.observations.flatMap((observation) => observation.problems()).length : 0;
+    return this.eligibleCount() - this.#observations.flatMap((observation) => observation.problems()).length;
   }
   eligibleCount() {
-    return this.#state.kind === "ready" ? this.#state.observations.reduce((sum, observation) => sum + observation.eligibleCount(), 0) : 0;
+    return this.#observations.reduce((sum, observation) => sum + observation.eligibleCount(), 0);
   }
   problems() {
-    return this.#state.kind === "ready" ? [...this.#state.invalidProblems, ...this.#state.observations.flatMap((observation) => observation.problems())] : [];
+    return [...this.#invalidProblems, ...this.#observations.flatMap((observation) => observation.problems())];
   }
   refinementStale() {
-    return this.#state.kind === "ready" ? this.#state.observations.filter((observation) => observation.refinementIsStale()).map((observation) => observation.location()) : [];
+    return this.#observations.filter((observation) => observation.refinementIsStale()).map((observation) => observation.location());
   }
   scopes() {
-    return this.#state.scopes;
+    return this.#scopes;
   }
-  unavailableReason() {
-    return this.#state.kind === "unavailable" ? this.#state.reason : null;
+}
+// src/doctor/domain/verification-evidence.ts
+var INCOMPLETE_SKIP_REASONS = new Set([
+  "timeout",
+  "unavailable",
+  "compile-error",
+  "ir-version-mismatch",
+  "unrecognized-format"
+]);
+
+class VerificationEvidence {
+  #irHash;
+  #unavailable;
+  #skippedReasons;
+  #checkedUnits;
+  constructor(props) {
+    this.#irHash = props.irHash;
+    this.#unavailable = props.unavailable;
+    this.#skippedReasons = boundedCollectionSnapshot(props.skippedReasons, 65536, "too-many-skip-reasons");
+    this.#checkedUnits = boundedCollectionSnapshot(props.checkedUnits, 65536, "too-many-checked-units");
+  }
+  static of(props) {
+    return new VerificationEvidence(props);
+  }
+  static parse(props) {
+    return parseConstruction(() => new VerificationEvidence(props));
+  }
+  countsFor(hash) {
+    return this.#irHash.equals(hash) && this.#unavailable === null && this.#skippedReasons.every((reason) => !INCOMPLETE_SKIP_REASONS.has(reason.asString()));
+  }
+  completedUnitsFor(hash) {
+    return this.countsFor(hash) ? [...this.#checkedUnits] : [];
+  }
+  equals(other) {
+    return this.#irHash.equals(other.#irHash) && (this.#unavailable === null ? other.#unavailable === null : other.#unavailable !== null && this.#unavailable.equals(other.#unavailable)) && this.#skippedReasons.length === other.#skippedReasons.length && this.#skippedReasons.every((reason, index) => reason.asString() === other.#skippedReasons[index]?.asString()) && this.#checkedUnits.length === other.#checkedUnits.length && this.#checkedUnits.every((unit, index) => {
+      const otherUnit = other.#checkedUnits[index];
+      return otherUnit !== undefined && unit.equals(otherUnit);
+    });
   }
 }
 // src/doctor/domain/verification-staleness.ts
@@ -2836,14 +2934,567 @@ class VerificationObservation {
     return VerificationStaleness.of({ anchor: this.#anchor }).isStale() ? CoverageState.stale() : null;
   }
 }
+// src/kernel/adapter/artifact-io.ts
+import { readdirSync, readFileSync, statSync } from "fs";
+function readFailure(path, error) {
+  const code = error.code;
+  if (code === "ENOENT")
+    return { kind: "not-found", path };
+  return {
+    kind: "io-failed",
+    operation: "read",
+    path,
+    cause: error instanceof Error ? error.message : String(error)
+  };
+}
+function readArtifactBytes(path) {
+  let bytes;
+  try {
+    bytes = readFileSync(path);
+  } catch (error) {
+    return err(readFailure(path, error));
+  }
+  return ok(bytes);
+}
+function readArtifactText(path) {
+  try {
+    return ok(readFileSync(path, "utf-8"));
+  } catch (error) {
+    return err(readFailure(path, error));
+  }
+}
+function readDirectory(path) {
+  let entries;
+  try {
+    entries = readdirSync(path, { withFileTypes: true });
+  } catch (error) {
+    return err(readFailure(path, error));
+  }
+  return ok(Object.freeze(entries));
+}
+function readArtifactStat(path) {
+  try {
+    return ok(statSync(path));
+  } catch (error) {
+    return err(readFailure(path, error));
+  }
+}
+// src/kernel/adapter/directory-finalization-lock.ts
+import { randomBytes } from "crypto";
+import { mkdirSync, renameSync, rmSync, writeFileSync } from "fs";
+import { join } from "path";
+var DESIGN_LOCK_BASENAME = ".deep-spec-design-finalization.lock";
+var METADATA_BASENAME = "owner.lockmeta";
+var LEASE_MS = 30000;
+var OWNER_TOKEN_BYTES = 16;
+function causeOf(e) {
+  return e instanceof Error ? e.message : String(e);
+}
+
+class DirectoryFinalizationLock {
+  #clock;
+  #liveness;
+  #lockBasename;
+  #ownerTokens;
+  constructor(clock, liveness, lockBasename = DESIGN_LOCK_BASENAME) {
+    this.#clock = clock;
+    this.#liveness = liveness;
+    this.#lockBasename = lockBasename;
+    this.#ownerTokens = new Map;
+  }
+  canonicalPathOf(directory) {
+    return join(directory.asString(), this.#lockBasename);
+  }
+  ownerTokenOf(directory) {
+    return this.#ownerTokens.get(this.canonicalPathOf(directory)) ?? null;
+  }
+  acquire(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const token = randomBytes(OWNER_TOKEN_BYTES).toString("hex");
+    const blocked = this.#createOwned(canonical, token);
+    if (blocked === null) {
+      this.#ownerTokens.set(canonical, token);
+      return { kind: "acquired" };
+    }
+    const observed = this.#readMetadata(canonical);
+    if (!observed.ok) {
+      return { kind: "lock-contended", cause: `owner metadata is unreadable (${blocked})` };
+    }
+    if (observed.value.state !== "held") {
+      return { kind: "lock-contended", cause: `owner metadata is in state "${observed.value.state}"` };
+    }
+    if (this.#clock.now() < observed.value.leaseExpiresAtMs) {
+      return { kind: "lock-contended", cause: "the lease has not expired" };
+    }
+    const status = this.#liveness.statusOf(observed.value.pid);
+    if (status !== "absent") {
+      return { kind: "lock-contended", cause: `owner process ${observed.value.pid} is ${status}` };
+    }
+    const reread = this.#readMetadata(canonical);
+    if (!reread.ok || reread.value.token !== observed.value.token) {
+      return { kind: "lock-contended", cause: "the lock changed hands during the recovery check" };
+    }
+    const stale = `${canonical}.stale.${observed.value.token}.${token}`;
+    try {
+      renameSync(canonical, stale);
+    } catch (e) {
+      return { kind: "lock-recovery-failed", cause: causeOf(e) };
+    }
+    const lost = this.#createOwned(canonical, token);
+    this.#discard(stale);
+    if (lost !== null) {
+      return { kind: "lock-recovery-failed", cause: lost };
+    }
+    this.#ownerTokens.set(canonical, token);
+    return { kind: "recovered", displacedToken: observed.value.token };
+  }
+  holdsOwnership(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const mine = this.#ownerTokens.get(canonical);
+    if (mine === undefined)
+      return false;
+    const observed = this.#readMetadata(canonical);
+    return observed.ok && observed.value.state === "held" && observed.value.token === mine;
+  }
+  release(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const mine = this.#ownerTokens.get(canonical);
+    if (mine === undefined) {
+      return { kind: "lock-release-failed", cause: "this writer does not hold the lock" };
+    }
+    this.#ownerTokens.delete(canonical);
+    const observed = this.#readMetadata(canonical);
+    if (!observed.ok || observed.value.token !== mine) {
+      return { kind: "lock-release-failed", cause: "the canonical lock is no longer owned by this writer" };
+    }
+    const cleanup = `${canonical}.cleanup.${mine}`;
+    try {
+      renameSync(canonical, cleanup);
+    } catch (e) {
+      return { kind: "lock-release-failed", cause: causeOf(e) };
+    }
+    const swept = this.#discard(cleanup);
+    if (swept !== null) {
+      return { kind: "cleanup-failed", cause: swept };
+    }
+    return { kind: "released" };
+  }
+  #createOwned(canonical, token) {
+    const acquiredAtMs = this.#clock.now();
+    try {
+      mkdirSync(canonical);
+    } catch (e) {
+      return causeOf(e);
+    }
+    const metadata = {
+      state: "held",
+      token,
+      pid: this.#liveness.self(),
+      acquiredAtMs,
+      leaseExpiresAtMs: acquiredAtMs + LEASE_MS
+    };
+    try {
+      writeFileSync(join(canonical, METADATA_BASENAME), `${JSON.stringify(metadata)}
+`, "utf-8");
+      return null;
+    } catch (e) {
+      const cleanup = `${canonical}.cleanup.${token}`;
+      try {
+        renameSync(canonical, cleanup);
+        this.#discard(cleanup);
+      } catch {}
+      return causeOf(e);
+    }
+  }
+  #readMetadata(canonical) {
+    const path = join(canonical, METADATA_BASENAME);
+    const read = readArtifactText(path);
+    if (!read.ok)
+      return err(read.error);
+    let raw;
+    try {
+      raw = JSON.parse(read.value);
+    } catch (error) {
+      return err({ kind: "corrupt", path, cause: error instanceof Error ? error.message : String(error) });
+    }
+    if (typeof raw !== "object" || raw === null)
+      return err({ kind: "corrupt", path, cause: "owner metadata must be an object" });
+    const doc = raw;
+    if (typeof doc.state !== "string" || typeof doc.token !== "string")
+      return err({ kind: "corrupt", path, cause: "owner metadata lacks state or token" });
+    if (typeof doc.pid !== "number" || typeof doc.acquiredAtMs !== "number" || typeof doc.leaseExpiresAtMs !== "number")
+      return err({ kind: "corrupt", path, cause: "owner metadata has invalid numeric fields" });
+    return ok({
+      state: doc.state,
+      token: doc.token,
+      pid: doc.pid,
+      acquiredAtMs: doc.acquiredAtMs,
+      leaseExpiresAtMs: doc.leaseExpiresAtMs
+    });
+  }
+  #discard(ownPath) {
+    try {
+      rmSync(ownPath, { recursive: true, force: true });
+      return null;
+    } catch (e) {
+      return causeOf(e);
+    }
+  }
+}
+// src/kernel/adapter/fence.ts
+function extractFences(md, lang) {
+  const fences = [];
+  const lines = md.split(`
+`);
+  let open = false;
+  let info = "";
+  let openLine = 0;
+  let buf = [];
+  for (let i = 0;i < lines.length; i++) {
+    const m = (lines[i] ?? "").match(/^\s*```(.*)$/);
+    if (m && !open) {
+      open = true;
+      info = (m[1] ?? "").trim().toLowerCase();
+      openLine = i + 1;
+      buf = [];
+      continue;
+    }
+    if (m && open) {
+      if (info === lang || info.startsWith(`${lang} `)) {
+        fences.push({ info, body: buf.join(`
+`), line: openLine });
+      }
+      open = false;
+      continue;
+    }
+    if (open)
+      buf.push(lines[i] ?? "");
+  }
+  return fences;
+}
+// src/kernel/adapter/findings-document.ts
+var strings = (value) => Array.isArray(value) && value.every((v) => typeof v === "string");
+var optionalString = (value) => value === undefined || typeof value === "string";
+function decodeFindingsDocument(raw) {
+  if (!isObject(raw))
+    return err("findings document must be an object");
+  for (const field of ["backend", "irVersion", "irHash", "method"]) {
+    if (typeof raw[field] !== "string")
+      return err(`${field} must be a string`);
+  }
+  if (!Array.isArray(raw.findings) || !raw.findings.every((f) => isObject(f) && typeof f.kind === "string" && Array.isArray(f.targets) && f.targets.length > 0 && f.targets.length <= MAX_FINDING_TARGETS && strings(f.frRefs) && strings(f.targets) && isObject(f.witness) && typeof f.detail === "string" && optionalString(f.unit))) {
+    return err("findings must be an array of complete finding records");
+  }
+  if (!Array.isArray(raw.skipped) || !raw.skipped.every((s) => isObject(s) && typeof s.target === "string" && typeof s.reason === "string" && optionalString(s.detail) && optionalString(s.unit))) {
+    return err("skipped must be an array of complete skip records");
+  }
+  if (raw.unavailable !== undefined && (!isObject(raw.unavailable) || typeof raw.unavailable.reason !== "string")) {
+    return err("unavailable must carry a reason");
+  }
+  if (raw.inputs !== undefined && (!Array.isArray(raw.inputs) || !raw.inputs.every((i) => isObject(i) && typeof i.artifact === "string" && typeof i.sha256 === "string"))) {
+    return err("inputs must be an array of input anchors");
+  }
+  if (raw.checked !== undefined && !strings(raw.checked))
+    return err("checked must be an array of strings");
+  if (raw.crossChecked !== undefined && (!Array.isArray(raw.crossChecked) || !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && (c.unit === undefined || typeof c.unit === "string") && strings(c.targets)))) {
+    return err("crossChecked must be an array of backend comparisons");
+  }
+  return ok(raw);
+}
+// src/kernel/adapter/findings-values-parser.ts
+function parseFindingsValues(raw) {
+  const decoded = decodeFindingsDocument(raw);
+  if (!decoded.ok)
+    return decoded;
+  const doc = decoded.value;
+  const parsed = combineResults({
+    backend: BackendName.parse(doc.backend),
+    irVersion: IntermediateRepresentationVersion.parse(doc.irVersion),
+    irHash: ContentHash.parse(doc.irHash),
+    method: VerificationMethod.parse(doc.method),
+    findings: traverseResult(doc.findings, (entry) => {
+      const fields = combineResults({
+        kind: FindingKind.parse(entry.kind),
+        functionalRequirementReferences: flatMapResult(traverseResult(entry.frRefs, RequirementIdentifier.parse), FunctionalRequirementReferences.parse),
+        targets: flatMapResult(traverseResult(entry.targets, TargetIdentifier.parse), (targets) => {
+          const [head, ...tail] = targets;
+          return head === undefined ? err({ kind: "empty-finding-targets" }) : FindingTargets.parse(head, tail);
+        }),
+        unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
+      });
+      if (!fields.ok)
+        return fields;
+      return ok({
+        ...fields.value,
+        functionalRequirementReferences: fields.value.functionalRequirementReferences,
+        targets: fields.value.targets,
+        witness: entry.witness,
+        detail: entry.detail
+      });
+    }),
+    skipped: traverseResult(doc.skipped, (entry) => {
+      const fields = combineResults({
+        target: TargetIdentifier.parse(entry.target),
+        reason: SkipReason.parse(entry.reason),
+        unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
+      });
+      if (!fields.ok)
+        return fields;
+      return ok({ ...fields.value, detail: entry.detail });
+    }),
+    inputs: doc.inputs === undefined ? ok(undefined) : traverseResult(doc.inputs, (entry) => combineResults({
+      artifact: ArtifactPath.parse(entry.artifact),
+      sha256: ContentHash.parse(entry.sha256)
+    })),
+    crossChecked: doc.crossChecked === undefined ? ok(undefined) : traverseResult(doc.crossChecked, (entry) => {
+      const fields = combineResults({
+        backend: BackendName.parse(entry.backend),
+        unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit),
+        targets: flatMapResult(traverseResult(entry.targets, TargetIdentifier.parse), TargetIdentifiers.parse)
+      });
+      if (!fields.ok)
+        return fields;
+      return ok({
+        backend: fields.value.backend,
+        unit: fields.value.unit,
+        targets: fields.value.targets
+      });
+    })
+  });
+  if (!parsed.ok)
+    return err(JSON.stringify(parsed.error));
+  return ok({ ...parsed.value, checked: doc.checked, unavailable: doc.unavailable });
+}
+// src/kernel/adapter/yaml.ts
+class YamlError extends Error {
+}
+function parseYamlSubset(src) {
+  const raw = src.split(`
+`);
+  const lines = [];
+  for (let i = 0;i < raw.length; i++) {
+    const expanded = (raw[i] ?? "").replace(/\t/g, "  ");
+    const trimmed = expanded.trim();
+    if (trimmed === "" || trimmed.startsWith("#"))
+      continue;
+    lines.push({ indent: expanded.length - expanded.trimStart().length, text: trimmed, n: i + 1 });
+  }
+  if (lines.length === 0)
+    return { value: null };
+  try {
+    const [value, next] = parseBlock(lines, 0, lines[0]?.indent ?? 0);
+    if (next < lines.length) {
+      throw new YamlError(`line ${lines[next]?.n}: content outside the top-level block`);
+    }
+    return { value };
+  } catch (err3) {
+    return { error: err3 instanceof Error ? err3.message : String(err3) };
+  }
+}
+function parseBlock(lines, start, indent) {
+  const first = lines[start];
+  if (!first)
+    return [null, start];
+  if (first.text === "-" || first.text.startsWith("- ")) {
+    return parseSequence(lines, start, indent);
+  }
+  return parseMapping(lines, start, indent);
+}
+function parseSequence(lines, start, indent) {
+  const out = [];
+  let i = start;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line || line.indent !== indent || !(line.text === "-" || line.text.startsWith("- ")))
+      break;
+    const rest = line.text === "-" ? "" : line.text.slice(2).trim();
+    if (rest === "") {
+      const next = lines[i + 1];
+      if (next && next.indent > indent) {
+        const [child, ni] = parseBlock(lines, i + 1, next.indent);
+        out.push(child);
+        i = ni;
+      } else {
+        out.push(null);
+        i++;
+      }
+      continue;
+    }
+    if (isMappingEntry(rest)) {
+      const virtual = { indent: indent + 2, text: rest, n: line.n };
+      const sub = [virtual];
+      let j = i + 1;
+      while (j < lines.length && (lines[j]?.indent ?? 0) > indent) {
+        sub.push(lines[j]);
+        j++;
+      }
+      const [child] = parseMapping(sub, 0, indent + 2);
+      out.push(child);
+      i = j;
+      continue;
+    }
+    out.push(parseScalar(rest, line.n));
+    i++;
+  }
+  return [out, i];
+}
+function isMappingEntry(text) {
+  if (text.startsWith("[") || text.startsWith("'") || text.startsWith('"'))
+    return false;
+  return /^[^:]+:(\s|$)/.test(text);
+}
+function parseMapping(lines, start, indent) {
+  const entries = [];
+  let i = start;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line || line.indent !== indent)
+      break;
+    if (line.text === "-" || line.text.startsWith("- "))
+      break;
+    const m = line.text.match(/^([^:]+):(?:\s+(.*))?$/);
+    if (!m)
+      throw new YamlError(`line ${line.n}: not a mapping entry: "${line.text}"`);
+    const key = unquote((m[1] ?? "").trim());
+    const valPart = (m[2] ?? "").trim();
+    if (valPart === "") {
+      const next = lines[i + 1];
+      if (next && next.indent > indent) {
+        const [child, ni] = parseBlock(lines, i + 1, next.indent);
+        entries.push([key, child]);
+        i = ni;
+      } else {
+        entries.push([key, null]);
+        i++;
+      }
+      continue;
+    }
+    if (/^[>|][+-]?$/.test(valPart)) {
+      const parts = [];
+      let j = i + 1;
+      while (j < lines.length && (lines[j]?.indent ?? 0) > indent) {
+        parts.push(lines[j]?.text ?? "");
+        j++;
+      }
+      entries.push([key, parts.join(valPart.startsWith(">") ? " " : `
+`)]);
+      i = j;
+      continue;
+    }
+    entries.push([key, parseScalar(valPart, line.n)]);
+    i++;
+  }
+  return [Object.fromEntries(entries), i];
+}
+function unquote(s) {
+  if (s.startsWith('"') && s.endsWith('"') || s.startsWith("'") && s.endsWith("'")) {
+    return s.slice(1, -1);
+  }
+  return s;
+}
+function parseScalar(s, lineNo) {
+  let v = s;
+  if (v.startsWith("&") || v.startsWith("*") || v.startsWith("!")) {
+    throw new YamlError(`line ${lineNo}: unsupported YAML feature (anchor/alias/tag): "${v}"`);
+  }
+  if (v.startsWith("{")) {
+    throw new YamlError(`line ${lineNo}: unsupported YAML feature (flow mapping): "${v}"`);
+  }
+  if (v.startsWith('"') || v.startsWith("'")) {
+    const quote = v[0];
+    const close = v.indexOf(quote, 1);
+    if (close > 0)
+      return v.slice(1, close);
+    throw new YamlError(`line ${lineNo}: unterminated quoted scalar: "${v}"`);
+  }
+  const hash = v.indexOf(" #");
+  if (hash >= 0)
+    v = v.slice(0, hash).trim();
+  if (v.startsWith("[")) {
+    if (!v.endsWith("]"))
+      throw new YamlError(`line ${lineNo}: unterminated inline sequence: "${v}"`);
+    const inner = v.slice(1, -1).trim();
+    if (inner === "")
+      return [];
+    return inner.split(",").map((item) => parseScalar(item.trim(), lineNo));
+  }
+  if (v === "true")
+    return true;
+  if (v === "false")
+    return false;
+  if (v === "null" || v === "~")
+    return null;
+  if (/^-?[0-9]+$/.test(v))
+    return Number.parseInt(v, 10);
+  if (/^-?[0-9]+\.[0-9]+$/.test(v))
+    return Number.parseFloat(v);
+  return v;
+}
+// src/doctor/adapter/backend-evidence-reader.ts
+var BACKENDS = ["smt.json", "quint.json"];
+function readBackendEvidence(directory) {
+  const listing = readDirectory(directory);
+  if (!listing.ok)
+    return listing.error.kind === "not-found" ? ok([]) : err(listing.error);
+  const names = new Set(listing.value.map((entry) => entry.name));
+  const evidence = [];
+  for (const backend of BACKENDS) {
+    if (!names.has(backend))
+      continue;
+    const path = join2(directory, backend);
+    const read = readArtifactText(path);
+    if (!read.ok)
+      return err(read.error);
+    let raw;
+    try {
+      raw = JSON.parse(read.value);
+    } catch (error) {
+      return err({ kind: "corrupt", path, cause: error instanceof Error ? error.message : String(error) });
+    }
+    const parsed = parseFindingsValues(raw);
+    if (!parsed.ok)
+      return err({ kind: "corrupt", path, cause: parsed.error });
+    if (parsed.value.backend.asString() !== backend.slice(0, -5))
+      return err({ kind: "corrupt", path, cause: "findings backend does not match its filename" });
+    const unavailable = parsed.value.unavailable === undefined ? null : ErrorMessage.parse(parsed.value.unavailable.reason);
+    if (unavailable !== null && !unavailable.ok)
+      return err({ kind: "corrupt", path, cause: JSON.stringify(unavailable.error) });
+    const checkedUnits = [];
+    for (const checked of parsed.value.checked ?? []) {
+      const target = TargetIdentifier.parse(checked);
+      if (!target.ok || !checked.startsWith("unit:"))
+        return err({
+          kind: "corrupt",
+          path,
+          cause: JSON.stringify(target.ok ? { kind: "checked-unit-prefix" } : target.error)
+        });
+      const unit = UnitName.parse(checked.slice("unit:".length));
+      if (!unit.ok)
+        return err({ kind: "corrupt", path, cause: JSON.stringify(unit.error) });
+      checkedUnits.push(unit.value);
+    }
+    const built = VerificationEvidence.parse({
+      irHash: parsed.value.irHash,
+      unavailable: unavailable === null ? null : unavailable.value,
+      skippedReasons: parsed.value.skipped.map((entry) => entry.reason),
+      checkedUnits
+    });
+    if (!built.ok)
+      return err({ kind: "corrupt", path, cause: JSON.stringify(built.error) });
+    evidence.push(built.value);
+  }
+  return ok(Object.freeze(evidence));
+}
 // src/doctor/adapter/doctor-presenter.ts
 class DoctorPresenter {
   #harnessDir;
   constructor(config) {
     this.#harnessDir = config.harnessDir;
   }
-  installation(statuses) {
-    return statuses.map((s) => Check.of({
+  installation(result) {
+    if (!result.ok)
+      return [this.#acquisitionFailure("installation manifest", result.error, CheckSeverity.error())];
+    return result.value.map((s) => Check.of({
       pass: s.isPresent(),
       label: `deep-spec-analysis: ${s.entry().rel()} installed`,
       fix: `Run \`bun ${this.#harnessDir}/tools/aidlc-utility.ts plugin-sync\` (or re-run the plugin's \`hooks/compose.ts\`).`,
@@ -2882,7 +3533,10 @@ class DoctorPresenter {
       })
     });
   }
-  solvers(availability) {
+  solvers(result) {
+    if (!result.ok)
+      return [this.#acquisitionFailure("solver availability", result.error)];
+    const availability = result.value;
     return [
       Check.of({
         pass: availability.hasZ3Package(),
@@ -2910,7 +3564,10 @@ class DoctorPresenter {
       })
     ];
   }
-  verificationCoverage(assessment) {
+  verificationCoverage(result) {
+    if (!result.ok)
+      return [this.#acquisitionFailure("verification coverage", result.error)];
+    const assessment = result.value;
     const rows = assessment.problems().map((row) => {
       const noun = row.problemState()?.match({
         unverified: () => "has requirements with no deep-spec verification",
@@ -2931,16 +3588,23 @@ class DoctorPresenter {
     }));
     return rows;
   }
-  structuralDebt(debt) {
+  structuralDebt(result) {
+    if (!result.ok)
+      return [this.#acquisitionFailure("design refcheck", result.error)];
+    const debt = result.value;
     const rows = debt.rows().map((row) => Check.of({
       pass: false,
-      label: `deep-spec-analysis: ${row.artifact().location().space().asString()}/${row.artifact().location().intent().asString()} ${row.artifact().relativePath().asString()} has ${row.findingCount()} reference-integrity finding(s)`,
+      label: `deep-spec-analysis: ${row.artifact().location().space().asString()}/${row.artifact().location().intent().asString()} ${row.artifact().relativePath().asString()} ${row.match({
+        complete: (findings) => `has ${findings.asNumber()} reference-integrity finding(s)`,
+        partial: (findings, reason) => `has ${findings.asNumber()} reference-integrity finding(s); inspection incomplete (${reason.asString()})`,
+        unavailable: (reason) => `could not be inspected (${reason.asString()})`
+      })}`,
       fix: "Open the artifact and fix (or record as an accepted risk) each finding; " + "the deep-spec-refcheck sensors re-check on every write and write the detail next to the artifact under deep-spec-refcheck/.",
       severity: CheckSeverity.advisory()
     }));
     if (debt.hasScans()) {
       rows.push(Check.of({
-        pass: debt.totalFindings() === 0,
+        pass: debt.isComplete() && debt.totalFindings() === 0,
         label: `deep-spec-analysis: design refcheck \u2014 ${debt.totalFindings()} structural finding(s) across ${debt.scannedCount()} design artifact(s) scanned (report-only)`,
         fix: "See the per-artifact rows above.",
         severity: CheckSeverity.advisory()
@@ -2948,17 +3612,10 @@ class DoctorPresenter {
     }
     return rows;
   }
-  functionalCoverage(coverage) {
-    const unavailable = coverage.unavailableReason();
-    if (unavailable !== null)
-      return [
-        Check.of({
-          pass: false,
-          label: `deep-spec-analysis: design verification coverage unavailable \u2014 ${unavailable.asString()}`,
-          fix: "Reduce the workspace's functional-design scope and run the doctor again.",
-          severity: CheckSeverity.advisory()
-        })
-      ];
+  functionalCoverage(result) {
+    if (!result.ok)
+      return [this.#acquisitionFailure("design verification coverage", result.error)];
+    const coverage = result.value;
     const rows = coverage.refinementStale().map((row) => Check.of({
       pass: false,
       label: `deep-spec-analysis: intent ${row.space().asString()}/${row.intent().asString()} re-verified its requirements after the last design verification (refinement evidence is stale)`,
@@ -2993,15 +3650,66 @@ class DoctorPresenter {
     }
     return rows;
   }
+  #acquisitionFailure(subject, error, severity = CheckSeverity.advisory()) {
+    return Check.of({
+      pass: false,
+      label: `deep-spec-analysis: ${subject} unavailable \u2014 ${error.path}: ${error.kind}${"cause" in error ? ` (${error.cause})` : ""}`,
+      fix: "Restore the artifact or directory and its read permissions, then run the doctor again.",
+      severity
+    });
+  }
 }
 // src/doctor/adapter/doctor-workspace-client-implementation.ts
-import { existsSync, readdirSync, readFileSync, statSync } from "fs";
-import { join } from "path";
-function invalidUnitProblem(location, error) {
-  const detail = ErrorMessage.parse(JSON.stringify(error));
-  if (!detail.ok)
-    throw new Error(`defect: unit name diagnostic could not be represented (${detail.error.kind})`);
-  return UnitCoverageProblem.invalid(location, detail.value);
+import { join as join3 } from "path";
+function corrupt(path, cause) {
+  return { kind: "corrupt", path, cause };
+}
+function optionalText(path) {
+  const read = readArtifactText(path);
+  if (read.ok)
+    return read;
+  return read.error.kind === "not-found" ? ok(null) : read;
+}
+function optionalBytes(path) {
+  const read = readArtifactBytes(path);
+  if (read.ok)
+    return read;
+  return read.error.kind === "not-found" ? ok(null) : read;
+}
+function optionalStat(path) {
+  const read = readArtifactStat(path);
+  if (read.ok)
+    return read;
+  return read.error.kind === "not-found" ? ok(null) : read;
+}
+function optionalDirectory(path) {
+  const read = readDirectory(path);
+  if (read.ok)
+    return read;
+  return read.error.kind === "not-found" ? ok([]) : read;
+}
+function modelDocument(text, path) {
+  const fences = extractFences(text, "json");
+  if (fences.length !== 1)
+    return err(corrupt(path, "model must contain exactly one JSON fence"));
+  let value;
+  try {
+    value = JSON.parse(fences[0].body);
+  } catch (cause) {
+    if (!(cause instanceof SyntaxError))
+      throw cause;
+    return err(corrupt(path, cause.message));
+  }
+  return isObject(value) ? ok(value) : err(corrupt(path, "model must be a JSON object"));
+}
+function locationOf(space, intent, path) {
+  const parsedSpace = ArtifactPath.parse(space);
+  const parsedIntent = ArtifactPath.parse(intent);
+  if (!parsedSpace.ok)
+    return err(corrupt(path, JSON.stringify(parsedSpace.error)));
+  if (!parsedIntent.ok)
+    return err(corrupt(path, JSON.stringify(parsedIntent.error)));
+  return ok(IntentLocation.of(parsedSpace.value, parsedIntent.value));
 }
 
 class DoctorWorkspaceClientImplementation {
@@ -3014,258 +3722,294 @@ class DoctorWorkspaceClientImplementation {
     this.#refcheckToolNames = config.refcheckToolNames;
   }
   static #FALLBACK_STAGE_SCOPES = StageScopes.of([StageScope.of("enterprise"), StageScope.of("feature")]);
-  #scopesOfStage(...stagePath) {
-    const stageFile = join(this.#root, "aidlc-common", "stages", ...stagePath);
-    let items = null;
-    try {
-      const frontmatter = readFileSync(stageFile, "utf-8").split(`
+  #scopesOfStage(phase, name) {
+    const path = join3(this.#root, "aidlc-common", "stages", phase, name);
+    const read = optionalText(path);
+    if (!read.ok)
+      return read;
+    if (read.value === null)
+      return ok(DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES);
+    const frontmatter = read.value.split(`
 ---`)[0];
-      const m = frontmatter.match(/^scopes:\n((?:\s+- .+\n)+)/m);
-      items = m?.[1]?.match(/- (\S+)/g)?.map((item) => item.slice(2)) ?? null;
-    } catch {}
-    if (items === null)
-      return DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES;
-    const scopes = [];
-    for (const item of items) {
-      const parsed2 = StageScope.parse(item);
-      if (!parsed2.ok)
-        return DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES;
-      scopes.push(parsed2.value);
+    const lines = frontmatter.split(`
+`);
+    const indexes = lines.flatMap((line, index) => /^scopes\s*:/.test(line) ? [index] : []);
+    if (indexes.length === 0)
+      return ok(DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES);
+    if (indexes.length !== 1)
+      return err(corrupt(path, "stage scopes are duplicated"));
+    const start = indexes[0];
+    const section = [lines[start]];
+    for (let index = start + 1;index < lines.length && /^(?:\s|#|$)/.test(lines[index]); index++)
+      section.push(lines[index]);
+    const parsedYaml = parseYamlSubset(section.join(`
+`));
+    if (parsedYaml.error !== undefined)
+      return err(corrupt(path, parsedYaml.error));
+    if (parsedYaml.value === undefined || !isObject(parsedYaml.value) || !Array.isArray(parsedYaml.value.scopes))
+      return err(corrupt(path, "stage scopes must be a list"));
+    const values = [];
+    for (const item of parsedYaml.value.scopes) {
+      if (typeof item !== "string")
+        return err(corrupt(path, "stage scope must be a string"));
+      const scope = StageScope.parse(item);
+      if (!scope.ok)
+        return err(corrupt(path, JSON.stringify(scope.error)));
+      values.push(scope.value);
     }
-    const parsed = StageScopes.parse(scopes);
-    return parsed.ok ? parsed.value : DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES;
+    const parsed = StageScopes.parse(values);
+    return parsed.ok ? parsed : err(corrupt(path, JSON.stringify(parsed.error)));
   }
-  #verificationScopes() {
-    return this.#scopesOfStage("inception", "deep-spec-analysis-verify.md");
-  }
-  #functionalScopes() {
-    return this.#scopesOfStage("construction", "deep-spec-analysis-functional-verify.md");
-  }
-  #spaces() {
-    try {
-      return readdirSync(join(this.#projectDir, "aidlc", "spaces"), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
-    } catch {
-      return [];
+  #records() {
+    const spacesPath = join3(this.#projectDir, "aidlc", "spaces");
+    const spaces = optionalDirectory(spacesPath);
+    if (!spaces.ok)
+      return spaces;
+    const records = [];
+    for (const space of spaces.value) {
+      if (!space.isDirectory())
+        continue;
+      const intents = optionalDirectory(join3(spacesPath, space.name, "intents"));
+      if (!intents.ok)
+        return intents;
+      for (const intent of intents.value) {
+        if (!intent.isDirectory() || intent.name.startsWith("."))
+          continue;
+        const path = join3(spacesPath, space.name, "intents", intent.name);
+        const location = locationOf(space.name, intent.name, path);
+        if (!location.ok)
+          return location;
+        records.push({ path, location: location.value });
+      }
     }
-  }
-  #intents(space) {
-    try {
-      return readdirSync(join(this.#projectDir, "aidlc", "spaces", space, "intents"), { withFileTypes: true }).filter((e) => e.isDirectory() && !e.name.startsWith(".")).map((e) => e.name);
-    } catch {
-      return [];
-    }
-  }
-  #record(space, intent) {
-    return join(this.#projectDir, "aidlc", "spaces", space, "intents", intent);
+    return ok(records);
   }
   #scopeOf(record) {
-    let state = "";
-    try {
-      state = readFileSync(join(record, "aidlc-state.md"), "utf-8");
-    } catch {
-      return null;
-    }
-    return state.match(/^- \*\*Scope\*\*: (\S+)/m)?.[1] ?? null;
+    const path = join3(record, "aidlc-state.md");
+    const state = readArtifactText(path);
+    if (!state.ok)
+      return state;
+    const scope = state.value.match(/^- \*\*Scope\*\*: (\S+)/m)?.[1];
+    if (scope === undefined)
+      return err(corrupt(path, "intent scope is missing"));
+    const parsed = StageScope.parse(scope);
+    return parsed.ok ? parsed : err(corrupt(path, JSON.stringify(parsed.error)));
   }
   verificationCoverage() {
-    const scopes = this.#verificationScopes();
-    const out = [];
-    for (const space of this.#spaces()) {
-      for (const intent of this.#intents(space)) {
-        const record = this.#record(space, intent);
-        const scope = this.#scopeOf(record);
-        if (!scope)
-          continue;
-        const parsedScope = StageScope.parse(scope);
-        if (!parsedScope.ok || !scopes.include(parsedScope.value))
-          continue;
-        const requirements = join(record, "inception", "requirements-analysis", "requirements.md");
-        if (!existsSync(requirements))
-          continue;
-        const model = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
-        const verifyDir = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-verify");
-        let hasFindings = false;
-        try {
-          hasFindings = readdirSync(verifyDir).some((f) => f.endsWith(".json"));
-        } catch {
-          hasFindings = false;
+    const scopes = this.#scopesOfStage("inception", "deep-spec-analysis-verify.md");
+    if (!scopes.ok)
+      return scopes;
+    const records = this.#records();
+    if (!records.ok)
+      return records;
+    const observations = [];
+    for (const { path: record, location } of records.value) {
+      const scope = this.#scopeOf(record);
+      if (!scope.ok)
+        return scope;
+      if (!scopes.value.include(scope.value))
+        continue;
+      const requirementsPath = join3(record, "inception", "requirements-analysis", "requirements.md");
+      const requirements = optionalBytes(requirementsPath);
+      if (!requirements.ok)
+        return requirements;
+      if (requirements.value === null)
+        continue;
+      const modelPath = join3(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
+      const model = optionalText(modelPath);
+      if (!model.ok)
+        return model;
+      let anchor = null;
+      let hasFindings = false;
+      if (model.value !== null) {
+        const document = modelDocument(model.value, modelPath);
+        if (!document.ok)
+          return document;
+        if (document.value.sourceDigest !== undefined) {
+          if (typeof document.value.sourceDigest !== "string")
+            return err(corrupt(modelPath, "sourceDigest must be a string"));
+          const digest = ContentHash.parse(document.value.sourceDigest);
+          if (!digest.ok)
+            return err(corrupt(modelPath, JSON.stringify(digest.error)));
+          anchor = DigestAnchor.of(digest.value, ContentHash.ofBytes(requirements.value));
         }
-        const hasModel = existsSync(model);
-        if (!hasModel || !hasFindings) {
-          out.push(VerificationObservation.of({
-            location: IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent)),
-            hasModel,
-            hasFindings,
-            anchor: null
-          }));
-          continue;
-        }
-        const anchored = readFileSync(model, "utf-8").match(/```json\n([\s\S]*?)```/)?.[1]?.match(/"sourceDigest"\s*:\s*"([0-9a-f]{64})"/)?.[1];
-        out.push(VerificationObservation.of({
-          location: IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent)),
-          hasModel,
-          hasFindings,
-          anchor: anchored ? DigestAnchor.of(ContentHash.of(anchored), ContentHash.ofBytes(readFileSync(requirements))) : null
-        }));
+        const hash = ContentHash.ofText(canonicalStringify(document.value));
+        const evidence = readBackendEvidence(join3(record, "inception", "deep-spec-analysis-verify", "deep-spec-verify"));
+        if (!evidence.ok)
+          return evidence;
+        hasFindings = evidence.value.some((report) => report.countsFor(hash));
       }
+      observations.push(VerificationObservation.of({ location, hasModel: model.value !== null, hasFindings, anchor }));
     }
-    return CoverageAssessment.of(out, scopes);
+    const parsed = CoverageAssessment.parse(observations, scopes.value);
+    return parsed.ok ? parsed : err(corrupt(join3(this.#projectDir, "aidlc"), JSON.stringify(parsed.error)));
   }
   designArtifacts() {
-    const out = [];
-    for (const space of this.#spaces()) {
-      for (const intent of this.#intents(space)) {
-        const record = this.#record(space, intent);
-        const ref = (tool, artifactPath, label) => {
-          if (!existsSync(artifactPath))
-            return;
-          out.push(DesignArtifactReference.of({
-            location: IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent)),
-            tool: ArtifactPath.of(tool),
-            artifactPath: ArtifactPath.of(artifactPath),
-            relativePath: ArtifactPath.of(label)
-          }));
-        };
-        ref(this.#refcheckToolNames.domain, join(record, "inception", "domain-design", "components.md"), "inception/domain-design/components.md");
-        ref(this.#refcheckToolNames.contract, join(record, "inception", "contract-design", "contract-summary.md"), "inception/contract-design/contract-summary.md");
-        const constructionDir = join(record, "construction");
-        let units = [];
-        try {
-          units = readdirSync(constructionDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
-        } catch {
-          units = [];
-        }
-        for (const unit of units) {
-          const fdDir = join(constructionDir, unit, "functional-design");
-          const trigger = ["entities.md", "rules.md", "functional-spec.md"].map((f) => join(fdDir, f)).find((p) => existsSync(p));
-          if (trigger !== undefined) {
-            ref(this.#refcheckToolNames.functional, trigger, `construction/${unit}/functional-design`);
-          }
+    const records = this.#records();
+    if (!records.ok)
+      return records;
+    const values = [];
+    for (const { path: record, location } of records.value) {
+      const append = (tool, path, label) => {
+        const present = optionalStat(path);
+        if (!present.ok)
+          return present;
+        if (present.value === null)
+          return ok(undefined);
+        const parsedPath = ArtifactPath.parse(path);
+        if (!parsedPath.ok)
+          return err(corrupt(path, JSON.stringify(parsedPath.error)));
+        values.push(DesignArtifactReference.of({
+          location,
+          tool: ArtifactPath.of(tool),
+          artifactPath: parsedPath.value,
+          relativePath: ArtifactPath.of(label)
+        }));
+        return ok(undefined);
+      };
+      for (const [tool, label] of [
+        [this.#refcheckToolNames.domain, "inception/domain-design/components.md"],
+        [this.#refcheckToolNames.contract, "inception/contract-design/contract-summary.md"]
+      ]) {
+        const appended = append(tool, join3(record, label), label);
+        if (!appended.ok)
+          return appended;
+      }
+      const construction = join3(record, "construction");
+      const units = optionalDirectory(construction);
+      if (!units.ok)
+        return units;
+      for (const unit of [...units.value].filter((entry) => entry.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
+        const directory = join3(construction, unit.name, "functional-design");
+        for (const name of ["entities.md", "rules.md", "functional-spec.md"]) {
+          const path = join3(directory, name);
+          const found = optionalStat(path);
+          if (!found.ok)
+            return found;
+          if (found.value === null)
+            continue;
+          const appended = append(this.#refcheckToolNames.functional, path, `construction/${unit.name}/functional-design`);
+          if (!appended.ok)
+            return appended;
+          break;
         }
       }
     }
-    return DesignArtifacts.of(out);
+    const parsed = DesignArtifacts.parse(values);
+    return parsed.ok ? parsed : err(corrupt(join3(this.#projectDir, "aidlc"), JSON.stringify(parsed.error)));
   }
   functionalCoverage() {
-    const scopes = this.#functionalScopes();
-    const out = [];
+    const scopes = this.#scopesOfStage("construction", "deep-spec-analysis-functional-verify.md");
+    if (!scopes.ok)
+      return scopes;
+    const records = this.#records();
+    if (!records.ok)
+      return records;
+    const observations = [];
     const invalidUnits = [];
-    for (const space of this.#spaces()) {
-      for (const intent of this.#intents(space)) {
-        const record = this.#record(space, intent);
-        const scope = this.#scopeOf(record);
-        if (!scope)
+    for (const { path: record, location } of records.value) {
+      const scope = this.#scopeOf(record);
+      if (!scope.ok)
+        return scope;
+      if (!scopes.value.include(scope.value))
+        continue;
+      const construction = join3(record, "construction");
+      const listed = optionalDirectory(construction);
+      if (!listed.ok)
+        return listed;
+      const units = [];
+      for (const unit of [...listed.value].filter((entry) => entry.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
+        const directory = join3(construction, unit.name, "functional-design");
+        const present = optionalStat(directory);
+        if (!present.ok)
+          return present;
+        if (present.value === null)
           continue;
-        const parsedScope = StageScope.parse(scope);
-        if (!parsedScope.ok || !scopes.include(parsedScope.value))
+        if (!present.value.isDirectory())
+          return err(corrupt(directory, "functional-design must be a directory"));
+        const name = UnitName.parse(unit.name);
+        if (!name.ok) {
+          const message = ErrorMessage.parse(JSON.stringify(name.error));
+          if (!message.ok)
+            return err(corrupt(directory, JSON.stringify(message.error)));
+          invalidUnits.push(UnitCoverageProblem.invalid(location, message.value));
           continue;
-        const constructionDir = join(record, "construction");
-        let unitDirs = [];
-        try {
-          unitDirs = readdirSync(constructionDir, { withFileTypes: true }).filter((e) => e.isDirectory() && existsSync(join(constructionDir, e.name, "functional-design"))).map((e) => e.name).sort();
-        } catch {
-          continue;
         }
-        if (unitDirs.length === 0)
-          continue;
-        const stageDir = join(constructionDir, "deep-spec-analysis-functional-verify");
-        const modelPath = join(stageDir, "deep-spec-analysis-functional-formal-model.md");
-        let modelUnits = [];
-        let modelMtime = null;
-        const completedUnits = new Set;
-        let hasFindings = false;
-        if (existsSync(modelPath)) {
-          try {
-            modelMtime = statSync(modelPath).mtimeMs;
-            const fence = readFileSync(modelPath, "utf-8").match(/```json\n([\s\S]*?)```/);
-            const ir = fence ? JSON.parse(fence[1] ?? "{}") : {};
-            for (const u of Array.isArray(ir.units) ? ir.units : []) {
-              if (u && typeof u.unit === "string")
-                modelUnits.push(u.unit);
-            }
-          } catch {
-            modelUnits = [];
-          }
-          try {
-            const verifyDir = join(stageDir, "deep-spec-design-verify");
-            for (const f of readdirSync(verifyDir)) {
-              if (!f.endsWith(".json") || f === "cross-check.json")
-                continue;
-              try {
-                const doc = JSON.parse(readFileSync(join(verifyDir, f), "utf-8"));
-                if (doc && typeof doc === "object" && !doc.unavailable) {
-                  hasFindings = true;
-                  for (const t of Array.isArray(doc.checked) ? doc.checked : []) {
-                    if (typeof t === "string" && t.startsWith("unit:"))
-                      completedUnits.add(t.slice(5));
-                  }
-                }
-              } catch {}
-            }
-          } catch {
-            hasFindings = false;
-          }
+        let newest = 0;
+        for (const filename of ["entities.md", "rules.md", "functional-spec.md"]) {
+          const modified3 = optionalStat(join3(directory, filename));
+          if (!modified3.ok)
+            return modified3;
+          if (modified3.value !== null && !modified3.value.isFile())
+            return err(corrupt(join3(directory, filename), "functional-design artifact must be a file"));
+          if (modified3.value !== null)
+            newest = Math.max(newest, modified3.value.mtimeMs);
         }
-        const location = IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent));
-        const units = [];
-        for (const unit of unitDirs) {
-          const fdDir = join(constructionDir, unit, "functional-design");
-          let newest = 0;
-          for (const f of ["entities.md", "rules.md", "functional-spec.md"]) {
-            const p = join(fdDir, f);
-            if (existsSync(p))
-              newest = Math.max(newest, statSync(p).mtimeMs);
-          }
-          const parsedUnit = UnitName.parse(unit);
-          if (!parsedUnit.ok) {
-            invalidUnits.push(invalidUnitProblem(location, parsedUnit.error));
-            continue;
-          }
-          units.push(FunctionalUnitObservation.of(parsedUnit.value, ArtifactModifiedAt.of(newest)));
-        }
-        const reqModel = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
-        const modelUnitValues = [];
-        for (const name of modelUnits) {
-          const parsed = UnitName.parse(name);
-          if (parsed.ok)
-            modelUnitValues.push(parsed.value);
-          else
-            invalidUnits.push(invalidUnitProblem(location, parsed.error));
-        }
-        const completedUnitValues = [];
-        for (const name of completedUnits) {
-          const parsed = UnitName.parse(name);
-          if (parsed.ok)
-            completedUnitValues.push(parsed.value);
-          else
-            invalidUnits.push(invalidUnitProblem(location, parsed.error));
-        }
-        const observation = FunctionalObservation.parse({
-          location,
-          units,
-          modelModifiedAt: modelMtime === null ? null : ArtifactModifiedAt.of(modelMtime),
-          modelUnits: modelUnitValues,
-          completedUnits: completedUnitValues,
-          hasFindings,
-          requirementsModelModifiedAt: existsSync(reqModel) ? ArtifactModifiedAt.of(statSync(reqModel).mtimeMs) : null
-        });
-        if (observation.ok)
-          out.push(observation.value);
-        else {
-          const detail2 = ErrorMessage.parse(`functional observation is unusable: ${observation.error.kind}`);
-          if (!detail2.ok)
-            throw new Error(`defect: observation diagnostic could not be represented (${detail2.error.kind})`);
-          return UnitCoverage.unavailable(scopes, detail2.value);
-        }
+        const modified2 = ArtifactModifiedAt.parse(newest);
+        if (!modified2.ok)
+          return err(corrupt(directory, JSON.stringify(modified2.error)));
+        units.push(FunctionalUnitObservation.of(name.value, modified2.value));
       }
+      if (units.length === 0)
+        continue;
+      const stage = join3(construction, "deep-spec-analysis-functional-verify");
+      const modelPath = join3(stage, "deep-spec-analysis-functional-formal-model.md");
+      const model = optionalText(modelPath);
+      if (!model.ok)
+        return model;
+      const modelStat = optionalStat(modelPath);
+      if (!modelStat.ok)
+        return modelStat;
+      const modelUnits = [];
+      const completedUnits = [];
+      let hasFindings = false;
+      if (model.value !== null) {
+        const document = modelDocument(model.value, modelPath);
+        if (!document.ok)
+          return document;
+        if (!Array.isArray(document.value.units))
+          return err(corrupt(modelPath, "design model units must be an array"));
+        for (const unit of document.value.units) {
+          if (!isObject(unit) || typeof unit.unit !== "string")
+            return err(corrupt(modelPath, "design model unit name is missing"));
+          const name = UnitName.parse(unit.unit);
+          if (!name.ok)
+            return err(corrupt(modelPath, JSON.stringify(name.error)));
+          modelUnits.push(name.value);
+        }
+        const hash = ContentHash.ofText(canonicalStringify(document.value));
+        const evidence = readBackendEvidence(join3(stage, "deep-spec-design-verify"));
+        if (!evidence.ok)
+          return evidence;
+        hasFindings = evidence.value.some((report) => report.countsFor(hash));
+        for (const report of evidence.value)
+          completedUnits.push(...report.completedUnitsFor(hash));
+      }
+      const requirementsPath = join3(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
+      const requirementsStat = optionalStat(requirementsPath);
+      if (!requirementsStat.ok)
+        return requirementsStat;
+      const modified = modelStat.value === null ? ok(null) : ArtifactModifiedAt.parse(modelStat.value.mtimeMs);
+      if (!modified.ok)
+        return err(corrupt(modelPath, JSON.stringify(modified.error)));
+      const requirementsModified = requirementsStat.value === null ? ok(null) : ArtifactModifiedAt.parse(requirementsStat.value.mtimeMs);
+      if (!requirementsModified.ok)
+        return err(corrupt(requirementsPath, JSON.stringify(requirementsModified.error)));
+      const observation = FunctionalObservation.parse({
+        location,
+        units,
+        modelModifiedAt: modified.value,
+        modelUnits,
+        completedUnits,
+        hasFindings,
+        requirementsModelModifiedAt: requirementsModified.value
+      });
+      if (!observation.ok)
+        return err(corrupt(record, JSON.stringify(observation.error)));
+      observations.push(observation.value);
     }
-    const coverage = UnitCoverage.parse(out, scopes, invalidUnits);
-    if (coverage.ok)
-      return coverage.value;
-    const detail = ErrorMessage.parse(`functional coverage is unusable: ${coverage.error.kind}`);
-    if (!detail.ok)
-      throw new Error(`defect: coverage diagnostic could not be represented (${detail.error.kind})`);
-    return UnitCoverage.unavailable(scopes, detail.value);
+    const parsed = UnitCoverage.parse(observations, scopes.value, invalidUnits);
+    return parsed.ok ? parsed : err(corrupt(join3(this.#projectDir, "aidlc"), JSON.stringify(parsed.error)));
   }
 }
 // src/doctor/adapter/git-hub-release-tags-client-implementation.ts
@@ -3323,33 +4067,40 @@ class GitHubReleaseTagsClientImplementation {
   }
 }
 // src/doctor/adapter/harness-file-client-implementation.ts
-import { existsSync as existsSync2 } from "fs";
-import { join as join2 } from "path";
-
+import { join as join4 } from "path";
 class HarnessFileClientImplementation {
   #root;
   constructor(config) {
     this.#root = config.root;
   }
   isInstalled(entry) {
-    return existsSync2(join2(this.#root, entry.rel()));
+    const stat = readArtifactStat(join4(this.#root, entry.rel()));
+    if (!stat.ok)
+      return stat.error.kind === "not-found" ? ok(false) : stat;
+    return ok(stat.value.isFile());
   }
 }
 // src/doctor/adapter/installation-provenance-client-implementation.ts
-import { existsSync as existsSync3, readFileSync as readFileSync2 } from "fs";
-import { join as join3 } from "path";
+import { join as join5 } from "path";
 class InstallationProvenanceClientImplementation {
   #path;
   constructor(config) {
-    this.#path = join3(config.harnessRoot, "tools", "data", "deep-spec-analysis-install.json");
+    this.#path = join5(config.harnessRoot, "tools", "data", "deep-spec-analysis-install.json");
   }
   read() {
-    if (!existsSync3(this.#path))
-      return InstallationProvenance.missing();
+    const read = readArtifactText(this.#path);
+    if (!read.ok) {
+      if (read.error.kind === "not-found")
+        return InstallationProvenance.missing();
+      const reason = ErrorMessage.parse(read.error.cause);
+      return InstallationProvenance.malformed(reason.ok ? reason.value : ErrorMessage.of("provenance read failure could not be represented"));
+    }
     let value;
     try {
-      value = JSON.parse(readFileSync2(this.#path, "utf-8"));
-    } catch {
+      value = JSON.parse(read.value);
+    } catch (error) {
+      if (!(error instanceof SyntaxError))
+        throw error;
       return InstallationProvenance.malformed(ErrorMessage.of("file is not readable JSON"));
     }
     if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -3371,45 +4122,63 @@ class InstallationProvenanceClientImplementation {
 }
 // src/doctor/adapter/reference-check-backend-client-implementation.ts
 import { spawnSync } from "child_process";
-import { existsSync as existsSync4 } from "fs";
-import { join as join4 } from "path";
+import { join as join6 } from "path";
 class ReferenceCheckBackendClientImplementation {
   #root;
   constructor(config) {
     this.#root = config.root;
   }
   observe(artifact) {
-    const findings = this.#readFindings(artifact);
-    if (findings === null)
-      return StructuralObservation.of(artifact, null);
-    const parsed = FindingCount.parse(findings);
-    return StructuralObservation.of(artifact, parsed.ok ? parsed.value : null);
+    const script = join6(this.#root, "tools", artifact.tool().asString());
+    const scriptStat = readArtifactStat(script);
+    if (!scriptStat.ok)
+      return StructuralObservation.unavailable(artifact, this.#error(scriptStat.error));
+    const result = spawnSync("bun", [script, "--stage", "doctor", "--output-path", artifact.artifactPath().asString(), "--report-only"], { encoding: "utf-8", timeout: 15000 });
+    if (result.error)
+      return StructuralObservation.unavailable(artifact, this.#message(String(result.error)));
+    if (result.status !== 0)
+      return StructuralObservation.unavailable(artifact, this.#message(`backend exited with status ${result.status}`));
+    const verdict = this.#parseVerdict(result.stdout ?? "");
+    if (!verdict.ok)
+      return StructuralObservation.unavailable(artifact, this.#message(verdict.error));
+    if (!verdict.value.pass && verdict.value.findingsCount === 0)
+      return StructuralObservation.unavailable(artifact, this.#message("backend returned a failed zero-finding verdict"));
+    const findings = FindingCount.parse(verdict.value.findingsCount);
+    if (!findings.ok)
+      return StructuralObservation.unavailable(artifact, this.#message(JSON.stringify(findings.error)));
+    if (verdict.value.skippedCount > 0)
+      return StructuralObservation.partial(artifact, findings.value, this.#message("backend skipped one or more checks"));
+    return StructuralObservation.of(artifact, findings.value);
   }
-  #readFindings(artifact) {
-    const script = join4(this.#root, "tools", artifact.tool().asString());
-    if (!existsSync4(script))
-      return null;
-    const res = spawnSync("bun", [script, "--stage", "doctor", "--output-path", artifact.artifactPath().asString(), "--report-only"], {
-      encoding: "utf-8",
-      timeout: 15000
-    });
-    if (res.error || res.status !== 0)
-      return null;
+  #error(error) {
+    return this.#message("cause" in error ? `${error.kind}: ${error.cause}` : error.kind);
+  }
+  #parseVerdict(stdout) {
+    const line = stdout.trim().split(`
+`).pop() ?? "";
+    let raw;
     try {
-      const lines = (res.stdout ?? "").trim().split(`
-`);
-      const verdict = JSON.parse(lines[lines.length - 1] ?? "{}");
-      return typeof verdict.findings_count === "number" ? verdict.findings_count : null;
-    } catch {
-      return null;
+      raw = JSON.parse(line);
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
+    if (!isObject(raw) || raw.note === "not-applicable" || typeof raw.pass !== "boolean" || typeof raw.findings_count !== "number" || typeof raw.skipped_count !== "number" || !Number.isSafeInteger(raw.findings_count) || raw.findings_count < 0 || !Number.isSafeInteger(raw.skipped_count) || raw.skipped_count < 0)
+      return { ok: false, error: "backend verdict lacks valid checked pass/findings_count/skipped_count" };
+    return {
+      ok: true,
+      value: { pass: raw.pass, findingsCount: raw.findings_count, skippedCount: raw.skipped_count }
+    };
+  }
+  #message(raw) {
+    const parsed = ErrorMessage.parse(raw);
+    return parsed.ok ? parsed.value : ErrorMessage.of("reference-check backend failed");
   }
 }
 // src/doctor/adapter/solver-probe-client-implementation.ts
 import { spawnSync as spawnSync2 } from "child_process";
-import { existsSync as existsSync5, mkdtempSync, readdirSync as readdirSync2, rmSync, writeFileSync } from "fs";
+import { mkdtempSync, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
 import { tmpdir } from "os";
-import { join as join5 } from "path";
+import { join as join7 } from "path";
 function listenProbe(port) {
   return `const s=require("node:net").connect(${port},"127.0.0.1");` + "s.setTimeout(300);" + 's.on("connect",()=>{s.destroy();s.unref()});' + 's.on("timeout",()=>{s.destroy();throw new Error("no apalache server")});' + 's.on("error",()=>{throw new Error("no apalache server")});';
 }
@@ -3440,10 +4209,10 @@ class SolverProbeClientImplementation {
   #apalacheServerIsStale() {
     if (!this.#apalacheServerIsListening())
       return false;
-    const work = mkdtempSync(join5(tmpdir(), "deep-spec-doctor-probe-"));
+    const work = mkdtempSync(join7(tmpdir(), "deep-spec-doctor-probe-"));
     try {
-      const spec = join5(work, "probe.qnt");
-      writeFileSync(spec, PROBE_MODULE, "utf-8");
+      const spec = join7(work, "probe.qnt");
+      writeFileSync2(spec, PROBE_MODULE, "utf-8");
       const res = spawnSync2(this.#config.quintBin, ["verify", spec, "--main=probe", "--invariant=inv", "--max-steps=1"], {
         encoding: "utf-8",
         timeout: 30000,
@@ -3452,27 +4221,29 @@ class SolverProbeClientImplementation {
       });
       return Boolean(res.error) || res.status !== 0;
     } finally {
-      rmSync(work, { recursive: true, force: true });
+      rmSync2(work, { recursive: true, force: true });
     }
   }
   availability() {
     let apalacheDist = this.#config.apalacheDistDeclared;
     if (!apalacheDist) {
-      try {
-        apalacheDist = readdirSync2(join5(this.#config.homeDir, ".quint")).some((f) => f.startsWith("apalache-dist-"));
-      } catch {
-        apalacheDist = false;
-      }
+      const directory = readDirectory(join7(this.#config.homeDir, ".quint"));
+      if (!directory.ok && directory.error.kind !== "not-found")
+        return directory;
+      apalacheDist = directory.ok && directory.value.some((entry) => entry.isDirectory() && entry.name.startsWith("apalache-dist-"));
     }
     const quintCli = this.#probe(this.#config.quintBin, ["--version"]);
     const apalache = this.#probe("java", ["-version"]) && apalacheDist;
-    return SolverAvailability.of({
-      z3Package: existsSync5(join5(this.#config.projectDir, "node_modules", "z3-solver", "package.json")),
+    const packageStat = readArtifactStat(join7(this.#config.projectDir, "node_modules", "z3-solver", "package.json"));
+    if (!packageStat.ok && packageStat.error.kind !== "not-found")
+      return packageStat;
+    return ok(SolverAvailability.of({
+      z3Package: packageStat.ok && packageStat.value.isFile(),
       nodeRuntime: this.#probe("node", ["--version"]),
       quintCli,
       apalache,
       apalacheServerStale: apalache && quintCli && this.#apalacheServerIsStale()
-    });
+    }));
   }
 }
 // src/doctor/usecase/check-functional-coverage-usecase.ts
@@ -3492,11 +4263,7 @@ class CheckInstallationUseCase {
     this.#files = files;
   }
   execute() {
-    const out = [];
-    for (const entry of InstallationManifest.standard()) {
-      out.push(InstalledStatus.of(entry, this.#files.isInstalled(entry)));
-    }
-    return out;
+    return traverseResult([...InstallationManifest.standard()], (entry) => flatMapResult(this.#files.isInstalled(entry), (present) => ok(InstalledStatus.of(entry, present))));
   }
 }
 // src/doctor/usecase/check-solvers-usecase.ts
@@ -3518,10 +4285,15 @@ class CheckStructuralDebtUseCase {
     this.#backend = backend;
   }
   execute() {
-    const observations = [];
-    for (const artifact of this.#workspace.designArtifacts())
-      observations.push(this.#backend.observe(artifact));
-    return StructuralDebt.of(observations);
+    return matchResult(this.#workspace.designArtifacts(), {
+      err: (error) => err(error),
+      ok: (artifacts) => {
+        const observations = [];
+        for (const artifact of artifacts)
+          observations.push(this.#backend.observe(artifact));
+        return ok(StructuralDebt.of(observations));
+      }
+    });
   }
 }
 // src/doctor/usecase/check-verification-coverage-usecase.ts
@@ -3553,7 +4325,7 @@ class CheckVersionAdvisoryUseCase {
 async function main() {
   const projectDir = process.env.AIDLC_PROJECT_DIR || process.cwd();
   const harnessDir = process.env.AIDLC_HARNESS_DIR || ".claude";
-  const root = join6(projectDir, harnessDir);
+  const root = join8(projectDir, harnessDir);
   const presenter = new DoctorPresenter({ harnessDir });
   const workspace = new DoctorWorkspaceClientImplementation({
     projectDir,

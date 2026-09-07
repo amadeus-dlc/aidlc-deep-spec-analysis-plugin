@@ -1,7 +1,9 @@
 import { matchResult } from "@deep-spec-analysis/kernel-infrastructure";
+import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
 import {
   type FormalModelIdentifier,
   IntermediateRepresentationValidationMaterialsIdentifier,
+  type RequirementsSource,
 } from "@deep-spec-analysis/requirements-domain";
 import type { IntermediateRepresentationValidationMaterialsRepository } from "./port/intermediate-representation-validation-materials-repository.ts";
 import type { RequirementsSourceRepository } from "./port/requirements-source-repository.ts";
@@ -28,11 +30,17 @@ export class ValidateIntermediateRepresentationUseCase {
         ok: (materials) =>
           materials.validate<ValidateIntermediateRepresentationOutcome>({
             complete: (assessment) => ({ kind: "verdict", assessment }),
-            sourceRequired: (sourceId, validation) =>
-              matchResult(this.#sourceRepository.findById(sourceId), {
-                ok: (source) => ({ kind: "verdict", assessment: validation.assess(source) }),
-                err: () => ({ kind: "verdict", assessment: validation.assess(null) }),
-              }),
+            sourceRequired: (sourceId, validation): ValidateIntermediateRepresentationOutcome =>
+              matchResult<RequirementsSource, RepositoryError, ValidateIntermediateRepresentationOutcome>(
+                this.#sourceRepository.findById(sourceId),
+                {
+                  ok: (source) => ({ kind: "verdict", assessment: validation.assess(source) }),
+                  err: (error) =>
+                    error.kind === "not-found"
+                      ? { kind: "verdict", assessment: validation.assess(null) }
+                      : { kind: "acquisition-failed", error },
+                },
+              ),
           }),
       },
     );

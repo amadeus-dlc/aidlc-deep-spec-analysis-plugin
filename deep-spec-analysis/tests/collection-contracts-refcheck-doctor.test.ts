@@ -238,14 +238,14 @@ describe("doctorと索引のコレクション契約", () => {
   });
 
   test("StructuralDebtは問題や走査がゼロでも観測を持てば空ではない", () => {
-    const source = [StructuralObservation.of(artifact, null)];
+    const source = [StructuralObservation.unavailable(artifact, ErrorMessage.of("backend unavailable"))];
     const unscanned = StructuralDebt.of(source);
     source.length = 0;
     const clean = StructuralDebt.of([StructuralObservation.of(artifact, FindingCount.of(0))]);
     expect(StructuralDebt.of([]).isEmpty()).toBe(true);
     expect(unscanned.isEmpty()).toBe(false);
     expect(unscanned.hasScans()).toBe(false);
-    expect(unscanned.rows()).toHaveLength(0);
+    expect(unscanned.rows()).toHaveLength(1);
     expect(clean.isEmpty()).toBe(false);
     expect(clean.totalFindings()).toBe(0);
   });

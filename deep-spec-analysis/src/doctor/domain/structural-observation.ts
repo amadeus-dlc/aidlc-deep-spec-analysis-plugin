@@ -1,36 +1,73 @@
+import type { ErrorMessage } from "@deep-spec-analysis/kernel-domain";
 import type { DesignArtifactReference } from "./design-artifact-reference.ts";
 import type { FindingCount } from "./finding-count.ts";
 
-// 未計測は0件と区別し、走査済み母数に入れない。
+type StructuralObservationState =
+  | { readonly kind: "complete"; readonly findings: FindingCount }
+  | { readonly kind: "partial"; readonly findings: FindingCount; readonly reason: ErrorMessage }
+  | { readonly kind: "unavailable"; readonly reason: ErrorMessage };
+
 export class StructuralObservation {
   readonly #artifact: DesignArtifactReference;
-  readonly #findings: FindingCount | null;
-  private constructor(artifact: DesignArtifactReference, findings: FindingCount | null) {
+  readonly #state: StructuralObservationState;
+  private constructor(artifact: DesignArtifactReference, state: StructuralObservationState) {
     this.#artifact = artifact;
-    this.#findings = findings;
+    this.#state = state;
   }
-  static of(artifact: DesignArtifactReference, findings: FindingCount | null): StructuralObservation {
-    return new StructuralObservation(artifact, findings);
+
+  static of(artifact: DesignArtifactReference, findings: FindingCount): StructuralObservation {
+    return new StructuralObservation(artifact, { kind: "complete", findings });
   }
+
+  static partial(
+    artifact: DesignArtifactReference,
+    findings: FindingCount,
+    reason: ErrorMessage,
+  ): StructuralObservation {
+    return new StructuralObservation(artifact, { kind: "partial", findings, reason });
+  }
+
+  static unavailable(artifact: DesignArtifactReference, reason: ErrorMessage): StructuralObservation {
+    return new StructuralObservation(artifact, { kind: "unavailable", reason });
+  }
+
   wasScanned(): boolean {
-    return this.#findings !== null;
+    return this.#state.kind !== "unavailable";
   }
+
+  isComplete(): boolean {
+    return this.#state.kind === "complete";
+  }
+
   hasDebt(): boolean {
-    return this.#findings !== null && !this.#findings.isEmpty();
+    return this.#state.kind !== "unavailable" && !this.#state.findings.isEmpty();
   }
-  findingCount(): number {
-    return this.#findings?.asNumber() ?? 0;
-  }
+
   artifact(): DesignArtifactReference {
     return this.#artifact;
   }
 
+  match<T>(handlers: {
+    complete: (findings: FindingCount) => T;
+    partial: (findings: FindingCount, reason: ErrorMessage) => T;
+    unavailable: (reason: ErrorMessage) => T;
+  }): T {
+    if (this.#state.kind === "complete") return handlers.complete(this.#state.findings);
+    if (this.#state.kind === "partial") return handlers.partial(this.#state.findings, this.#state.reason);
+    return handlers.unavailable(this.#state.reason);
+  }
+
   equals(other: StructuralObservation): boolean {
-    return (
-      this.#artifact.equals(other.#artifact) &&
-      (this.#findings === null
-        ? other.#findings === null
-        : other.#findings !== null && this.#findings.asNumber() === other.#findings.asNumber())
-    );
+    if (!this.#artifact.equals(other.#artifact) || this.#state.kind !== other.#state.kind) return false;
+    if (this.#state.kind === "unavailable" && other.#state.kind === "unavailable")
+      return this.#state.reason.equals(other.#state.reason);
+    if (this.#state.kind === "complete" && other.#state.kind === "complete")
+      return this.#state.findings.asNumber() === other.#state.findings.asNumber();
+    if (this.#state.kind === "partial" && other.#state.kind === "partial")
+      return (
+        this.#state.findings.asNumber() === other.#state.findings.asNumber() &&
+        this.#state.reason.equals(other.#state.reason)
+      );
+    return false;
   }
 }

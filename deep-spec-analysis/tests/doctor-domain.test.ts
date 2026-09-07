@@ -44,7 +44,8 @@ import {
   CheckVerificationCoverageUseCase,
 } from "@deep-spec-analysis/doctor-usecase";
 import { ContentHash, ErrorMessage, UnitName } from "@deep-spec-analysis/kernel-domain";
-import { IllegalArgumentException } from "@deep-spec-analysis/kernel-infrastructure";
+import { canonicalStringify, err, IllegalArgumentException, ok } from "@deep-spec-analysis/kernel-infrastructure";
+import { requireSuccess } from "./result-fixtures.ts";
 
 const location = (intent: string) => IntentLocation.of(ArtifactPath.of("default"), ArtifactPath.of(intent));
 const scopes = (...names: string[]) => StageScopes.of(names.map((name) => StageScope.of(name)));
@@ -56,7 +57,9 @@ const artifact = (relative: string) =>
     relativePath: ArtifactPath.of(relative),
   });
 const debtObservation = (relative: string, count: number | null) =>
-  StructuralObservation.of(artifact(relative), count === null ? null : FindingCount.of(count));
+  count === null
+    ? StructuralObservation.unavailable(artifact(relative), ErrorMessage.of("fixture scan unavailable"))
+    : StructuralObservation.of(artifact(relative), FindingCount.of(count));
 const units = (...entries: readonly [string, number][]) =>
   entries.map(([name, modifiedAt]) =>
     FunctionalUnitObservation.of(UnitName.of(name), ArtifactModifiedAt.of(modifiedAt)),
@@ -141,7 +144,7 @@ describe("assessment aggregates", () => {
     expect(CoverageAssessment.of([], scopes()).isClean()).toBe(true);
   });
 
-  test("structural debt excludes unmeasured artifacts and totals findings", () => {
+  test("structural debt retains unmeasured artifacts and totals known findings", () => {
     const d = StructuralDebt.of([
       debtObservation("inception/domain-design/components.md", 3),
       debtObservation("construction/u1/functional-design", 2),
@@ -150,7 +153,8 @@ describe("assessment aggregates", () => {
     expect(d.hasScans()).toBe(true);
     expect(d.scannedCount()).toBe(2);
     expect(d.totalFindings()).toBe(5);
-    expect(d.rows()).toHaveLength(2);
+    expect(d.rows()).toHaveLength(3);
+    expect(d.isComplete()).toBe(false);
     expect(StructuralDebt.of([]).hasScans()).toBe(false);
   });
 
@@ -202,9 +206,9 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
   const presenter = new DoctorPresenter({ harnessDir: ".claude" });
 
   test("manifest and solver rows render the legacy bytes", () => {
-    const rows = presenter.installation([
-      InstalledStatus.of(ManifestEntry.error(ArtifactPath.of("sensors/aidlc-deep-spec-ir-valid.md")), false),
-    ]);
+    const rows = presenter.installation(
+      ok([InstalledStatus.of(ManifestEntry.error(ArtifactPath.of("sensors/aidlc-deep-spec-ir-valid.md")), false)]),
+    );
     expect(rows[0]?.toDocument()).toEqual({
       pass: false,
       label: "deep-spec-analysis: sensors/aidlc-deep-spec-ir-valid.md installed",
@@ -212,13 +216,15 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
       severity: "error",
     });
     const solvers = presenter.solvers(
-      SolverAvailability.of({
-        z3Package: true,
-        nodeRuntime: false,
-        quintCli: true,
-        apalache: false,
-        apalacheServerStale: false,
-      }),
+      ok(
+        SolverAvailability.of({
+          z3Package: true,
+          nodeRuntime: false,
+          quintCli: true,
+          apalache: false,
+          apalacheServerStale: false,
+        }),
+      ),
     );
     expect(solvers.map((c) => [c.passes(), c.label()])).toEqual([
       [true, "deep-spec-analysis: z3-solver package present (SMT backend)"],
@@ -243,7 +249,7 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
     });
     expect(stale.apalacheServerIsStale()).toBe(true);
     expect(stale.hasApalache()).toBe(false);
-    const row = presenter.solvers(stale)[3];
+    const row = presenter.solvers(ok(stale))[3];
     expect(row?.passes()).toBe(false);
     expect(row?.label()).toBe("deep-spec-analysis: Apalache available (quint verify, method: bounded)");
     expect(row?.fix()).toBe(
@@ -263,7 +269,7 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
     });
     expect(healthy.apalacheServerIsStale()).toBe(false);
     expect(healthy.hasApalache()).toBe(true);
-    const row = presenter.solvers(healthy)[3];
+    const row = presenter.solvers(ok(healthy))[3];
     expect(row?.passes()).toBe(true);
     expect(row?.fix()).toBe(
       "Install a JDK (17+) and run any `quint verify` once so quint downloads its Apalache distribution into ~/.quint (or set APALACHE_DIST). " +
@@ -273,9 +279,11 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
 
   test("coverage rows carry the grep-frozen nouns and the summary carries the scope list", () => {
     const rows = presenter.verificationCoverage(
-      CoverageAssessment.of(
-        [observed("i1", false, false, null), observed("i2", true, true, null)],
-        scopes("enterprise", "feature"),
+      ok(
+        CoverageAssessment.of(
+          [observed("i1", false, false, null), observed("i2", true, true, null)],
+          scopes("enterprise", "feature"),
+        ),
       ),
     );
     expect(rows[0]?.label()).toBe(
@@ -298,11 +306,13 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
 
   test("debt rows and the report-only summary render the legacy bytes; no scans, no summary", () => {
     const rows = presenter.structuralDebt(
-      StructuralDebt.of([
-        debtObservation("inception/domain-design/components.md", 4),
-        debtObservation("inception/contract-design/contract-summary.md", 0),
-        debtObservation("construction/u1/functional-design", 0),
-      ]),
+      ok(
+        StructuralDebt.of([
+          debtObservation("inception/domain-design/components.md", 4),
+          debtObservation("inception/contract-design/contract-summary.md", 0),
+          debtObservation("construction/u1/functional-design", 0),
+        ]),
+      ),
     );
     expect(rows[0]?.label()).toBe(
       "deep-spec-analysis: default/i1 inception/domain-design/components.md has 4 reference-integrity finding(s)",
@@ -310,15 +320,17 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
     expect(rows[1]?.label()).toBe(
       "deep-spec-analysis: design refcheck — 4 structural finding(s) across 3 design artifact(s) scanned (report-only)",
     );
-    expect(presenter.structuralDebt(StructuralDebt.of([]))).toHaveLength(0);
+    expect(presenter.structuralDebt(ok(StructuralDebt.of([])))).toHaveLength(0);
   });
 
   test("functional rows keep the frozen order: refinement staleness, then units, then the summary", () => {
     const rows = presenter.functionalCoverage(
-      UnitCoverage.of(
-        [functional("i1", units(["u1", 50], ["u2", 150]), names("u2"), names("u2"), 200)],
-        scopes("feature"),
-        [],
+      ok(
+        UnitCoverage.of(
+          [functional("i1", units(["u1", 50], ["u2", 150]), names("u2"), names("u2"), 200)],
+          scopes("feature"),
+          [],
+        ),
       ),
     );
     expect(rows.map((c) => c.label())).toEqual([
@@ -327,7 +339,7 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
       "deep-spec-analysis: unit default/i1/u2 changed its functional-design artifacts after the last design verification",
       "deep-spec-analysis: design verification coverage — 0/2 eligible units verified (scopes: feature)",
     ]);
-    expect(presenter.functionalCoverage(UnitCoverage.of([], scopes(), []))).toHaveLength(0);
+    expect(presenter.functionalCoverage(ok(UnitCoverage.of([], scopes(), [])))).toHaveLength(0);
   });
 });
 
@@ -347,11 +359,11 @@ describe("doctor flow and observation ownership", () => {
       [],
     );
     const repo: DoctorWorkspaceClient = {
-      verificationCoverage: () => CoverageAssessment.of([], scopes()),
-      functionalCoverage: () => coverage,
-      designArtifacts: () => DesignArtifacts.of([]),
+      verificationCoverage: () => ok(CoverageAssessment.of([], scopes())),
+      functionalCoverage: () => ok(coverage),
+      designArtifacts: () => ok(DesignArtifacts.of([])),
     };
-    const out = new CheckFunctionalCoverageUseCase(repo).execute();
+    const out = requireSuccess(new CheckFunctionalCoverageUseCase(repo).execute());
     expect(
       out.problems().map((row) => [
         row.match({
@@ -375,37 +387,40 @@ describe("doctor flow and observation ownership", () => {
       ["default", "i1"],
     ]);
     expect(out.eligibleCount()).toBe(4);
-    expect(new CheckVerificationCoverageUseCase(repo).execute().eligibleCount()).toBe(0);
+    expect(requireSuccess(new CheckVerificationCoverageUseCase(repo).execute()).eligibleCount()).toBe(0);
   });
 
   test("installation and structural checks pass domain references unchanged to ports", () => {
     const installed: string[] = [];
-    const statuses = new CheckInstallationUseCase({
-      isInstalled: (entry) => {
-        installed.push(entry.rel());
-        return true;
-      },
-    }).execute();
+    const statuses = requireSuccess(
+      new CheckInstallationUseCase({
+        isInstalled: (entry) => {
+          installed.push(entry.rel());
+          return ok(true);
+        },
+      }).execute(),
+    );
     expect(installed).toHaveLength(26);
     expect(statuses.every((status) => status.isPresent())).toBe(true);
     const targets = DesignArtifacts.of([artifact("a"), artifact("b"), artifact("c")]);
     const requested: string[] = [];
-    const out = new CheckStructuralDebtUseCase(
-      {
-        verificationCoverage: () => CoverageAssessment.of([], scopes()),
-        functionalCoverage: () => UnitCoverage.of([], scopes(), []),
-        designArtifacts: () => targets,
-      },
-      {
-        observe: (target) => {
-          requested.push(target.relativePath().asString());
-          return StructuralObservation.of(
-            target,
-            requested.length === 2 ? null : FindingCount.of(requested.length === 1 ? 2 : 0),
-          );
+    const out = requireSuccess(
+      new CheckStructuralDebtUseCase(
+        {
+          verificationCoverage: () => ok(CoverageAssessment.of([], scopes())),
+          functionalCoverage: () => ok(UnitCoverage.of([], scopes(), [])),
+          designArtifacts: () => ok(targets),
         },
-      },
-    ).execute();
+        {
+          observe: (target) => {
+            requested.push(target.relativePath().asString());
+            return requested.length === 2
+              ? StructuralObservation.unavailable(target, ErrorMessage.of("fixture scan unavailable"))
+              : StructuralObservation.of(target, FindingCount.of(requested.length === 1 ? 2 : 0));
+          },
+        },
+      ).execute(),
+    );
     expect(requested).toEqual(["a", "b", "c"]);
     expect(out.scannedCount()).toBe(2);
     expect(out.totalFindings()).toBe(2);
@@ -564,18 +579,27 @@ describe("workspace timestamp observation", () => {
       const modelPath = join(stageDirectory, "deep-spec-analysis-functional-formal-model.md");
       writeFileSync(modelPath, '```json\n{"units":[{"unit":"u1"}]}\n```\n');
       const findingsPath = join(findingsDirectory, "quint.json");
-      writeFileSync(findingsPath, JSON.stringify({ checked: ["unit:u1"] }));
+      const report = (checked: string[]) => ({
+        backend: "quint",
+        irVersion: "1.0.0",
+        irHash: ContentHash.ofText(canonicalStringify({ units: [{ unit: "u1" }] })).asString(),
+        method: "bounded",
+        findings: [],
+        skipped: [],
+        checked,
+      });
+      writeFileSync(findingsPath, JSON.stringify(report(["unit:u1"])));
       const workspace = new DoctorWorkspaceClientImplementation({
         projectDir: project,
         root: join(project, ".claude"),
         refcheckToolNames: { domain: "domain.ts", contract: "contract.ts", functional: "functional.ts" },
       });
       utimesSync(modelPath, new Date(0), new Date(0));
-      expect(workspace.functionalCoverage().verifiedCount()).toBe(1);
-      expect(workspace.functionalCoverage().problems()).toHaveLength(0);
+      expect(requireSuccess(workspace.functionalCoverage()).verifiedCount()).toBe(1);
+      expect(requireSuccess(workspace.functionalCoverage()).problems()).toHaveLength(0);
 
       utimesSync(modelPath, new Date(-1000), new Date(-1000));
-      const preEpoch = workspace.functionalCoverage();
+      const preEpoch = requireSuccess(workspace.functionalCoverage());
       expect(preEpoch.eligibleCount()).toBe(1);
       expect(
         preEpoch.problems().map((problem) =>
@@ -586,10 +610,9 @@ describe("workspace timestamp observation", () => {
         ),
       ).toEqual(["stale"]);
 
-      writeFileSync(findingsPath, JSON.stringify({ checked: [] }));
+      writeFileSync(findingsPath, JSON.stringify(report([])));
       expect(
-        workspace
-          .functionalCoverage()
+        requireSuccess(workspace.functionalCoverage())
           .problems()
           .map((problem) =>
             problem.match({
@@ -600,8 +623,7 @@ describe("workspace timestamp observation", () => {
       ).toEqual(["unverified"]);
       rmSync(modelPath);
       expect(
-        workspace
-          .functionalCoverage()
+        requireSuccess(workspace.functionalCoverage())
           .problems()
           .map((problem) =>
             problem.match({
@@ -616,7 +638,7 @@ describe("workspace timestamp observation", () => {
   });
 });
 
-test("invalid or oversized authored stage scopes use the default range without constructor panics", () => {
+test("invalid or oversized authored stage scopes return an acquisition failure without constructor panics", () => {
   const project = mkdtempSync(join(tmpdir(), "doctor-stage-scopes-"));
   const root = join(project, ".claude");
   const stageRoot = join(root, "aidlc-common", "stages");
@@ -629,17 +651,24 @@ test("invalid or oversized authored stage scopes use the default range without c
       refcheckToolNames: { domain: "domain.ts", contract: "contract.ts", functional: "functional.ts" },
     });
     const cases = [
-      { authored: ["Invalid"], expected: ["enterprise", "feature"] },
-      { authored: ["a".repeat(129)], expected: ["enterprise", "feature"] },
-      { authored: Array(1025).fill("feature"), expected: ["enterprise", "feature"] },
+      { authored: ["Invalid"], expected: null },
+      { authored: ["a".repeat(129)], expected: null },
+      { authored: Array(1025).fill("feature"), expected: null },
       { authored: ["refactor"], expected: ["refactor"] },
     ];
     for (const { authored, expected } of cases) {
       const frontmatter = `---\nscopes:\n${authored.map((scope) => `  - ${scope}\n`).join("")}name: audit-stage\n---\n`;
       writeFileSync(join(stageRoot, "inception", "deep-spec-analysis-verify.md"), frontmatter);
       writeFileSync(join(stageRoot, "construction", "deep-spec-analysis-functional-verify.md"), frontmatter);
-      expect([...workspace.verificationCoverage().scopes()].map((scope) => scope.asString())).toEqual(expected);
-      expect([...workspace.functionalCoverage().scopes()].map((scope) => scope.asString())).toEqual(expected);
+      for (const acquired of [workspace.verificationCoverage(), workspace.functionalCoverage()]) {
+        if (expected === null) {
+          expect(acquired.ok).toBe(false);
+          if (!acquired.ok) expect(acquired.error.kind).toBe("corrupt");
+        } else {
+          expect(acquired.ok).toBe(true);
+          if (acquired.ok) expect([...acquired.value.scopes()].map((scope) => scope.asString())).toEqual(expected);
+        }
+      }
     }
   } finally {
     rmSync(project, { recursive: true, force: true });
@@ -658,7 +687,7 @@ test("invalid functional-design unit names become explicit coverage problems", (
       root: join(project, ".claude"),
       refcheckToolNames: { domain: "domain.ts", contract: "contract.ts", functional: "functional.ts" },
     });
-    const coverage = workspace.functionalCoverage();
+    const coverage = requireSuccess(workspace.functionalCoverage());
     expect(coverage.isClean()).toBe(false);
     expect(
       coverage
@@ -670,7 +699,7 @@ test("invalid functional-design unit names become explicit coverage problems", (
     expect(coverage.problems()[0]?.match({ valid: () => "", invalid: (detail) => detail.asString() })).toContain(
       "unit-name-too-long",
     );
-    expect(new DoctorPresenter({ harnessDir: ".claude" }).functionalCoverage(coverage)[0]?.label()).toContain(
+    expect(new DoctorPresenter({ harnessDir: ".claude" }).functionalCoverage(ok(coverage))[0]?.label()).toContain(
       "invalid functional-design unit name",
     );
   } finally {
@@ -715,17 +744,22 @@ test("functional observation enforces iteration budgets before constructing KeyS
   expect(FunctionalObservation.parse({ ...seed, completedUnits: overCompletedUnits }).ok).toBe(false);
 });
 
-test("unavailable functional coverage is explicitly presented", () => {
-  const coverage = UnitCoverage.unavailable(scopes("feature"), ErrorMessage.of("coverage budget exceeded"));
-  expect(coverage.isClean()).toBe(false);
-  expect(coverage.eligibleCount()).toBe(0);
-  expect(coverage.hasEligible()).toBe(false);
-  expect(coverage.verifiedCount()).toBe(0);
-  expect(coverage.problems()).toEqual([]);
-  expect(coverage.refinementStale()).toEqual([]);
-  expect([...coverage.scopes()].map((scope) => scope.asString())).toEqual(["feature"]);
-  expect(coverage.unavailableReason()?.asString()).toBe("coverage budget exceeded");
-  expect(new DoctorPresenter({ harnessDir: ".claude" }).functionalCoverage(coverage)[0]?.label()).toContain(
-    "coverage unavailable",
-  );
+test("workspace acquisition failure is explicitly presented", () => {
+  const acquired = err({
+    kind: "io-failed" as const,
+    operation: "read" as const,
+    path: "/workspace/aidlc/spaces",
+    cause: "not a directory",
+  });
+  const presenter = new DoctorPresenter({ harnessDir: ".claude" });
+  for (const rows of [
+    presenter.functionalCoverage(acquired),
+    presenter.verificationCoverage(acquired),
+    presenter.structuralDebt(acquired),
+  ]) {
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.passes()).toBe(false);
+    expect(rows[0]?.label()).toContain("unavailable");
+    expect(rows[0]?.label()).toContain("not a directory");
+  }
 });

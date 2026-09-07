@@ -1,4 +1,6 @@
 import { InstallationManifest, InstalledStatus } from "@deep-spec-analysis/doctor-domain";
+import { flatMapResult, ok, type Result, traverseResult } from "@deep-spec-analysis/kernel-infrastructure";
+import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
 import type { HarnessFileClient } from "./port/harness-file-client.ts";
 
 // マニフェスト全行の実在判定（checks 配列の先頭ブロック——凍結順）。
@@ -9,11 +11,9 @@ export class CheckInstallationUseCase {
     this.#files = files;
   }
 
-  execute(): readonly InstalledStatus[] {
-    const out: InstalledStatus[] = [];
-    for (const entry of InstallationManifest.standard()) {
-      out.push(InstalledStatus.of(entry, this.#files.isInstalled(entry)));
-    }
-    return out;
+  execute(): Result<readonly InstalledStatus[], RepositoryError> {
+    return traverseResult([...InstallationManifest.standard()], (entry) =>
+      flatMapResult(this.#files.isInstalled(entry), (present) => ok(InstalledStatus.of(entry, present))),
+    );
   }
 }

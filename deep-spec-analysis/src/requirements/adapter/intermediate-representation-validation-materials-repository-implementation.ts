@@ -1,6 +1,8 @@
 import {
   decodeDeclaredBindings,
   extractFences,
+  readArtifactBytes,
+  readArtifactStat,
   readContractSchema,
   writeFileAtomically,
 } from "@deep-spec-analysis/kernel-adapter";
@@ -27,7 +29,6 @@ import { flatMapResult } from "@deep-spec-analysis/kernel-infrastructure";
 // 黙殺条件からの逐語移植。型宣言を欠く属性を kind: "" でカタログに載せる
 // 挙動（参照解決の可否が変わる）を含め、そのまま保存する。
 
-import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import {
   combineResults,
@@ -230,27 +231,18 @@ export class IntermediateRepresentationValidationMaterialsRepositoryImplementati
     const outputPath = id.modelId().artifactPath().asString();
     // 機能形式モデル以外・不在はこの Repository の収蔵外（not-found——use case
     // が pass-through へ写像する旧 not-applicable の凍結挙動）。
-    if (basename(outputPath) !== FORMAL_MODEL_BASENAME || !existsSync(outputPath)) {
+    if (basename(outputPath) !== FORMAL_MODEL_BASENAME) {
       return err({ kind: "not-found", path: outputPath });
     }
 
     const corrupt = (cause: string): Result<IntermediateRepresentationValidationMaterials, RepositoryError> =>
       err({ kind: "corrupt", path: outputPath, cause });
 
-    // existsSync 後の競合（削除・権限変更・ディレクトリ）でも Result 契約を
-    // 守る——読取失敗は io-failed（use case は corrupt と同じ verdict 写像）。
-    let bytes: Buffer;
-    try {
-      bytes = readFileSync(outputPath);
-    } catch (e) {
-      return err({
-        kind: "io-failed",
-        operation: "read",
-        path: outputPath,
-        cause: e instanceof Error ? e.message : String(e),
-      });
-    }
-    const md = bytes.toString("utf-8");
+    // 実際の読取結果で不在と I/O 障害を区別し、RepositoryError をそのまま返す。
+    const read = readArtifactBytes(outputPath);
+    if (!read.ok) return err(read.error);
+    const bytes = read.value;
+    const md = Buffer.from(bytes).toString("utf-8");
     const fences = extractFences(md, "json").map((f) => f.body);
     if (fences.length !== 1) {
       return corrupt(`formal model must contain exactly one \`\`\`json fence (found ${fences.length})`);
@@ -266,8 +258,13 @@ export class IntermediateRepresentationValidationMaterialsRepositoryImplementati
       return corrupt("IR fence must contain a JSON object");
     }
 
-    if (!existsSync(this.#schemaPath)) {
-      return corrupt(`IR schema not installed at ${this.#schemaPath} — run plugin sync`);
+    const schemaStat = readArtifactStat(this.#schemaPath);
+    if (!schemaStat.ok) {
+      return corrupt(
+        schemaStat.error.kind === "not-found"
+          ? `IR schema not installed at ${this.#schemaPath} — run plugin sync`
+          : `IR schema unreadable: ${schemaStat.error.cause}`,
+      );
     }
     const schema = readContractSchema(this.#schemaPath);
     if (!schema.ok) {
@@ -302,7 +299,7 @@ export class IntermediateRepresentationValidationMaterialsRepositoryImplementati
         functionalRequirementReferenceClaims: claimsCollection.value,
         declaredDigest: parsed.value.declaredDigest,
         sourceId: RequirementsSourceIdentifier.of(recordRoot),
-        sourceDocument: new Uint8Array(bytes),
+        sourceDocument: bytes,
       }),
     );
   }

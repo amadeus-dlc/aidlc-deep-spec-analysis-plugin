@@ -9,6 +9,7 @@ export { decodeItfTrace, itfStatus } from "./itf-decoder.ts";
 export type { QuintClientConfiguration } from "./quint-client-configuration.ts";
 export { QuintClientImplementation } from "./quint-client-implementation.ts";
 export { compileQuintMachine, type QuintCompilation, qVar } from "./quint-compilation.ts";
+export { hasQuintDeadlockDiagnostic } from "./quint-process-diagnostics.ts";
 export { RequirementsSourceRepositoryImplementation } from "./requirements-source-repository-implementation.ts";
 export type { SatisfiabilityModuloTheoriesChildQuery } from "./satisfiability-modulo-theories-child-query.ts";
 export {

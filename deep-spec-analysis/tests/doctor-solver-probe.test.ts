@@ -21,6 +21,7 @@ import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SolverProbeClientImplementation } from "@deep-spec-analysis/doctor-adapter";
+import { requireSuccess } from "./result-fixtures.ts";
 
 const TRUE_BIN = ["/usr/bin/true", "/bin/true"].find((path) => existsSync(path));
 const unsupported = process.platform === "win32" || TRUE_BIN === undefined;
@@ -72,7 +73,7 @@ describe.skipIf(unsupported)("the solver probe measures whether Apalache can act
   test("a listening server that cannot verify is reported stale, and the Apalache row fails", async () => {
     const { server, port } = await listenOnFreePort();
     try {
-      const availability = client(failingQuint, port).availability();
+      const availability = requireSuccess(client(failingQuint, port).availability());
       expect(availability.hasQuintCli()).toBe(true);
       expect(availability.apalacheServerIsStale()).toBe(true);
       expect(availability.hasApalache()).toBe(false);
@@ -84,7 +85,7 @@ describe.skipIf(unsupported)("the solver probe measures whether Apalache can act
   test("a listening server that verifies cleanly is healthy", async () => {
     const { server, port } = await listenOnFreePort();
     try {
-      const availability = client(passingQuint, port).availability();
+      const availability = requireSuccess(client(passingQuint, port).availability());
       expect(availability.hasQuintCli()).toBe(true);
       expect(availability.apalacheServerIsStale()).toBe(false);
       expect(availability.hasApalache()).toBe(true);
@@ -99,14 +100,14 @@ describe.skipIf(unsupported)("the solver probe measures whether Apalache can act
     // 「プローブを払わなかった」ことの観測になる。
     const { server, port } = await listenOnFreePort();
     await close(server);
-    const availability = client(failingQuint, port).availability();
+    const availability = requireSuccess(client(failingQuint, port).availability());
     expect(availability.hasQuintCli()).toBe(true);
     expect(availability.apalacheServerIsStale()).toBe(false);
     expect(availability.hasApalache()).toBe(true);
   }, 60_000);
 
   test("a missing quint CLI leaves staleness unmeasured rather than guessed", () => {
-    const availability = client(join(work, "no-such-quint"), 1).availability();
+    const availability = requireSuccess(client(join(work, "no-such-quint"), 1).availability());
     expect(availability.hasQuintCli()).toBe(false);
     expect(availability.apalacheServerIsStale()).toBe(false);
     expect(availability.hasApalache()).toBe(true);

@@ -8,6 +8,7 @@ import type { VerificationSkips } from "./verification-skips.ts";
 
 type QuintCheckResultParam =
   | { readonly kind: "cli-unavailable" }
+  | { readonly kind: "backend-unavailable"; readonly reason: ErrorMessage }
   | { readonly kind: "machine-uncompilable"; readonly method: VerificationMethod; readonly error: ErrorMessage }
   | {
       readonly kind: "checked";
@@ -34,6 +35,8 @@ export class QuintCheckResult {
     switch (result.kind) {
       case "cli-unavailable":
         return VerificationReport.quintUnavailable(id, model);
+      case "backend-unavailable":
+        return VerificationReport.quintBackendUnavailable(id, model, result.reason);
       case "machine-uncompilable":
         return VerificationReport.machineUncompilable(id, model, result.method.asString(), result.error.asString());
       case "checked": {
@@ -55,6 +58,7 @@ export class QuintCheckResult {
   match<T>(cases: { unavailable: () => T; uncompilable: () => T; checked: () => T }): T {
     switch (this.#result.kind) {
       case "cli-unavailable":
+      case "backend-unavailable":
         return cases.unavailable();
       case "machine-uncompilable":
         return cases.uncompilable();

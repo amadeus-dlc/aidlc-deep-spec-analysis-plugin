@@ -265,8 +265,10 @@ describe("doctorの全通常コレクションの操作と等価性", () => {
   });
 
   test("未走査と0件、同じ成果物の取得場所違いを同値にしない", () => {
-    const unscanned = Doctor.StructuralObservation.of(artifact(1), null);
-    expect(unscanned.equals(Doctor.StructuralObservation.of(artifact(1), null))).toBe(true);
+    const unscanned = Doctor.StructuralObservation.unavailable(artifact(1), ErrorMessage.of("backend unavailable"));
+    expect(
+      unscanned.equals(Doctor.StructuralObservation.unavailable(artifact(1), ErrorMessage.of("backend unavailable"))),
+    ).toBe(true);
     expect(unscanned.equals(Doctor.StructuralObservation.of(artifact(1), Doctor.FindingCount.of(0)))).toBe(false);
     expect(Doctor.StructuralObservation.of(artifact(1), Doctor.FindingCount.of(0)).equals(unscanned)).toBe(false);
     expect(artifact(1).equals(artifact(2))).toBe(false);

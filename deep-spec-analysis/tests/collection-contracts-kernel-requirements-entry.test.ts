@@ -57,7 +57,7 @@ test.each([
     environment: "AIDLC_DEEP_SPEC_SMT_RUNTIME",
     answer: '{"results":[{"id":"global","status":"unsat","core":[]}]}',
   },
-  { backend: "quint", environment: "AIDLC_DEEP_SPEC_QUINT_BIN", answer: "deadlock" },
+  { backend: "quint", environment: "AIDLC_DEEP_SPEC_QUINT_BIN", answer: "error: reached a deadlock" },
 ])("$backend の公開entryは対象欠落の診断をセンサー成功として出力しない", ({ backend, environment, answer }) => {
   const directory = mkdtempSync(join(tmpdir(), "finding-targets-entry-"));
   try {
@@ -67,7 +67,11 @@ test.each([
       `\`\`\`json\n${JSON.stringify({ irVersion: "1.0.0", schema: { entities: [] }, obligations: [], scenarios: [], background: [] })}\n\`\`\`\n`,
     );
     const solver = join(directory, "solver");
-    writeFileSync(solver, `#!/bin/sh\nprintf '%s\\n' '${answer}'\n`, { mode: 0o755 });
+    const script =
+      backend === "quint"
+        ? `#!/bin/sh\nif [ "$1" = "--version" ]; then echo 0.32.0; exit 0; fi\nprintf '%s\\n' '${answer}' >&2\nexit 1\n`
+        : `#!/bin/sh\nprintf '%s\\n' '${answer}'\n`;
+    writeFileSync(solver, script, { mode: 0o755 });
     const result = spawnSync(
       process.execPath,
       [join(applicationRoot, "src", "entries", `aidlc-sensor-deep-spec-verify-${backend}.ts`), "--output-path", model],

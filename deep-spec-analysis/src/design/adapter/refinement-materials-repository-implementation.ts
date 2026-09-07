@@ -1,4 +1,11 @@
-import { decodeScenarioBindings, extractFences, findRecordRoot, relArtifact } from "@deep-spec-analysis/kernel-adapter";
+import {
+  decodeScenarioBindings,
+  extractFences,
+  findRecordRoot,
+  readArtifactBytes,
+  readArtifactText,
+  relArtifact,
+} from "@deep-spec-analysis/kernel-adapter";
 import {
   ArtifactPath,
   ContentHash,
@@ -33,7 +40,6 @@ import {
 // 旧 refinement-lib の loadRequirementsIr / loadRefinementMap と旧 entry の
 // inputs 組成からの逐語移植。
 
-import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
   AttributeMapping,
@@ -94,7 +100,9 @@ export class RefinementMaterialsRepositoryImplementation implements RefinementMa
 
   findById(id: RefinementMaterialsIdentifier): Result<RefinementMaterials, RepositoryError> {
     const modelPath = id.modelArtifactPath().asString();
-    const recordRoot = findRecordRoot(dirname(modelPath));
+    const foundRecordRoot = findRecordRoot(dirname(modelPath));
+    if (!foundRecordRoot.ok) return err(foundRecordRoot.error);
+    const recordRoot = foundRecordRoot.value;
     if (recordRoot === null) return ok(RefinementMaterials.inactive(id));
     const requirements = this.#loadRequirements(recordRoot);
     if (!requirements.ok) {
@@ -106,12 +114,7 @@ export class RefinementMaterialsRepositoryImplementation implements RefinementMa
   }
 
   #read(path: string): Result<Uint8Array, RepositoryError> {
-    try {
-      return ok(new Uint8Array(readFileSync(path)));
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === "ENOENT") return err({ kind: "not-found", path });
-      return err({ kind: "io-failed", operation: "read", path, cause: e instanceof Error ? e.message : String(e) });
-    }
+    return readArtifactBytes(path);
   }
 
   #loadRequirements(recordRoot: string): Result<{ model: RefinementRequirements; bytes: Uint8Array }, RepositoryError> {
@@ -288,8 +291,17 @@ export function parseRefinementMapDocument(
       error: `refinement map fence is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
+  const schemaText = readArtifactText(mapSchemaPath);
+  if (!schemaText.ok) {
+    return {
+      kind: "malformed",
+      error: `refinement map schema unreadable: ${
+        schemaText.error.kind === "not-found" ? mapSchemaPath : schemaText.error.cause
+      }`,
+    };
+  }
   try {
-    const schemaDoc = JSON.parse(readFileSync(mapSchemaPath, "utf-8"));
+    const schemaDoc = JSON.parse(schemaText.value);
     const errors: string[] = [];
     validateSchema(schemaDoc as never, schemaDoc as never, raw as never, "", errors);
     if (errors.length > 0)

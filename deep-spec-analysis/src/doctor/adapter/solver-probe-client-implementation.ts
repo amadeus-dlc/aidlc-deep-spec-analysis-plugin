@@ -1,9 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SolverAvailability } from "@deep-spec-analysis/doctor-domain";
 import type { SolverProbeClient } from "@deep-spec-analysis/doctor-usecase";
+import { readArtifactStat, readDirectory } from "@deep-spec-analysis/kernel-adapter";
+import { ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
 import type { SolverProbeClientConfiguration } from "./solver-probe-client-configuration.ts";
 
 // 127.0.0.1:<port> に繋がるかだけを答える子スクリプト（exit 0 = 待ち受けあり）。
@@ -83,24 +86,27 @@ export class SolverProbeClientImplementation implements SolverProbeClient {
     }
   }
 
-  availability(): SolverAvailability {
+  availability(): Result<SolverAvailability, RepositoryError> {
     let apalacheDist = this.#config.apalacheDistDeclared;
     if (!apalacheDist) {
-      try {
-        apalacheDist = readdirSync(join(this.#config.homeDir, ".quint")).some((f) => f.startsWith("apalache-dist-"));
-      } catch {
-        apalacheDist = false;
-      }
+      const directory = readDirectory(join(this.#config.homeDir, ".quint"));
+      if (!directory.ok && directory.error.kind !== "not-found") return directory;
+      apalacheDist =
+        directory.ok && directory.value.some((entry) => entry.isDirectory() && entry.name.startsWith("apalache-dist-"));
     }
     const quintCli = this.#probe(this.#config.quintBin, ["--version"]);
     const apalache = this.#probe("java", ["-version"]) && apalacheDist;
-    return SolverAvailability.of({
-      z3Package: existsSync(join(this.#config.projectDir, "node_modules", "z3-solver", "package.json")),
-      nodeRuntime: this.#probe("node", ["--version"]),
-      quintCli,
-      apalache,
-      // quint が無ければ verify そのものが打てない——陳腐化は測れないので測らない。
-      apalacheServerStale: apalache && quintCli && this.#apalacheServerIsStale(),
-    });
+    const packageStat = readArtifactStat(join(this.#config.projectDir, "node_modules", "z3-solver", "package.json"));
+    if (!packageStat.ok && packageStat.error.kind !== "not-found") return packageStat;
+    return ok(
+      SolverAvailability.of({
+        z3Package: packageStat.ok && packageStat.value.isFile(),
+        nodeRuntime: this.#probe("node", ["--version"]),
+        quintCli,
+        apalache,
+        // quint が無ければ verify そのものが打てない——陳腐化は測れないので測らない。
+        apalacheServerStale: apalache && quintCli && this.#apalacheServerIsStale(),
+      }),
+    );
   }
 }

@@ -227,8 +227,9 @@ function publishedOf(aggregate: DesignVerifyDirectory): DesignReport {
 
 function crossCheckOf(aggregate: DesignVerifyDirectory): DesignReport {
   const cross = aggregate.crossCheck();
-  if (cross === null) throw new Error("test setup: the aggregate carries no cross-check");
-  return cross;
+  if (!cross.ok) throw new Error(`test setup: cross-check is unreadable (${cross.error.asString()})`);
+  if (cross.value === null) throw new Error("test setup: the aggregate carries no cross-check");
+  return cross.value;
 }
 
 // --- #6 schema は合成ルートで一度だけ読まれる（FR1.2、BR1.1）----------------
@@ -289,7 +290,7 @@ describe("finalization failures never become a success", () => {
       chmodSync(quintPath, 0o644);
 
       expect(loaded.ok).toBe(false);
-      if (!loaded.ok) expect(loaded.error.kind).toBe("corrupt");
+      if (!loaded.ok) expect(loaded.error.kind).toBe("io-failed");
       // Failure Matrix 行 4: old / old / save-failed。
       expect(readFileSync(join(ws.verifyDir, "smt.json"), "utf-8")).toBe(backendBefore);
       expect(readFileSync(crossPath, "utf-8")).toBe(crossBefore);
@@ -320,7 +321,7 @@ describe("finalization failures never become a success", () => {
       chmodSync(quintPath, 0o644);
 
       expect(stored.ok).toBe(false);
-      if (!stored.ok) expect(stored.error.kind).toBe("corrupt");
+      if (!stored.ok) expect(stored.error.kind).toBe("io-failed");
       expect(existsSync(join(ws.verifyDir, "smt.json"))).toBe(false);
       expect(existsSync(join(ws.verifyDir, "cross-check.json"))).toBe(false);
       expect(existsSync(join(ws.verifyDir, LOCK_BASENAME))).toBe(false);
@@ -691,7 +692,7 @@ describe("a stale cross-check is never taken for the latest result", () => {
             .toArray()
             .map((r) => r.id().fileName()),
         ).toEqual(["smt.json"]);
-        expect(reloaded.value.crossCheck()).toBe(null);
+        expect(reloaded.value.crossCheck()).toEqual({ ok: true, value: null });
       }
     } finally {
       rmSync(ws.record, { recursive: true, force: true });

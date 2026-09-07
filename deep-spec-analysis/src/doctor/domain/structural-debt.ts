@@ -32,13 +32,26 @@ export class StructuralDebt extends FirstClassCollectionBase<StructuralObservati
   hasScans(): boolean {
     return this.#observations.some((observation) => observation.wasScanned());
   }
+
+  isComplete(): boolean {
+    return this.#observations.every((observation) => observation.isComplete());
+  }
   scannedCount(): number {
     return this.#observations.filter((observation) => observation.wasScanned()).length;
   }
   totalFindings(): number {
-    return this.#observations.reduce((sum, observation) => sum + observation.findingCount(), 0);
+    return this.#observations.reduce(
+      (sum, observation) =>
+        sum +
+        observation.match({
+          complete: (findings) => findings.asNumber(),
+          partial: (findings) => findings.asNumber(),
+          unavailable: () => 0,
+        }),
+      0,
+    );
   }
   rows(): readonly StructuralObservation[] {
-    return this.#observations.filter((observation) => observation.hasDebt());
+    return this.#observations.filter((observation) => !observation.isComplete() || observation.hasDebt());
   }
 }

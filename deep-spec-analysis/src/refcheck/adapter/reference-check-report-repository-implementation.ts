@@ -5,9 +5,8 @@
 // 一度だけ済ませる（ReferenceCheckReport.conformedTo）ので、ここは schema を
 // 読まない。
 
-import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { writeFileAtomically } from "@deep-spec-analysis/kernel-adapter";
+import { readArtifactText, writeFileAtomically } from "@deep-spec-analysis/kernel-adapter";
 import { err, type Json, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
 import type { ReferenceCheckReport, ReferenceCheckReportIdentifier } from "@deep-spec-analysis/refcheck-domain";
@@ -19,12 +18,11 @@ const encoder = new TextEncoder();
 export class ReferenceCheckReportRepositoryImplementation implements ReferenceCheckReportRepository {
   findById(aggregateId: ReferenceCheckReportIdentifier): Result<ReferenceCheckReport, RepositoryError> {
     const path = join(aggregateId.directory().asString(), aggregateId.fileName());
-    if (!existsSync(path)) {
-      return err({ kind: "not-found", path });
-    }
+    const text = readArtifactText(path);
+    if (!text.ok) return text;
     let raw: Json;
     try {
-      raw = JSON.parse(readFileSync(path, "utf-8")) as Json;
+      raw = JSON.parse(text.value) as Json;
     } catch (e) {
       return err({ kind: "corrupt", path, cause: e instanceof Error ? e.message : String(e) });
     }

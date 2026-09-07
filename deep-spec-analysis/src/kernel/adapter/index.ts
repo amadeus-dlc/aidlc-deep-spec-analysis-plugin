@@ -1,5 +1,6 @@
 // kernel/adapter の公開 facade — 明示列挙のみ（export * 禁止）。
 
+export { readArtifactBytes, readArtifactStat, readArtifactText, readDirectory } from "./artifact-io.ts";
 export { writeFileAtomically } from "./atomic-write.ts";
 export { decodeDeclaredBindings, decodeScenarioBindings } from "./bindings-decoder.ts";
 export { readContractSchema, readFindingsSchema } from "./contract-schema.ts";
@@ -8,10 +9,8 @@ export type { DirectoryFinalizationLockOutcome } from "./directory-finalization-
 export { extractFences, type Fence } from "./fence.ts";
 export { decodeFindingsDocument, type FindingsDocument } from "./findings-document.ts";
 export { parseFindingsValues } from "./findings-values-parser.ts";
-export { listSubdirectories } from "./list-subdirectories.ts";
 export { type MarkdownTable, parseMarkdownTables } from "./markdown-table.ts";
 export type { ProcessLiveness } from "./process-liveness.ts";
-export { readIfExists } from "./read-if-exists.ts";
 export { findRecordRoot, relArtifact } from "./record-root.ts";
 export { parseRequirementIdentifiers } from "./requirement-identifiers-parser.ts";
 export type { SchemaUnreadable } from "./schema-unreadable.ts";

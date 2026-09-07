@@ -1,0 +1,292 @@
+{
+  "checkedFiles": 153,
+  "diagnostics": [
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/design/adapter/design-intermediate-representation-validation-materials-repository-implementation.ts",
+      "line": 273,
+      "column": 60,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/design/adapter/design-model-repository-implementation.ts",
+      "line": 23,
+      "column": 7,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/design/adapter/design-model-repository-implementation.ts",
+      "line": 24,
+      "column": 62,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "repository-error-collapse",
+      "path": "src/design/adapter/design-verify-directory-repository-implementation.ts",
+      "line": 78,
+      "column": 66,
+      "message": "a RepositoryError branch is unconditionally converted to not-applicable or success; preserve non-not-found failures"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/design/adapter/design-verify-directory-repository-implementation.ts",
+      "line": 202,
+      "column": 10,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/design/adapter/refinement-map-repository-implementation.ts",
+      "line": 22,
+      "column": 10,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/design/adapter/refinement-materials-repository-implementation.ts",
+      "line": 111,
+      "column": 7,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/design/adapter/sibling-backend-client-implementation.ts",
+      "line": 115,
+      "column": 9,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/doctor/adapter/doctor-workspace-client-implementation.ts",
+      "line": 81,
+      "column": 7,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/doctor/adapter/doctor-workspace-client-implementation.ts",
+      "line": 91,
+      "column": 7,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/doctor/adapter/doctor-workspace-client-implementation.ts",
+      "line": 104,
+      "column": 7,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/doctor/adapter/doctor-workspace-client-implementation.ts",
+      "line": 121,
+      "column": 14,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/doctor/adapter/doctor-workspace-client-implementation.ts",
+      "line": 127,
+      "column": 11,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/doctor/adapter/doctor-workspace-client-implementation.ts",
+      "line": 170,
+      "column": 16,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/doctor/adapter/doctor-workspace-client-implementation.ts",
+      "line": 197,
+      "column": 11,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/doctor/adapter/doctor-workspace-client-implementation.ts",
+      "line": 204,
+      "column": 26,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/doctor/adapter/doctor-workspace-client-implementation.ts",
+      "line": 229,
+      "column": 47,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/doctor/adapter/doctor-workspace-client-implementation.ts",
+      "line": 232,
+      "column": 11,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/doctor/adapter/doctor-workspace-client-implementation.ts",
+      "line": 244,
+      "column": 13,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/doctor/adapter/doctor-workspace-client-implementation.ts",
+      "line": 252,
+      "column": 13,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/doctor/adapter/doctor-workspace-client-implementation.ts",
+      "line": 271,
+      "column": 13,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/doctor/adapter/doctor-workspace-client-implementation.ts",
+      "line": 282,
+      "column": 17,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/doctor/adapter/doctor-workspace-client-implementation.ts",
+      "line": 311,
+      "column": 40,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/doctor/adapter/reference-check-backend-client-implementation.ts",
+      "line": 27,
+      "column": 10,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/doctor/adapter/solver-probe-client-implementation.ts",
+      "line": 91,
+      "column": 9,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/kernel/adapter/directory-finalization-lock.ts",
+      "line": 197,
+      "column": 7,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/kernel/adapter/list-subdirectories.ts",
+      "line": 12,
+      "column": 5,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/kernel/adapter/read-if-exists.ts",
+      "line": 4,
+      "column": 10,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/refcheck/adapter/design-record-repository-implementation.ts",
+      "line": 50,
+      "column": 7,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/refcheck/adapter/reference-check-report-repository-implementation.ts",
+      "line": 22,
+      "column": 10,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/requirements/adapter/formal-model-repository-implementation.ts",
+      "line": 24,
+      "column": 7,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/requirements/adapter/formal-model-repository-implementation.ts",
+      "line": 29,
+      "column": 62,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/requirements/adapter/intermediate-representation-validation-materials-repository-implementation.ts",
+      "line": 233,
+      "column": 60,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/requirements/adapter/quint-client-implementation.ts",
+      "line": 117,
+      "column": 7,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/requirements/adapter/quint-client-implementation.ts",
+      "line": 146,
+      "column": 20,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "filesystem-error-collapse",
+      "path": "src/requirements/adapter/quint-client-implementation.ts",
+      "line": 149,
+      "column": 9,
+      "message": "filesystem acquisition errors are collapsed to null/empty/false/continue; distinguish ENOENT from other RepositoryErrors"
+    },
+    {
+      "rule": "process-output-classification",
+      "path": "src/requirements/adapter/quint-client-implementation.ts",
+      "line": 201,
+      "column": 9,
+      "message": "external process stdout/stderr is classified by an unanchored error/deadlock/fail/violation word; use exit/status/signal or a validated protocol"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/requirements/adapter/requirements-source-repository-implementation.ts",
+      "line": 29,
+      "column": 8,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "repository-error-collapse",
+      "path": "src/requirements/adapter/verification-directory-repository-implementation.ts",
+      "line": 90,
+      "column": 9,
+      "message": "a RepositoryError branch is unconditionally converted to not-applicable or success; preserve non-not-found failures"
+    },
+    {
+      "rule": "filesystem-existence-gate",
+      "path": "src/requirements/adapter/verification-directory-repository-implementation.ts",
+      "line": 216,
+      "column": 10,
+      "message": "existsSync gates acquisition or silently excludes a missing artifact; return a typed RepositoryError or use an explicit unavailable result"
+    },
+    {
+      "rule": "repository-error-collapse",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 32,
+      "column": 15,
+      "message": "a RepositoryError branch is unconditionally converted to not-applicable or success; preserve non-not-found failures"
+    }
+  ]
+}

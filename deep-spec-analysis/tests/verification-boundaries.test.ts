@@ -386,10 +386,29 @@ describe("不正な兄弟文書を正常な集約へ復元しない", () => {
       }
       writeFileSync(join(directory, "quint.json"), JSON.stringify(reportDocument()));
       expect(repository.findByDirectory(ap(directory)).ok).toBe(true);
-      // 導出物の不正だけは再計算できるので、兄弟と違って不在として扱う。
+      // 導出物であっても破損は取得失敗として残し、成功経路へ丸めない。
       writeFileSync(join(directory, "cross-check.json"), "[]");
-      const loaded = repository.findByDirectory(ap(directory));
-      expect(loaded.ok && loaded.value.crossCheck() === null).toBe(true);
+      const malformedCrossCheck = repository.findByDirectory(ap(directory));
+      expect(malformedCrossCheck.ok).toBe(true);
+      if (malformedCrossCheck.ok) {
+        const crossCheck = malformedCrossCheck.value.crossCheck();
+        expect(crossCheck.ok).toBe(false);
+        if (!crossCheck.ok) {
+          expect(crossCheck.error.asString()).toContain("cross-check could not be loaded");
+          const retained = malformedCrossCheck.value.conformedTo(schema).crossCheck();
+          expect(retained.ok).toBe(false);
+          if (!retained.ok) expect(retained.error.equals(crossCheck.error)).toBe(true);
+        }
+      }
+      rmSync(join(directory, "cross-check.json"));
+      mkdirSync(join(directory, "cross-check.json"));
+      const unreadableCrossCheck = repository.findByDirectory(ap(directory));
+      expect(unreadableCrossCheck.ok).toBe(true);
+      if (unreadableCrossCheck.ok) {
+        const crossCheck = unreadableCrossCheck.value.crossCheck();
+        expect(crossCheck.ok).toBe(false);
+        if (!crossCheck.ok) expect(crossCheck.error.asString()).toContain("io-failed");
+      }
     });
   }
 });
@@ -512,11 +531,12 @@ describe("cross-checkの不変条件は呼び順に依存しない", () => {
     const limitedSchema = FindingsSchema.of({ type: "object", properties: { method: { const: "exhaustive" } } });
     const wrongOrder = initial.finalizing(candidate).crossChecked(model, model.irHash()).conformedTo(limitedSchema);
     expect(wrongOrder.candidate()?.isUnavailable()).toBe(true);
-    expect(wrongOrder.crossCheck()).toBeNull();
+    expect(wrongOrder.crossCheck()).toEqual({ ok: true, value: null });
     const prepared = initial.finalizedWith(candidate, model, limitedSchema);
     expect(prepared.candidate()?.isUnavailable()).toBe(true);
-    expect(prepared.crossCheck()?.toDocument().crossChecked).toEqual([]);
-    expect(initial.finalizedWith(candidate, null, limitedSchema).crossCheck()).toBeNull();
+    const preparedCrossCheck = prepared.crossCheck();
+    expect(preparedCrossCheck.ok && preparedCrossCheck.value?.toDocument().crossChecked).toEqual([]);
+    expect(initial.finalizedWith(candidate, null, limitedSchema).crossCheck()).toEqual({ ok: true, value: null });
   });
   test("design: 候補の降格で古い導出物を捨て、一操作でも正しく準備できる", () => {
     const ws = designWorkspace();
@@ -538,10 +558,11 @@ describe("cross-checkの不変条件は呼び順に依存しない", () => {
       .crossChecked(ws.model, ws.model.irHash())
       .conformedTo(limitedSchema);
     expect(wrongOrder.candidate()?.isUnavailable()).toBe(true);
-    expect(wrongOrder.crossCheck()).toBeNull();
+    expect(wrongOrder.crossCheck()).toEqual({ ok: true, value: null });
     const prepared = initial.finalizedWith(candidate, ws.model, limitedSchema);
-    expect(prepared.crossCheck()?.toDocument().crossChecked).toEqual([]);
-    expect(initial.finalizedWith(candidate, null, limitedSchema).crossCheck()).toBeNull();
+    const preparedCrossCheck = prepared.crossCheck();
+    expect(preparedCrossCheck.ok && preparedCrossCheck.value?.toDocument().crossChecked).toEqual([]);
+    expect(initial.finalizedWith(candidate, null, limitedSchema).crossCheck()).toEqual({ ok: true, value: null });
   });
 });
 

@@ -53,9 +53,15 @@ export class InMemoryVerificationDirectoryRepository implements VerificationDire
     this.#store.set(this.#keyOf(candidate.id()), candidate);
     const crossCheck = aggregate.crossCheck();
     const crossKey = `${aggregate.directory().asString()}/${CROSS_CHECK_FILENAME}`;
+    if (!crossCheck.ok)
+      return err({
+        kind: "corrupt",
+        path: crossKey,
+        cause: crossCheck.error.asString(),
+      });
     // 導けなかったクロスチェックは古いまま残さない（実装は stale へ退避する）。
-    if (crossCheck === null) this.#store.delete(crossKey);
-    else this.#store.set(crossKey, crossCheck);
+    if (crossCheck.value === null) this.#store.delete(crossKey);
+    else this.#store.set(crossKey, crossCheck.value);
     return ok(undefined);
   }
 
