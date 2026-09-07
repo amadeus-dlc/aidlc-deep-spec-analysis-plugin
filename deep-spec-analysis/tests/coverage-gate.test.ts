@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   ABSOLUTE_THRESHOLD,
   failedTestCount,
+  failedTestNames,
   geWithTolerance,
   measureWithBun,
   parseArgs,
@@ -149,6 +150,36 @@ describe("coverage gate — decisions", () => {
       return { status: 1, stdout: " 1 fail\n", stderr: "" };
     };
     expect(() => measureWithBun("/repo", run)).toThrow("テストが 1 件失敗しました");
+  });
+
+  test("failedTestNames が失敗行だけを上限まで拾う", () => {
+    const output = ["(pass) 通ったテスト [1.00ms]", "(fail) 落ちたテスト A [2.00ms]", "  (fail) 落ちたテスト B"].join(
+      "\n",
+    );
+    expect(failedTestNames(output)).toEqual(["(fail) 落ちたテスト A [2.00ms]", "(fail) 落ちたテスト B"]);
+    expect(failedTestNames(" 3 pass\n 0 fail\n")).toEqual([]);
+    const many = Array.from({ length: 25 }, (_value, index) => `(fail) t${String(index)}`).join("\n");
+    expect(failedTestNames(many).length).toBe(20);
+  });
+
+  test("テスト失敗の診断に落ちたテスト名が載る", () => {
+    const run = (_command: string, args: readonly string[], _cwd: string) => {
+      const coverageDir = args.find((arg) => arg.startsWith("--coverage-dir="))?.slice("--coverage-dir=".length);
+      if (coverageDir === undefined) throw new Error("coverage directory missing");
+      writeFileSync(`${coverageDir}/lcov.info`, "TN:\nSF:probe.ts\nLF:1\nLH:1\nend_of_record\n");
+      return { status: 1, stdout: "(fail) 壊れた契約 [3.00ms]\n 1 fail\n", stderr: "" };
+    };
+    expect(() => measureWithBun("/repo", run)).toThrow("(fail) 壊れた契約 [3.00ms]");
+  });
+
+  test("失敗行が無いときは診断に子プロセスの出力末尾が載る", () => {
+    const run = (_command: string, args: readonly string[], _cwd: string) => {
+      const coverageDir = args.find((arg) => arg.startsWith("--coverage-dir="))?.slice("--coverage-dir=".length);
+      if (coverageDir === undefined) throw new Error("coverage directory missing");
+      writeFileSync(`${coverageDir}/lcov.info`, "TN:\nSF:probe.ts\nLF:1\nLH:1\nend_of_record\n");
+      return { status: 1, stdout: " 1 fail\n", stderr: "panic: 実行環境が壊れています" };
+    };
+    expect(() => measureWithBun("/repo", run)).toThrow("panic: 実行環境が壊れています");
   });
 });
 
