@@ -35,6 +35,14 @@ export class RequirementIdentifiers
     return new RequirementIdentifiers(values);
   }
 
+  override map(transform: (element: RequirementIdentifier) => RequirementIdentifier): RequirementIdentifiers {
+    return this.mapTo(transform, RequirementIdentifiers.of);
+  }
+
+  override combine(other: RequirementIdentifiers): RequirementIdentifiers {
+    return this.combineTo(other, RequirementIdentifiers.of);
+  }
+
   static parse(values: readonly RequirementIdentifier[]): Result<RequirementIdentifiers, ParseError> {
     return parseConstruction(() => new RequirementIdentifiers(values));
   }

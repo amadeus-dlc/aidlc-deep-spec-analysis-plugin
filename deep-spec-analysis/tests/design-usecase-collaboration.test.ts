@@ -104,7 +104,7 @@ function targetCount(model: DesignModel): number {
   return model
     .units()
     .toArray()
-    .reduce((n, u) => n + [...u.allTargets()].length, 0);
+    .reduce((n, u) => n + u.allTargets().count(), 0);
 }
 
 // --- 注入する協力者 ---------------------------------------------------------

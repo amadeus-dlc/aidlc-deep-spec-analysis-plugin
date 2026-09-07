@@ -26,6 +26,14 @@ export class RefinementAttributes extends FirstClassCollectionBase<RefinementAtt
     return new RefinementAttributes(values);
   }
 
+  override map(transform: (element: RefinementAttribute) => RefinementAttribute): RefinementAttributes {
+    return this.mapTo(transform, RefinementAttributes.of);
+  }
+
+  override combine(other: RefinementAttributes): RefinementAttributes {
+    return this.combineTo(other, RefinementAttributes.of);
+  }
+
   static parse(values: readonly RefinementAttribute[]): Result<RefinementAttributes, ParseError> {
     return parseConstruction(() => new RefinementAttributes(values));
   }

@@ -41,6 +41,14 @@ export class ReachabilityPlan extends FirstClassCollectionBase<MachineReachabili
     return new ReachabilityPlan(machines);
   }
 
+  override map(transform: (element: MachineReachability) => MachineReachability): ReachabilityPlan {
+    return this.mapTo(transform, ReachabilityPlan.of);
+  }
+
+  override combine(other: ReachabilityPlan): ReachabilityPlan {
+    return this.combineTo(other, ReachabilityPlan.of);
+  }
+
   static parse(machines: readonly MachineReachability[]): Result<ReachabilityPlan, ParseError> {
     return parseConstruction(() => new ReachabilityPlan(machines));
   }

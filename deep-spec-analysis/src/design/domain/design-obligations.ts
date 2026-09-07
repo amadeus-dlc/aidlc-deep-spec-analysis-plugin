@@ -24,6 +24,14 @@ export class DesignObligations extends FirstClassCollectionBase<DesignObligation
     return new DesignObligations(values);
   }
 
+  override map(transform: (element: DesignObligation) => DesignObligation): DesignObligations {
+    return this.mapTo(transform, DesignObligations.of);
+  }
+
+  override combine(other: DesignObligations): DesignObligations {
+    return this.combineTo(other, DesignObligations.of);
+  }
+
   static parse(values: readonly DesignObligation[]): Result<DesignObligations, ParseError> {
     return parseConstruction(() => new DesignObligations(values));
   }

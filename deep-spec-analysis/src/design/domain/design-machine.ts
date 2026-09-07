@@ -1,4 +1,5 @@
 import type { AttributePath } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfBoolean } from "@deep-spec-analysis/kernel-infrastructure";
 // エンティティ属性ひとつを生涯とする状態機械（契約3）。deterministic: false は
 // 同一 (state, trigger) 重複の人間承認済み waiver 宣言。逐語移動。id と
 // 生涯属性の座標（entity / attribute）はドメインプリミティブで運ぶ。
@@ -49,28 +50,31 @@ export class DesignMachine {
   }
 
   equals(other: DesignMachine): boolean {
-    const initial = [...this.#initial];
-    const otherInitial = [...other.#initial];
-    const transitions = [...this.#transitions];
-    const otherTransitions = [...other.#transitions];
-    const ignores = [...this.#ignores];
-    const otherIgnores = [...other.#ignores];
     return (
       this.#id.equals(other.#id) &&
       this.#entity.equals(other.#entity) &&
       this.#attribute.equals(other.#attribute) &&
       this.#deterministic === other.#deterministic &&
-      initial.length === otherInitial.length &&
-      initial.every((state, index) => state.equals(otherInitial[index] as typeof state)) &&
-      transitions.length === otherTransitions.length &&
-      transitions.every((transition, index) => transition.equals(otherTransitions[index] as typeof transition)) &&
-      ignores.length === otherIgnores.length &&
-      ignores.every((ignore, index) => ignore.equals(otherIgnores[index] as typeof ignore))
+      this.#initial.equals(other.#initial) &&
+      this.#transitions.equals(other.#transitions) &&
+      this.#ignores.equals(other.#ignores)
     );
   }
 
+  hashCode(): number {
+    return combinedHash([
+      this.#id.hashCode(),
+      this.#entity.hashCode(),
+      this.#attribute.hashCode(),
+      hashOfBoolean(this.#deterministic),
+      this.#initial.hashCode(),
+      this.#transitions.hashCode(),
+      this.#ignores.hashCode(),
+    ]);
+  }
+
   ownsTransition(reference: LoweredOriginReference): boolean {
-    return [...this.#transitions].some((transition) => transition.id().asString() === reference.asString());
+    return this.#transitions.exists((transition) => transition.id().asString() === reference.asString());
   }
 
   hasAttribute(path: AttributePath): boolean {

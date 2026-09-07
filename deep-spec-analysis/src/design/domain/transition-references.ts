@@ -1,4 +1,4 @@
-import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase, type TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
   type ParseError,
@@ -24,6 +24,14 @@ export class TransitionReferences extends FirstClassCollectionBase<TransitionRef
     return new TransitionReferences(values);
   }
 
+  override map(transform: (element: TransitionReference) => TransitionReference): TransitionReferences {
+    return this.mapTo(transform, TransitionReferences.of);
+  }
+
+  override combine(other: TransitionReferences): TransitionReferences {
+    return this.combineTo(other, TransitionReferences.of);
+  }
+
   static parse(values: readonly TransitionReference[]): Result<TransitionReferences, ParseError> {
     return parseConstruction(() => new TransitionReferences(values));
   }
@@ -34,6 +42,11 @@ export class TransitionReferences extends FirstClassCollectionBase<TransitionRef
 
   override *[Symbol.iterator](): Iterator<TransitionReference> {
     yield* this.#values;
+  }
+
+  // 写像先の設計 id を検査対象 id として読む（宣言順のまま——finding の対象列の材料）。
+  asTargetIds(): readonly TargetIdentifier[] {
+    return this.#values.map((reference) => reference.asTargetId());
   }
 
   // 宣言に無い設計 id（gap 文言用の辞書順——旧 .sort() の凍結挙動）。

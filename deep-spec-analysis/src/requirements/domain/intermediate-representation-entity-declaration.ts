@@ -1,3 +1,4 @@
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
 import type { IntermediateRepresentationAttributeDeclaration } from "./intermediate-representation-attribute-declaration.ts";
 import type { IntermediateRepresentationAttributeDeclarations } from "./intermediate-representation-attribute-declarations.ts";
 import type { IntermediateRepresentationEntityName } from "./intermediate-representation-entity-name.ts";
@@ -29,13 +30,11 @@ export class IntermediateRepresentationEntityDeclaration {
   }
 
   equals(other: IntermediateRepresentationEntityDeclaration): boolean {
-    const attributes = this.#attributes.toArray();
-    const otherAttributes = other.#attributes.toArray();
-    return (
-      this.#name.equals(other.#name) &&
-      attributes.length === otherAttributes.length &&
-      attributes.every((attribute, index) => attribute.equals(otherAttributes[index] as (typeof attributes)[number]))
-    );
+    return this.#name.equals(other.#name) && this.#attributes.equals(other.#attributes);
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#name.hashCode(), this.#attributes.hashCode()]);
   }
 
   attributes(): IntermediateRepresentationAttributeDeclarations {
@@ -51,11 +50,8 @@ export class IntermediateRepresentationEntityDeclaration {
       duplicated: boolean,
     ) => void,
   ): void {
-    const seen = new Set<string>();
-    for (const attribute of this.#attributes) {
-      const attributeName = attribute.name().asString();
-      visitor(`${this.#name.asString()}.${attributeName}`, attribute, seen.has(attributeName));
-      seen.add(attributeName);
-    }
+    this.#attributes.inspectInDeclarationOrder((attribute, duplicated) => {
+      visitor(`${this.#name.asString()}.${attribute.name().asString()}`, attribute, duplicated);
+    });
   }
 }

@@ -215,9 +215,7 @@ export class ReferenceCheckReport {
   // アダプタは JSON.stringify で描画するだけ（旧 serializer の orderedDocument
   // を逐語で移設、golden 凍結）。irHash は inputs の正準 JSON の sha256。
   toDocument(): { [k: string]: Json } {
-    const inputs = this.#inputs
-      .toArray()
-      .map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() })) as unknown as Json;
+    const inputs = this.#inputs.toDocuments() as unknown as Json;
     const ordered: { [k: string]: Json } = {
       backend: this.#id.backendName().asString(),
       irVersion: CATALOG_VERSION,
@@ -228,39 +226,11 @@ export class ReferenceCheckReport {
     if (reason !== null) ordered.unavailable = { reason };
     ordered.inputs = inputs;
     ordered.checked = this.#checked.toStrings() as unknown as Json;
-    // ペイロードのコレクションはこの描画点でだけ toArray() に降りる。キー順は
-    // 旧構築サイトの挿入順そのもの（golden バイト凍結）：finding は (kind,
-    // frRefs, targets, witness, detail, unit?)、witness ref は (artifact,
-    // element, value?)、skip は (target, reason, detail?, unit?)。
-    ordered.findings = this.#findings.toArray().map((f) => {
-      const refs = f
-        .witnessRefs()
-        .toArray()
-        .map((r) => {
-          const out: { [k: string]: Json } = { artifact: r.artifact(), element: r.element() };
-          const value = r.value();
-          if (value !== undefined) out.value = value;
-          return out as Json;
-        });
-      const out: { [k: string]: Json } = {
-        kind: f.kind(),
-        frRefs: f.functionalRequirementReferences().toStrings() as unknown as Json,
-        targets: f.targets().toStrings() as unknown as Json,
-        witness: { refs },
-        detail: f.detail(),
-      };
-      const unit = f.unit();
-      if (unit !== undefined) out.unit = unit;
-      return out as Json;
-    });
-    ordered.skipped = this.#skipped.toArray().map((sk) => {
-      const out: { [k: string]: Json } = { target: sk.target(), reason: sk.reason() };
-      const detail = sk.detail();
-      if (detail !== undefined) out.detail = detail;
-      const unit = sk.unit();
-      if (unit !== undefined) out.unit = unit;
-      return out as Json;
-    });
+    // ペイロードの 1 行ずつのキー順（golden バイト凍結）は記録自身が所有する：
+    // finding は (kind, frRefs, targets, witness, detail, unit?)、witness ref は
+    // (artifact, element, value?)、skip は (target, reason, detail?, unit?)。
+    ordered.findings = this.#findings.toDocuments();
+    ordered.skipped = this.#skipped.toDocuments();
     return ordered;
   }
 

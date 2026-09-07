@@ -31,6 +31,20 @@ export class IntermediateRepresentationAttributeDeclarations
     return new IntermediateRepresentationAttributeDeclarations(values);
   }
 
+  override map(
+    transform: (
+      element: IntermediateRepresentationAttributeDeclaration,
+    ) => IntermediateRepresentationAttributeDeclaration,
+  ): IntermediateRepresentationAttributeDeclarations {
+    return this.mapTo(transform, IntermediateRepresentationAttributeDeclarations.of);
+  }
+
+  override combine(
+    other: IntermediateRepresentationAttributeDeclarations,
+  ): IntermediateRepresentationAttributeDeclarations {
+    return this.combineTo(other, IntermediateRepresentationAttributeDeclarations.of);
+  }
+
   static parse(
     values: readonly IntermediateRepresentationAttributeDeclaration[],
   ): Result<IntermediateRepresentationAttributeDeclarations, ParseError> {
@@ -49,6 +63,19 @@ export class IntermediateRepresentationAttributeDeclarations
 
   override *[Symbol.iterator](): Iterator<IntermediateRepresentationAttributeDeclaration> {
     yield* this.#values;
+  }
+
+  // 属性を宣言順に訪ね、「既に同名を見たか」を渡す（重複は 2 回目以降の
+  // 出現に立つ——凍結順）。同名の判定は宣言列そのものの知識。
+  inspectInDeclarationOrder(
+    visitor: (attribute: IntermediateRepresentationAttributeDeclaration, duplicated: boolean) => void,
+  ): void {
+    const seen = new Set<string>();
+    for (const attribute of this.#values) {
+      const name = attribute.name().asString();
+      visitor(attribute, seen.has(name));
+      seen.add(name);
+    }
   }
 
   toArray(): readonly IntermediateRepresentationAttributeDeclaration[] {

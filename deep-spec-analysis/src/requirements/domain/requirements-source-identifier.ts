@@ -22,6 +22,10 @@ export class RequirementsSourceIdentifier {
     return this.#recordRoot.equals(other.#recordRoot);
   }
 
+  hashCode(): number {
+    return this.#recordRoot.hashCode();
+  }
+
   recordRoot(): ArtifactPath {
     return this.#recordRoot;
   }

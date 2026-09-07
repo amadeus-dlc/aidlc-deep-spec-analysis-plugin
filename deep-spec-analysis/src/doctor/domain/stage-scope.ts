@@ -1,4 +1,5 @@
 import {
+  hashOfString,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -24,6 +25,9 @@ export class StageScope {
   }
   equals(other: StageScope): boolean {
     return this.#value === other.#value;
+  }
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
   asString(): string {
     return this.#value;

@@ -1,6 +1,14 @@
 import type { Expression } from "@deep-spec-analysis/kernel-domain";
 import { ErrorMessage, ErrorMessages, ExpressionTree } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { IntermediateRepresentationAttributeCatalog } from "./intermediate-representation-attribute-catalog.ts";
 // 契約1 IR の背景仮定宣言。抱える式の列挙と prime 禁止（背景仮定は常に
 // 無prime）は宣言自身が所有する——波3の義務／シナリオと同じ裁定（#71 波4）。
@@ -32,12 +40,15 @@ export class IntermediateRepresentationBackgroundDeclaration {
   }
 
   diagnostics(catalog: IntermediateRepresentationAttributeCatalog): ErrorMessages {
-    const context = `background ${this.#id.asString()}`;
-    const errors: string[] = [];
-    if (this.#assert !== undefined)
-      for (const message of catalog.expressionDiagnostics(this.#assert, context, false))
-        errors.push(message.asString());
-    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+    return ErrorMessages.collect(this.diagnosticStrings(catalog).map(ErrorMessage.parse));
+  }
+
+  // 境界: 診断の表現予算は呼び手の ErrorMessages.collect が守るので、
+  // ここは文字列のまま返す。
+  diagnosticStrings(catalog: IntermediateRepresentationAttributeCatalog): string[] {
+    const assertion = this.#assert;
+    if (assertion === undefined) return [];
+    return catalog.expressionDiagnosticStrings(assertion, `background ${this.#id.asString()}`, false);
   }
 
   id(): BackgroundAssumptionIdentifier {
@@ -51,5 +62,12 @@ export class IntermediateRepresentationBackgroundDeclaration {
         : other.#assert !== undefined &&
           ExpressionTree.of(this.#assert).isCanonicallyEqual(ExpressionTree.of(other.#assert));
     return this.#id.equals(other.#id) && assertionsEqual;
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#id.hashCode(),
+      hashOfNullable(this.#assert, (value) => hashOfString(canonicalStringify(value))),
+    ]);
   }
 }

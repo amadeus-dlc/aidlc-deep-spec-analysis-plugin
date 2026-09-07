@@ -1,4 +1,5 @@
 import {
+  hashOfString,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -34,6 +35,10 @@ export class VerificationMethod {
 
   equals(other: VerificationMethod): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   asString(): string {

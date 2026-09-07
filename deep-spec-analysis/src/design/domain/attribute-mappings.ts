@@ -46,6 +46,14 @@ export class AttributeMappings extends FirstClassCollectionBase<AttributeMapping
     return new AttributeMappings(values);
   }
 
+  override map(transform: (element: AttributeMapping) => AttributeMapping): AttributeMappings {
+    return this.mapTo(transform, AttributeMappings.of);
+  }
+
+  override combine(other: AttributeMappings): AttributeMappings {
+    return this.combineTo(other, AttributeMappings.of);
+  }
+
   static parse(values: readonly AttributeMapping[]): Result<AttributeMappings, ParseError> {
     return parseConstruction(() => new AttributeMappings(values));
   }

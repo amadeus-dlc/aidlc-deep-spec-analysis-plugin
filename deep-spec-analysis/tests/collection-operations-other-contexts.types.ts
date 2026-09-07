@@ -4,6 +4,7 @@ import type {
   DesignArtifacts,
   HealthVerdict,
   InstallationManifest,
+  ManifestEntries,
   ManifestEntry,
   PluginVersion,
   StableReleases,
@@ -116,15 +117,28 @@ import type {
 } from "@deep-spec-analysis/requirements-domain";
 
 type Assert<T extends true> = T;
-type Normal<C, E extends Equatable<E>> =
-  C extends FirstClassCollection<E>
-    ? ReturnType<C["tail"]> extends C
-      ? ReturnType<C["filter"]> extends C
-        ? true
+type Normal<C, E extends Equatable<E>> = C extends FirstClassCollection<E> & {
+  foldLeft<A>(initial: A, accumulate: (accumulator: A, element: E) => A): A;
+}
+  ? ReturnType<C["map"]> extends C
+    ? ReturnType<C["combine"]> extends C
+      ? ReturnType<C["tail"]> extends C
+        ? ReturnType<C["filter"]> extends C
+          ? true
+          : false
         : false
       : false
-    : false;
-type NonEmpty<C, E extends Equatable<E>> = C extends NonEmptyFirstClassCollection<E> ? true : false;
+    : false
+  : false;
+type NonEmpty<C, E extends Equatable<E>> = C extends NonEmptyFirstClassCollection<E> & {
+  foldLeft<A>(initial: A, accumulate: (accumulator: A, element: E) => A): A;
+}
+  ? ReturnType<C["map"]> extends C
+    ? ReturnType<C["combine"]> extends C
+      ? true
+      : false
+    : false
+  : false;
 
 type NormalCollections = [
   Normal<AllowedValues, AllowedValue>,
@@ -184,10 +198,21 @@ type NormalCollections = [
   Normal<StableReleases, PluginVersion>,
   Normal<StageScopes, StageScope>,
   Normal<StructuralDebt, StructuralObservation>,
+  Normal<ManifestEntries, ManifestEntry>,
 ][number];
 
 export type EveryNormalCollectionUsesTheCommonOperations = Assert<NormalCollections extends true ? true : false>;
 
 export type InstallationManifestKeepsItsNonEmptyContract = Assert<NonEmpty<InstallationManifest, ManifestEntry>>;
+export type InstallationManifestTailUsesManifestEntries = Assert<
+  ReturnType<InstallationManifest["tail"]> extends ManifestEntries ? true : false
+>;
+export type InstallationManifestFilterUsesManifestEntries = Assert<
+  ReturnType<InstallationManifest["filter"]> extends ManifestEntries ? true : false
+>;
+export type InstallationManifestCombineKeepsConcreteType = Assert<
+  ReturnType<InstallationManifest["combine"]> extends InstallationManifest ? true : false
+>;
+export type MapToIsNotPublic = Assert<"mapTo" extends keyof AllowedValues ? false : true>;
 
 export type NonEmptyCollectionsDoNotExposeIsEmpty = Assert<"isEmpty" extends keyof InstallationManifest ? false : true>;

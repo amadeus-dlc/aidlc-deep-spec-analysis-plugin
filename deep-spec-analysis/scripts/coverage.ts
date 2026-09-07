@@ -44,6 +44,8 @@ export const TOLERANCE = 0.01;
 // -----------------------------------------------------------------------------
 
 const PACKAGE_DIR = "deep-spec-analysis";
+// ゲートが落ちた理由をログだけで追うための診断上限。全件は出さない。
+const MAX_REPORTED_FAILURES = 20;
 const USAGE = `使い方: bun deep-spec-analysis/scripts/coverage.ts [オプション]
 
 オプション:
@@ -128,6 +130,20 @@ export function failedTestCount(output: string): number {
   return match ? Number(match[1]) : 0;
 }
 
+/** `bun test` の出力から失敗したテストの見出し行 (例: "(fail) 名前 [1.00ms]") を
+ *  最大 MAX_REPORTED_FAILURES 件まで抜く。ゲートが落ちた理由をログだけで
+ *  追えるようにするための診断であり、判定には使わない。 */
+export function failedTestNames(output: string): readonly string[] {
+  const names: string[] = [];
+  for (const raw of output.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line.startsWith("(fail)")) continue;
+    names.push(line);
+    if (names.length === MAX_REPORTED_FAILURES) break;
+  }
+  return names;
+}
+
 /** 指定リポジトリルートでLCOVを出力し、子プロセスの終了・テスト失敗・
  * 出力の欠落を検査してから行カバレッジを返す。Bunの通常レポーターによる
  * ファイル単位の関数・行カバレッジ判定とは別に、LCOVのLF/LHを計測対象全体で
@@ -143,7 +159,11 @@ export function measureWithBun(repoRoot: string, run: CommandRunner = defaultRun
     );
     if (result.error) throw new Error(`bun test を起動できません (${packageDir}): ${result.error.message}`);
     const failed = failedTestCount(`${result.stdout}\n${result.stderr}`);
-    if (failed > 0) throw new Error(`テストが ${failed} 件失敗しました (${packageDir})。カバレッジは判定しません`);
+    if (failed > 0) {
+      const names = failedTestNames(`${result.stdout}\n${result.stderr}`);
+      const detail = names.length > 0 ? `\n${names.join("\n")}` : `\n${describeFailure(result)}`;
+      throw new Error(`テストが ${failed} 件失敗しました (${packageDir})。カバレッジは判定しません${detail}`);
+    }
     if (result.status !== 0)
       throw new Error(
         `bun test が終了コード ${String(result.status)} で終了しました (${packageDir})。カバレッジは判定しません`,

@@ -1,5 +1,13 @@
 import { type Expression, ExpressionTree } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 import type { BackgroundAssumptionIdentifier } from "./background-assumption-identifier.ts";
 
@@ -35,6 +43,13 @@ export class BackgroundAssumption {
         : other.#assert !== undefined &&
           ExpressionTree.of(this.#assert).isCanonicallyEqual(ExpressionTree.of(other.#assert));
     return this.#id.equals(other.#id) && assertionsEqual;
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#id.hashCode(),
+      hashOfNullable(this.#assert, (value) => hashOfString(canonicalStringify(value))),
+    ]);
   }
 
   assertion(): Expression {

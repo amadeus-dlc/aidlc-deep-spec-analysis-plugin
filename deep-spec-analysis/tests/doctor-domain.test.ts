@@ -24,6 +24,7 @@ import {
   HealthVerdict,
   InstallationManifest,
   InstalledStatus,
+  InstalledStatuses,
   IntentLocation,
   ManifestEntry,
   SolverAvailability,
@@ -207,7 +208,11 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
 
   test("manifest and solver rows render the legacy bytes", () => {
     const rows = presenter.installation(
-      ok([InstalledStatus.of(ManifestEntry.error(ArtifactPath.of("sensors/aidlc-deep-spec-ir-valid.md")), false)]),
+      ok(
+        InstalledStatuses.of([
+          InstalledStatus.of(ManifestEntry.error(ArtifactPath.of("sensors/aidlc-deep-spec-ir-valid.md")), false),
+        ]),
+      ),
     );
     expect(rows[0]?.toDocument()).toEqual({
       pass: false,
@@ -401,7 +406,7 @@ describe("doctor flow and observation ownership", () => {
       }).execute(),
     );
     expect(installed).toHaveLength(26);
-    expect(statuses.every((status) => status.isPresent())).toBe(true);
+    expect(statuses.exists((status) => !status.isPresent())).toBe(false);
     const targets = DesignArtifacts.of([artifact("a"), artifact("b"), artifact("c")]);
     const requested: string[] = [];
     const out = requireSuccess(

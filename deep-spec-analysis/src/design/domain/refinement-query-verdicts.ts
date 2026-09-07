@@ -28,6 +28,16 @@ export class RefinementQueryVerdicts extends FirstClassCollectionBase<
     return new RefinementQueryVerdicts(values);
   }
 
+  override map(
+    transform: (element: RefinementQueryVerdictEntry) => RefinementQueryVerdictEntry,
+  ): RefinementQueryVerdicts {
+    return this.mapTo(transform, RefinementQueryVerdicts.of);
+  }
+
+  override combine(other: RefinementQueryVerdicts): RefinementQueryVerdicts {
+    return this.combineTo(other, RefinementQueryVerdicts.of);
+  }
+
   static parse(values: readonly RefinementQueryVerdictEntry[]): Result<RefinementQueryVerdicts, ParseError> {
     return parseConstruction(() => new RefinementQueryVerdicts(values));
   }

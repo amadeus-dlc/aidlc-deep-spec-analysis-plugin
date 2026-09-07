@@ -1,3 +1,4 @@
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
 import type { ComponentName } from "./component-name.ts";
 import type { ElementPath } from "./element-path.ts";
 import type { EntityName } from "./entity-name.ts";
@@ -38,5 +39,9 @@ export class EntityReference {
     return (
       this.#entity.equals(other.#entity) && this.#ownedBy.equals(other.#ownedBy) && this.#element.equals(other.#element)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#entity.hashCode(), this.#ownedBy.hashCode(), this.#element.hashCode()]);
   }
 }

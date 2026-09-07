@@ -1,4 +1,5 @@
 import type { SkipReason, TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfNullable, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 
 // v1 検証 skip（契約2）——対象・理由・任意の説明。正準順（target → reason）と
 // 「その対象の skip か」の判定は記録自身の知識（#71 波17）。reason は分類
@@ -39,6 +40,14 @@ export class VerificationSkipped {
       this.#reason.asString() === other.#reason.asString() &&
       this.#detail === other.#detail
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#target.hashCode(),
+      hashOfString(this.#reason.asString()),
+      hashOfNullable(this.#detail, hashOfString),
+    ]);
   }
 
   isFor(target: TargetIdentifier): boolean {

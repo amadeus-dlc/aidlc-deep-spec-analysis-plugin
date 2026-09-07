@@ -23,6 +23,14 @@ export class AllowedValues
     return new AllowedValues(values);
   }
 
+  override map(transform: (element: AllowedValue) => AllowedValue): AllowedValues {
+    return this.mapTo(transform, AllowedValues.of);
+  }
+
+  override combine(other: AllowedValues): AllowedValues {
+    return this.combineTo(other, AllowedValues.of);
+  }
+
   static parse(values: readonly AllowedValue[]): Result<AllowedValues, ParseError> {
     return parseConstruction(() => new AllowedValues(values));
   }

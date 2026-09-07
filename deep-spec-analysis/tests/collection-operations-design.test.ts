@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import * as Design from "@deep-spec-analysis/design-domain";
 import {
   AttributeMapping,
   AttributeMappings,
@@ -44,9 +45,10 @@ import {
 import {
   AttributeKind,
   AttributePath,
+  type Equatable,
   ExpressionTree,
+  type FirstClassCollection,
   FunctionalRequirementReferences,
-  ImmutableFirstClassCollection,
   ObligationNature,
   QueryLabel,
   TargetIdentifier,
@@ -54,6 +56,71 @@ import {
   UnitName,
 } from "@deep-spec-analysis/kernel-domain";
 import { IllegalArgumentException } from "@deep-spec-analysis/kernel-infrastructure";
+
+function verifyEmptyDesignCollection<
+  E extends Equatable<E>,
+  C extends FirstClassCollection<E> & {
+    map(transform: (element: E) => E): C;
+    combine(other: C): C;
+  },
+>(name: string, factory: () => C): void {
+  test(`${name} は空集合でもmap/combineの具象契約を保つ`, () => {
+    const empty = factory();
+    const mapped = empty.map((value) => value);
+    const combined = empty.combine(empty);
+    expect(mapped).not.toBe(empty);
+    expect(combined).not.toBe(empty);
+    expect([...mapped]).toHaveLength(0);
+    expect([...combined]).toHaveLength(0);
+    expect([...empty]).toHaveLength(0);
+  });
+}
+
+verifyEmptyDesignCollection("AttributePaths", () => AttributePaths.of([]));
+verifyEmptyDesignCollection("BusinessRuleReferences", () => BusinessRuleReferences.of([]));
+verifyEmptyDesignCollection("CheckedUnits", () => Design.CheckedUnits.of([]));
+verifyEmptyDesignCollection("DesignAssignments", () => DesignAssignments.of([]));
+verifyEmptyDesignCollection("DesignAttributeDeclarations", () => DesignAttributeDeclarations.of([]));
+verifyEmptyDesignCollection("DesignBackgroundAssumptions", () => DesignBackgroundAssumptions.of([]));
+verifyEmptyDesignCollection("DesignBackgroundDeclarations", () => Design.DesignBackgroundDeclarations.of([]));
+verifyEmptyDesignCollection("DesignCrossCheckedEntries", () => Design.DesignCrossCheckedEntries.of([]));
+verifyEmptyDesignCollection("DesignEntityDeclarations", () => DesignEntityDeclarations.of([]));
+verifyEmptyDesignCollection("DesignFindings", () => Design.DesignFindings.of([]));
+verifyEmptyDesignCollection("DesignIgnoreDeclarations", () => Design.DesignIgnoreDeclarations.of([]));
+verifyEmptyDesignCollection("DesignIgnores", () => Design.DesignIgnores.of([]));
+verifyEmptyDesignCollection("DesignInputAnchors", () => Design.DesignInputAnchors.of([]));
+verifyEmptyDesignCollection("DesignMachineDeclarations", () => Design.DesignMachineDeclarations.of([]));
+verifyEmptyDesignCollection("DesignMachines", () => DesignMachines.of([]));
+verifyEmptyDesignCollection("DesignObligationDeclarations", () => Design.DesignObligationDeclarations.of([]));
+verifyEmptyDesignCollection("DesignObligations", () => DesignObligations.of([]));
+verifyEmptyDesignCollection("DesignReports", () => Design.DesignReports.of([]));
+verifyEmptyDesignCollection("DesignScenarioDeclarations", () => Design.DesignScenarioDeclarations.of([]));
+verifyEmptyDesignCollection("DesignScenarios", () => DesignScenarios.of([]));
+verifyEmptyDesignCollection("DesignSkips", () => Design.DesignSkips.of([]));
+verifyEmptyDesignCollection("DesignTransitionDeclarations", () => Design.DesignTransitionDeclarations.of([]));
+verifyEmptyDesignCollection("DesignTransitions", () => Design.DesignTransitions.of([]));
+verifyEmptyDesignCollection("DesignUnitDeclarations", () => Design.DesignUnitDeclarations.of([]));
+verifyEmptyDesignCollection("DesignUnits", () => Design.DesignUnits.of([]));
+verifyEmptyDesignCollection("EffectAssignments", () => Design.EffectAssignments.of([]));
+verifyEmptyDesignCollection("EventMappings", () => EventMappings.of([]));
+verifyEmptyDesignCollection("InitialStates", () => InitialStates.of([]));
+verifyEmptyDesignCollection("IssuedLoweredIdentifiers", () => Design.IssuedLoweredIdentifiers.of([]));
+verifyEmptyDesignCollection("LoweredBackgrounds", () => Design.LoweredBackgrounds.of([]));
+verifyEmptyDesignCollection("LoweredObligations", () => Design.LoweredObligations.of([]));
+verifyEmptyDesignCollection("LoweredScenarios", () => Design.LoweredScenarios.of([]));
+verifyEmptyDesignCollection("ReachabilityPlan", () => Design.ReachabilityPlan.of([]));
+verifyEmptyDesignCollection("RefinementAttributes", () => Design.RefinementAttributes.of([]));
+verifyEmptyDesignCollection("RefinementObligations", () => Design.RefinementObligations.of([]));
+verifyEmptyDesignCollection("RefinementQueryVerdicts", () => RefinementQueryVerdicts.of([]));
+verifyEmptyDesignCollection("RefinementQuintInvariants", () => Design.RefinementQuintInvariants.of([]));
+verifyEmptyDesignCollection("RefinementScenarios", () => Design.RefinementScenarios.of([]));
+verifyEmptyDesignCollection("RefinementUnitMaps", () => RefinementUnitMaps.of([]));
+verifyEmptyDesignCollection("RuleSubsumptions", () => Design.RuleSubsumptions.of([]));
+verifyEmptyDesignCollection("SiblingVerdictFindings", () => Design.SiblingVerdictFindings.of([]));
+verifyEmptyDesignCollection("SiblingVerdictSkips", () => Design.SiblingVerdictSkips.of([]));
+verifyEmptyDesignCollection("TransitionReferences", () => Design.TransitionReferences.of([]));
+verifyEmptyDesignCollection("UnformalizedTargets", () => Design.UnformalizedTargets.of([]));
+verifyEmptyDesignCollection("UnmappedDeclarations", () => UnmappedDeclarations.of([]));
 
 test("代表的な設計コレクションは順序・値同値・不変性を公開操作で提供する", () => {
   const first = AttributeMapping.of(AttributePath.of("Order.total"), {
@@ -92,9 +159,16 @@ test("代表的な設計コレクションは順序・値同値・不変性を�
   expect(mappings.filter((value) => value.equals(second))).toBeInstanceOf(AttributeMappings);
   expect([...mappings.filter((value) => value.equals(second))].map((value) => value.equals(second))).toEqual([true]);
 
-  const mapped = mappings.map((value) => InitialState.of(value.req().asString()));
-  expect(mapped).toBeInstanceOf(ImmutableFirstClassCollection);
-  expect([...mapped].map((value) => value.asString())).toEqual(["Order.total", "Order.total"]);
+  const mapped = mappings.map((value) => value);
+  expect(mapped).toBeInstanceOf(AttributeMappings);
+  expect([...mapped].map((value) => value.req().asString())).toEqual(["Order.total", "Order.total"]);
+  expect([...mappings.combine(mappings)].map((value) => value.req().asString())).toEqual([
+    "Order.total",
+    "Order.total",
+    "Order.total",
+    "Order.total",
+  ]);
+  expect(mappings.foldLeft(0, (accumulator) => accumulator + 1)).toBe(2);
   expect([...mappings].map((value) => value.equals(first) || value.equals(second))).toEqual([true, true]);
 });
 
@@ -205,9 +279,8 @@ test("キーを値に結合した判定エントリはqueryの文脈を保持す
       .head()
       .equals(entry),
   ).toBe(true);
-  expect(values.map((candidate) => InitialState.of(candidate.query().asString()))).toBeInstanceOf(
-    ImmutableFirstClassCollection,
-  );
+  expect(values.map((candidate) => candidate)).toBeInstanceOf(RefinementQueryVerdicts);
+  expect(values.combine(values)).toBeInstanceOf(RefinementQueryVerdicts);
   expect(values.verdictOf(query)?.equals(verdict)).toBe(true);
 });
 

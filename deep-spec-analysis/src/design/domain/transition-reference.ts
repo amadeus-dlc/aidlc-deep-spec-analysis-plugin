@@ -1,6 +1,7 @@
 import { TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
 import {
   compareCanonically,
+  hashOfString,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -28,6 +29,10 @@ export class TransitionReference {
 
   equals(other: TransitionReference): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   // 正準順（英字骨格→数値セグメント）——kernel の TargetIdentifier が所有する順序に従う（裁定 1）。

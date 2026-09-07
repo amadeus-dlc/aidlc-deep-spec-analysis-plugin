@@ -33,6 +33,14 @@ export class ContractRows
     return new ContractRows(values);
   }
 
+  override map(transform: (element: ContractRow) => ContractRow): ContractRows {
+    return this.mapTo(transform, ContractRows.of);
+  }
+
+  override combine(other: ContractRows): ContractRows {
+    return this.combineTo(other, ContractRows.of);
+  }
+
   static parse(values: readonly ContractRow[]): Result<ContractRows, ParseError> {
     return parseConstruction(() => new ContractRows(values));
   }

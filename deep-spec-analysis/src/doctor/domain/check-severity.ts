@@ -1,3 +1,5 @@
+import { hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
+
 // doctor 検査行の深刻度——"error" は /aidlc --doctor を失敗させ、"advisory" は
 // 表示のみ（FR11 / NFR3）。公開語彙（判定書の severity）を知るドメイン
 // プリミティブで、`Check` と `ManifestEntry` が共有する（種別規律の裁定 18、
@@ -28,6 +30,10 @@ export class CheckSeverity {
 
   equals(other: CheckSeverity): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   // 判定書へ載せる公開トークン。

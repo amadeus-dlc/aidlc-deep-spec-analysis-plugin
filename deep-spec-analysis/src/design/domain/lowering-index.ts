@@ -56,26 +56,45 @@ export class LoweringIndex {
         ids.push(id);
       }
     this.#issued = IssuedLoweredIdentifiers.of(ids);
-    const machines: (readonly [DesignTransitionIdentifier, DesignMachine])[] = [];
-    const attributes: (readonly [DesignMachineIdentifier, AttributePath])[] = [...sourceMachines].map(
-      (machine) => [machine.id(), AttributePath.of(DesignMachines.attrPathOf(machine))] as const,
+    // 遷移由来の義務は「遷移 id → 機械」を与える。
+    const machines = obligations.foldLeft<(readonly [DesignTransitionIdentifier, DesignMachine])[]>(
+      [],
+      (acc, obligation) => {
+        const origin = obligation.origin();
+        const machine = origin.machine();
+        if (machine !== null && origin.attribute() !== null)
+          acc.push([DesignTransitionIdentifier.of(origin.design().asString()), machine]);
+        return acc;
+      },
     );
-    for (const obligation of obligations) {
+    // 「機械 id → 属性パス」は宣言から引き、遷移由来の義務が指す属性を後から重ねる。
+    const attributesFromDeclarations = sourceMachines.foldLeft<(readonly [DesignMachineIdentifier, AttributePath])[]>(
+      [],
+      (acc, machine) => {
+        acc.push([machine.id(), AttributePath.of(DesignMachines.attrPathOf(machine))]);
+        return acc;
+      },
+    );
+    const attributes = obligations.foldLeft(attributesFromDeclarations, (acc, obligation) => {
       const origin = obligation.origin();
       const machine = origin.machine();
       const attribute = origin.attribute();
-      if (machine !== null && attribute !== null) {
-        machines.push([DesignTransitionIdentifier.of(origin.design().asString()), machine]);
-        attributes.push([machine.id(), attribute]);
-      }
-    }
+      if (machine !== null && attribute !== null) acc.push([machine.id(), attribute]);
+      return acc;
+    });
     for (const obligation of obligations)
       if (!obligation.origin().isSyntheticProbe()) TargetIdentifier.of(obligation.origin().design().asString());
     this.#origins = KeyedIndex.of(
-      [...obligations].map((obligation) => [obligation.id(), obligation.origin()] as const),
+      obligations.foldLeft<(readonly [LoweredIdentifier, LoweredOrigin])[]>([], (acc, obligation) => {
+        acc.push([obligation.id(), obligation.origin()]);
+        return acc;
+      }),
     );
     this.#scenarioDesignIds = KeyedIndex.of(
-      [...scenarios].map((scenario) => [scenario.id(), scenario.origin()] as const),
+      scenarios.foldLeft<(readonly [LoweredIdentifier, DesignScenarioIdentifier])[]>([], (acc, scenario) => {
+        acc.push([scenario.id(), scenario.origin()]);
+        return acc;
+      }),
     );
     this.#machinesByTransition = KeyedIndex.of(machines);
     this.#attrPathsByMachine = KeyedIndex.of(attributes);

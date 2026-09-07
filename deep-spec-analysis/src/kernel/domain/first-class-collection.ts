@@ -4,4 +4,6 @@ import type { NonEmptyFirstClassCollection } from "./non-empty-first-class-colle
 /** 空を許すコレクションの操作契約。isEmptyは保持する要素の有無を返す。 */
 export interface FirstClassCollection<E extends Equatable<E>> extends NonEmptyFirstClassCollection<E> {
   isEmpty(): boolean;
+  map(transform: (element: E) => E): FirstClassCollection<E>;
+  combine(other: FirstClassCollection<E>): FirstClassCollection<E>;
 }

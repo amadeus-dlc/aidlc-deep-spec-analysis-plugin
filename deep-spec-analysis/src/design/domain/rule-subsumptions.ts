@@ -26,6 +26,14 @@ export class RuleSubsumptions extends FirstClassCollectionBase<RuleSubsumption, 
   static of(values: readonly RuleSubsumption[]): RuleSubsumptions {
     return new RuleSubsumptions(values);
   }
+  override map(transform: (element: RuleSubsumption) => RuleSubsumption): RuleSubsumptions {
+    return this.mapTo(transform, RuleSubsumptions.of);
+  }
+
+  override combine(other: RuleSubsumptions): RuleSubsumptions {
+    return this.combineTo(other, RuleSubsumptions.of);
+  }
+
   static parse(values: readonly RuleSubsumption[]): Result<RuleSubsumptions, ParseError> {
     return parseConstruction(() => new RuleSubsumptions(values));
   }

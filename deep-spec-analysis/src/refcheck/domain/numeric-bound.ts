@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfNumber,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 export class NumericBound {
   readonly #value: number;
@@ -16,6 +21,9 @@ export class NumericBound {
   }
   equals(other: NumericBound): boolean {
     return this.#value === other.#value;
+  }
+  hashCode(): number {
+    return hashOfNumber(this.#value);
   }
   asNumber(): number {
     return this.#value;

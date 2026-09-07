@@ -4,6 +4,7 @@ import type {
   DeclaredBound,
   EnumerationMembers,
 } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfNullable, hashOfNumber } from "@deep-spec-analysis/kernel-infrastructure";
 import type { IntermediateRepresentationAttributeName } from "./intermediate-representation-attribute-name.ts";
 
 // 属性宣言。型宣言が欠けた属性は kind: "" として届く（旧実装は type 欠落でも
@@ -71,14 +72,10 @@ export class IntermediateRepresentationAttributeDeclaration {
   }
 
   equals(other: IntermediateRepresentationAttributeDeclaration): boolean {
-    const values = this.#values?.toArray();
-    const otherValues = other.#values?.toArray();
     const valuesEqual =
-      values === undefined
-        ? otherValues === undefined
-        : otherValues !== undefined &&
-          values.length === otherValues.length &&
-          values.every((value, index) => value.equals(otherValues[index] as (typeof values)[number]));
+      this.#values === undefined
+        ? other.#values === undefined
+        : other.#values !== undefined && this.#values.equals(other.#values);
     return (
       this.#name.equals(other.#name) &&
       this.#kind.equals(other.#kind) &&
@@ -86,5 +83,15 @@ export class IntermediateRepresentationAttributeDeclaration {
       this.#min?.asNumber() === other.#min?.asNumber() &&
       this.#max?.asNumber() === other.#max?.asNumber()
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#name.hashCode(),
+      this.#kind.hashCode(),
+      hashOfNullable(this.#values, (values) => values.hashCode()),
+      hashOfNullable(this.#min, (min) => hashOfNumber(min.asNumber())),
+      hashOfNullable(this.#max, (max) => hashOfNumber(max.asNumber())),
+    ]);
   }
 }

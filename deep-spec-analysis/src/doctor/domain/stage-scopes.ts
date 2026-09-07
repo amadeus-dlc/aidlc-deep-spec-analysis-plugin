@@ -24,6 +24,14 @@ export class StageScopes
   static of(values: readonly StageScope[]): StageScopes {
     return new StageScopes(values);
   }
+  override map(transform: (element: StageScope) => StageScope): StageScopes {
+    return this.mapTo(transform, StageScopes.of);
+  }
+
+  override combine(other: StageScopes): StageScopes {
+    return this.combineTo(other, StageScopes.of);
+  }
+
   static parse(values: readonly StageScope[]): Result<StageScopes, ParseError> {
     return parseConstruction(() => new StageScopes(values));
   }

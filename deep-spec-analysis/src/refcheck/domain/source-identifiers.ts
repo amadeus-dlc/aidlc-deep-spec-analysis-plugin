@@ -27,6 +27,14 @@ export class SourceIdentifiers
     return new SourceIdentifiers(values);
   }
 
+  override map(transform: (element: SourceIdentifier) => SourceIdentifier): SourceIdentifiers {
+    return this.mapTo(transform, SourceIdentifiers.of);
+  }
+
+  override combine(other: SourceIdentifiers): SourceIdentifiers {
+    return this.combineTo(other, SourceIdentifiers.of);
+  }
+
   static parse(values: readonly SourceIdentifier[]): Result<SourceIdentifiers, ParseError> {
     return parseConstruction(() => new SourceIdentifiers(values));
   }

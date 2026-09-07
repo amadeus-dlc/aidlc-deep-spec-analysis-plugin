@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 // findings 文書の finding.kind。閉集合11種と正準順位を所有する。
 // 未知の種類は生成時に拒否し、正常な判定として復元しない。
@@ -93,6 +98,10 @@ export class FindingKind {
 
   equals(other: FindingKind): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   compareTo(other: FindingKind): number {

@@ -130,6 +130,38 @@ function compareCanonically(a, b) {
 function sortedUniqueCanonically(values) {
   return [...new Set(values)].sort(compareCanonically);
 }
+// src/kernel/infrastructure/hash-code.ts
+var SEED = 1;
+var MULTIPLIER = 31;
+var TRUE_HASH = 1231;
+var FALSE_HASH = 1237;
+function hashOfString(value) {
+  let hash = 0;
+  for (let index = 0;index < value.length; index++)
+    hash = MULTIPLIER * hash + value.charCodeAt(index) | 0;
+  return hash;
+}
+function hashOfNumber(value) {
+  if (Number.isNaN(value))
+    return 0;
+  if (Number.isSafeInteger(value))
+    return value === 0 ? 0 : value | 0;
+  const view = new DataView(new ArrayBuffer(8));
+  view.setFloat64(0, value);
+  return view.getInt32(0) ^ view.getInt32(4) | 0;
+}
+function hashOfBoolean(value) {
+  return value ? TRUE_HASH : FALSE_HASH;
+}
+function hashOfNullable(value, hash) {
+  return value === null || value === undefined ? 0 : hash(value);
+}
+function combinedHash(hashes) {
+  let hash = SEED;
+  for (const element of hashes)
+    hash = MULTIPLIER * hash + element | 0;
+  return hash;
+}
 // src/kernel/infrastructure/json.ts
 function isObject(v) {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -385,6 +417,14 @@ class Check {
   equals(other) {
     return this.#pass === other.#pass && this.#label === other.#label && this.#fix === other.#fix && this.#severity.equals(other.#severity);
   }
+  hashCode() {
+    return combinedHash([
+      hashOfBoolean(this.#pass),
+      hashOfString(this.#label),
+      hashOfNullable(this.#fix, hashOfString),
+      this.#severity.hashCode()
+    ]);
+  }
   toDocument() {
     return {
       pass: this.#pass,
@@ -414,6 +454,9 @@ class CheckSeverity {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   asString() {
     return this.#value;
@@ -467,6 +510,9 @@ class CoverageState {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
 }
 // src/doctor/domain/design-artifact-reference.ts
 class DesignArtifactReference {
@@ -498,6 +544,15 @@ class DesignArtifactReference {
   equals(other) {
     return this.#location.space().equals(other.#location.space()) && this.#location.intent().equals(other.#location.intent()) && this.#tool.equals(other.#tool) && this.#artifactPath.equals(other.#artifactPath) && this.#relativePath.equals(other.#relativePath);
   }
+  hashCode() {
+    return combinedHash([
+      this.#location.space().hashCode(),
+      this.#location.intent().hashCode(),
+      this.#tool.hashCode(),
+      this.#artifactPath.hashCode(),
+      this.#relativePath.hashCode()
+    ]);
+  }
 }
 // src/kernel/domain/artifact-path.ts
 class ArtifactPath {
@@ -517,6 +572,9 @@ class ArtifactPath {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   asString() {
     return this.#value;
@@ -541,6 +599,9 @@ class AttributeBound {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfNumber(this.#value);
+  }
   asNumber() {
     return this.#value;
   }
@@ -564,6 +625,9 @@ class AttributeKind {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   isBool() {
     return this.#value === "bool";
@@ -597,6 +661,9 @@ class AttributePath {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   compareTo(other) {
     return compareCanonically(this.#value, other.#value);
   }
@@ -623,6 +690,9 @@ class BackendName {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -646,6 +716,9 @@ class BindingDeclaration {
   }
   equals(other) {
     return this.#path.equals(other.#path) && this.#value.equals(other.#value);
+  }
+  hashCode() {
+    return combinedHash([this.#path.hashCode(), this.#value.hashCode()]);
   }
 }
 // src/kernel/domain/binding-value.ts
@@ -679,6 +752,13 @@ class BindingValue {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return this.match({
+      bool: (value) => hashOfBoolean(value),
+      int: (value) => hashOfNumber(value),
+      enum: (value) => hashOfString(value)
+    });
   }
   match(cases) {
     if (typeof this.#value === "boolean")
@@ -722,6 +802,9 @@ class ContentHash {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -760,6 +843,9 @@ class Declaration {
   equals(other) {
     return jsonEquals(this.#value, other.#value);
   }
+  hashCode() {
+    return hashOfString(canonicalStringify(this.#value));
+  }
   describe() {
     return JSON.stringify(this.#value);
   }
@@ -787,6 +873,9 @@ class DeclaredBindingValue {
   }
   equals(other) {
     return this.#value.equals(other.#value);
+  }
+  hashCode() {
+    return this.#value.hashCode();
   }
 }
 // src/kernel/domain/collection-operations.ts
@@ -872,46 +961,57 @@ function collectionMap(source, transform) {
   }
   return values;
 }
-
-// src/kernel/domain/immutable-first-class-collection.ts
-class ImmutableFirstClassCollection {
-  #values;
-  constructor(values) {
-    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-immutable-collection-elements");
+function collectionEquals(left, right) {
+  const leftIterator = left[Symbol.iterator]();
+  const rightIterator = right[Symbol.iterator]();
+  let inspected = 0;
+  for (;; ) {
+    checkReadBudget("collection-equals", inspected);
+    inspected++;
+    const leftStep = leftIterator.next();
+    const rightStep = rightIterator.next();
+    if (leftStep.done === true || rightStep.done === true)
+      return leftStep.done === rightStep.done;
+    if (!leftStep.value.equals(rightStep.value))
+      return false;
   }
-  static of(values) {
-    return new ImmutableFirstClassCollection(values);
+}
+function collectionHashCode(source) {
+  let hash = 1;
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-hash-code", inspected);
+    inspected++;
+    hash = 31 * hash + element.hashCode() | 0;
   }
-  static parse(values) {
-    return parseConstruction(() => new ImmutableFirstClassCollection(values));
+  return hash;
+}
+function collectionCount(source) {
+  let inspected = 0;
+  for (const _element of source) {
+    checkReadBudget("collection-count", inspected);
+    inspected++;
   }
-  [Symbol.iterator]() {
-    return this.#values[Symbol.iterator]();
+  return inspected;
+}
+function collectionCombine(left, right) {
+  const values = [];
+  for (const source of [left, right])
+    for (const element of source) {
+      checkReadBudget("collection-combine", values.length);
+      values.push(element);
+    }
+  return values;
+}
+function collectionFoldLeft(source, initial, accumulate) {
+  let accumulator = initial;
+  let inspected = 0;
+  for (const element of source) {
+    checkReadBudget("collection-fold-left", inspected);
+    inspected++;
+    accumulator = accumulate(accumulator, element);
   }
-  at(index) {
-    return collectionAt(this, index);
-  }
-  head() {
-    return collectionHead(this);
-  }
-  tail() {
-    return ImmutableFirstClassCollection.of(collectionTail(this));
-  }
-  include(element) {
-    return collectionInclude(this, element);
-  }
-  exists(predicate) {
-    return collectionExists(this, predicate);
-  }
-  filter(predicate) {
-    return ImmutableFirstClassCollection.of(collectionFilter(this, predicate));
-  }
-  map(transform) {
-    return ImmutableFirstClassCollection.of(collectionMap(this, transform));
-  }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
+  return accumulator;
 }
 
 // src/kernel/domain/non-empty-first-class-collection-base.ts
@@ -935,8 +1035,23 @@ class NonEmptyFirstClassCollectionBase {
   filter(predicate) {
     return this.rebuild(collectionFilter(this, predicate));
   }
-  map(transform) {
-    return ImmutableFirstClassCollection.of(collectionMap(this, transform));
+  equals(other) {
+    return this === other || collectionEquals(this, other);
+  }
+  hashCode() {
+    return collectionHashCode(this);
+  }
+  count() {
+    return collectionCount(this);
+  }
+  foldLeft(initial, accumulate) {
+    return collectionFoldLeft(this, initial, accumulate);
+  }
+  mapTo(transform, factory) {
+    return factory(collectionMap(this, transform));
+  }
+  combineTo(other, factory) {
+    return factory(collectionCombine(this, other));
   }
 }
 
@@ -964,6 +1079,12 @@ class DeclaredBindings extends FirstClassCollectionBase {
   rebuild(values) {
     return new DeclaredBindings(values);
   }
+  map(transform) {
+    return this.mapTo(transform, DeclaredBindings.of);
+  }
+  combine(other) {
+    return this.combineTo(other, DeclaredBindings.of);
+  }
   static parse(values) {
     return parseConstruction(() => new DeclaredBindings(values));
   }
@@ -975,6 +1096,18 @@ class DeclaredBindings extends FirstClassCollectionBase {
   }
   *[Symbol.iterator]() {
     yield* this.#values;
+  }
+  matchesVerbatim(other) {
+    if (this.count() !== other.count())
+      return false;
+    const otherValues = other.#values;
+    return !this.#values.some((binding, index) => {
+      const counterpart = otherValues[index];
+      return counterpart === undefined || !binding.path().equals(counterpart.path()) || binding.value().describe() !== counterpart.value().describe();
+    });
+  }
+  verbatimHashCode() {
+    return combinedHash(this.#values.map((binding) => combinedHash([binding.path().hashCode(), hashOfString(binding.value().describe())])));
   }
   toArray() {
     return this.#values;
@@ -1046,6 +1179,9 @@ class EnumerationMember {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   compareTo(other) {
     return compareCanonically(this.#value, other.#value);
   }
@@ -1064,6 +1200,12 @@ class EnumerationMembers extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new EnumerationMembers(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, EnumerationMembers.of);
+  }
+  combine(other) {
+    return this.combineTo(other, EnumerationMembers.of);
   }
   static parse(values) {
     return parseConstruction(() => new EnumerationMembers(values));
@@ -1122,6 +1264,9 @@ class ErrorMessage {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
 }
 // src/kernel/domain/error-messages.ts
 var MAX_MESSAGES = 65536;
@@ -1134,6 +1279,12 @@ class ErrorMessages extends FirstClassCollectionBase {
   }
   rebuild(values) {
     return new ErrorMessages(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, ErrorMessages.of);
+  }
+  combine(other) {
+    return this.combineTo(other, ErrorMessages.of);
   }
   static parse(values) {
     return parseConstruction(() => new ErrorMessages(values));
@@ -1151,6 +1302,9 @@ class ErrorMessages extends FirstClassCollectionBase {
       values.push(diagnostic.ok ? diagnostic.value : ErrorMessage.of("validation diagnostic could not be represented within its text budget"));
     }
     return new ErrorMessages(values);
+  }
+  asDiagnostics() {
+    return [...this.#values].map((message) => ok(message));
   }
   add(value) {
     return new ErrorMessages([...this.#values, value]);
@@ -1261,6 +1415,9 @@ class ExpressionTree {
   equals(other) {
     return this.isCanonicallyEqual(other);
   }
+  hashCode() {
+    return hashOfString(canonicalStringify(this.#root));
+  }
 }
 // src/kernel/domain/finding-kind.ts
 var KIND_RANK = {
@@ -1331,6 +1488,9 @@ class FindingKind {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   compareTo(other) {
     return KIND_RANK[this.#value] - KIND_RANK[other.#value];
   }
@@ -1367,6 +1527,9 @@ class TargetIdentifier {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   compareTo(other) {
     return compareCanonically(this.#value, other.#value);
   }
@@ -1392,6 +1555,12 @@ class TargetIdentifiers extends FirstClassCollectionBase {
   }
   static of(values) {
     return new TargetIdentifiers(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, TargetIdentifiers.of);
+  }
+  combine(other) {
+    return this.combineTo(other, TargetIdentifiers.of);
   }
   static parse(values) {
     return parseConstruction(() => new TargetIdentifiers(values));
@@ -1452,11 +1621,20 @@ class FindingTargets extends NonEmptyFirstClassCollectionBase {
   rebuild(values) {
     return TargetIdentifiers.of(values);
   }
+  map(transform) {
+    return this.mapTo(transform, ([head, ...tail]) => FindingTargets.of(head, tail));
+  }
+  combine(other) {
+    return this.combineTo(other, ([head, ...tail]) => FindingTargets.of(head, tail));
+  }
   static of(head, tail) {
     return new FindingTargets(head, tail);
   }
   static parse(head, tail) {
     return parseConstruction(() => new FindingTargets(head, tail));
+  }
+  static parseWithTail(head, tail) {
+    return parseConstruction(() => new FindingTargets(head, [...tail]));
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -1527,6 +1705,12 @@ class FunctionalRequirementReferences extends FirstClassCollectionBase {
   rebuild(values) {
     return new FunctionalRequirementReferences(values);
   }
+  map(transform) {
+    return this.mapTo(transform, FunctionalRequirementReferences.of);
+  }
+  combine(other) {
+    return this.combineTo(other, FunctionalRequirementReferences.of);
+  }
   static parse(values) {
     return parseConstruction(() => new FunctionalRequirementReferences(values));
   }
@@ -1571,6 +1755,9 @@ class IntermediateRepresentationVersion {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   majorVersion() {
     return Number.parseInt(this.#value.split(".")[0] ?? "", 10);
@@ -1682,6 +1869,9 @@ class NormalizedName {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -1702,6 +1892,9 @@ class ObligationNature {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   asString() {
     return this.#value;
@@ -1738,6 +1931,9 @@ class QueryLabel {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   compareTo(other) {
     return this.#value < other.#value ? -1 : this.#value > other.#value ? 1 : 0;
   }
@@ -1764,6 +1960,9 @@ class RequirementIdentifier {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   compareTo(other) {
     return compareCanonically(this.#value, other.#value);
   }
@@ -1786,6 +1985,12 @@ class RequirementIdentifiers extends FirstClassCollectionBase {
   }
   static of(values) {
     return new RequirementIdentifiers(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, RequirementIdentifiers.of);
+  }
+  combine(other) {
+    return this.combineTo(other, RequirementIdentifiers.of);
   }
   static parse(values) {
     return parseConstruction(() => new RequirementIdentifiers(values));
@@ -1834,6 +2039,9 @@ class ScenarioBinding {
   equals(other) {
     return this.#path.equals(other.#path) && this.#value.equals(other.#value);
   }
+  hashCode() {
+    return combinedHash([this.#path.hashCode(), this.#value.hashCode()]);
+  }
 }
 // src/kernel/domain/scenario-bindings.ts
 class ScenarioBindings extends FirstClassCollectionBase {
@@ -1855,6 +2063,12 @@ class ScenarioBindings extends FirstClassCollectionBase {
   }
   *[Symbol.iterator]() {
     yield* this.#values;
+  }
+  map(transform) {
+    return this.mapTo(transform, ScenarioBindings.of);
+  }
+  combine(other) {
+    return this.combineTo(other, ScenarioBindings.of);
   }
   static parse(values) {
     return parseConstruction(() => new ScenarioBindings(values));
@@ -1996,6 +2210,15 @@ class ScenarioVerdict {
   equals(other) {
     return this.#backend.equals(other.#backend) && this.#modelHash.equals(other.#modelHash) && this.#state === other.#state && this.#target.equals(other.#target) && (this.#unit === null ? other.#unit === null : other.#unit !== null && this.#unit.equals(other.#unit));
   }
+  hashCode() {
+    return combinedHash([
+      this.#backend.hashCode(),
+      this.#modelHash.hashCode(),
+      hashOfString(this.#state),
+      this.#target.hashCode(),
+      hashOfNullable(this.#unit, (unit) => unit.hashCode())
+    ]);
+  }
   verdictLabel() {
     if (this.#state !== "clean" && this.#state !== "violated")
       throw new Error("defect: an unverified scenario has no verdict label");
@@ -2023,6 +2246,12 @@ class ScenarioVerdicts extends FirstClassCollectionBase {
   }
   static of(values) {
     return new ScenarioVerdicts(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, ScenarioVerdicts.of);
+  }
+  combine(other) {
+    return this.combineTo(other, ScenarioVerdicts.of);
   }
   static parse(values) {
     return parseConstruction(() => new ScenarioVerdicts(values));
@@ -2121,6 +2350,9 @@ class TriggerName {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -2143,6 +2375,9 @@ class UnitName {
   }
   equals(other) {
     return this.#value === other.#value;
+  }
+  hashCode() {
+    return hashOfString(this.#value);
   }
   asString() {
     return this.#value;
@@ -2188,10 +2423,59 @@ class VerificationMethod {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
 }
+// src/doctor/domain/structural-debt.ts
+class StructuralDebt extends FirstClassCollectionBase {
+  #observations;
+  constructor(observations) {
+    super();
+    this.#observations = boundedCollectionSnapshot(observations, 65536, "too-many-structural-observations");
+  }
+  rebuild(values) {
+    return new StructuralDebt(values);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#observations;
+  }
+  static of(observations) {
+    return new StructuralDebt(observations);
+  }
+  map(transform) {
+    return this.mapTo(transform, StructuralDebt.of);
+  }
+  combine(other) {
+    return this.combineTo(other, StructuralDebt.of);
+  }
+  static parse(observations) {
+    return parseConstruction(() => new StructuralDebt(observations));
+  }
+  hasScans() {
+    return this.#observations.some((observation) => observation.wasScanned());
+  }
+  isComplete() {
+    return this.#observations.every((observation) => observation.isComplete());
+  }
+  scannedCount() {
+    return this.#observations.filter((observation) => observation.wasScanned()).length;
+  }
+  totalFindings() {
+    return this.#observations.reduce((sum, observation) => sum + observation.match({
+      complete: (findings) => findings.asNumber(),
+      partial: (findings) => findings.asNumber(),
+      unavailable: () => 0
+    }), 0);
+  }
+  rows() {
+    return this.#observations.filter((observation) => !observation.isComplete() || observation.hasDebt());
+  }
+}
+
 // src/doctor/domain/design-artifacts.ts
 class DesignArtifacts extends FirstClassCollectionBase {
   #values;
@@ -2205,11 +2489,20 @@ class DesignArtifacts extends FirstClassCollectionBase {
   static of(values) {
     return new DesignArtifacts(values);
   }
+  map(transform) {
+    return this.mapTo(transform, DesignArtifacts.of);
+  }
+  combine(other) {
+    return this.combineTo(other, DesignArtifacts.of);
+  }
   static parse(values) {
     return parseConstruction(() => new DesignArtifacts(values));
   }
   *[Symbol.iterator]() {
     yield* this.#values;
+  }
+  observedBy(observe) {
+    return StructuralDebt.of(this.#values.map((artifact) => observe(artifact)));
   }
 }
 // src/doctor/domain/digest-anchor.ts
@@ -2346,6 +2639,12 @@ class HealthVerdict extends FirstClassCollectionBase {
   rebuild(values) {
     return new HealthVerdict(values);
   }
+  map(transform) {
+    return this.mapTo(transform, HealthVerdict.of);
+  }
+  combine(other) {
+    return this.combineTo(other, HealthVerdict.of);
+  }
   static parse(values) {
     return parseConstruction(() => new HealthVerdict(values));
   }
@@ -2362,6 +2661,94 @@ class HealthVerdict extends FirstClassCollectionBase {
     return { checks: this.#values.map((c) => c.toDocument()) };
   }
 }
+// src/doctor/domain/installed-status.ts
+class InstalledStatus {
+  #entry;
+  #present;
+  constructor(entry, present) {
+    this.#entry = entry;
+    this.#present = present;
+  }
+  static of(entry, present) {
+    return new InstalledStatus(entry, present);
+  }
+  entry() {
+    return this.#entry;
+  }
+  isPresent() {
+    return this.#present;
+  }
+  equals(other) {
+    return this.#entry.equals(other.#entry) && this.#present === other.#present;
+  }
+  hashCode() {
+    return combinedHash([this.#entry.hashCode(), hashOfBoolean(this.#present)]);
+  }
+}
+
+// src/doctor/domain/installed-statuses.ts
+class InstalledStatuses extends FirstClassCollectionBase {
+  #values;
+  constructor(values) {
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65536, "too-many-installed-statuses");
+  }
+  static of(values) {
+    return new InstalledStatuses(values);
+  }
+  static empty() {
+    return new InstalledStatuses([]);
+  }
+  add(value) {
+    return new InstalledStatuses([...this.#values, value]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new InstalledStatuses(values));
+  }
+  rebuild(values) {
+    return InstalledStatuses.of(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, InstalledStatuses.of);
+  }
+  combine(other) {
+    return this.combineTo(other, InstalledStatuses.of);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/doctor/domain/manifest-entries.ts
+class ManifestEntries extends FirstClassCollectionBase {
+  #entries;
+  constructor(entries) {
+    super();
+    this.#entries = boundedCollectionSnapshot(entries, 65536, "too-many-manifest-entries");
+  }
+  static of(entries) {
+    return new ManifestEntries(entries);
+  }
+  static parse(entries) {
+    return parseConstruction(() => new ManifestEntries(entries));
+  }
+  rebuild(values) {
+    return ManifestEntries.of(values);
+  }
+  map(transform) {
+    return this.mapTo(transform, ManifestEntries.of);
+  }
+  combine(other) {
+    return this.combineTo(other, ManifestEntries.of);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#entries;
+  }
+}
+
 // src/doctor/domain/manifest-entry.ts
 class ManifestEntry {
   #rel;
@@ -2382,6 +2769,9 @@ class ManifestEntry {
   equals(other) {
     return this.#rel.equals(other.#rel) && this.#severity.equals(other.#severity);
   }
+  hashCode() {
+    return combinedHash([this.#rel.hashCode(), this.#severity.hashCode()]);
+  }
 }
 
 // src/doctor/domain/installation-manifest.ts
@@ -2389,16 +2779,28 @@ var err2 = (rel) => ManifestEntry.error(ArtifactPath.of(rel));
 
 class InstallationManifest extends NonEmptyFirstClassCollectionBase {
   #entries;
-  constructor(entries) {
+  constructor(head, tail) {
     super();
-    this.#entries = Object.freeze([...entries]);
+    const ownedTail = boundedCollectionSnapshot(tail, 65535, "too-many-installation-manifest-entries");
+    this.#entries = Object.freeze([head, ...ownedTail]);
+  }
+  static of(head, tail) {
+    return new InstallationManifest(head, tail);
+  }
+  static parse(head, tail) {
+    return parseConstruction(() => new InstallationManifest(head, tail));
+  }
+  map(transform) {
+    return this.mapTo(transform, ([head, ...tail]) => InstallationManifest.of(head, tail));
+  }
+  combine(other) {
+    return this.combineTo(other, ([head, ...tail]) => InstallationManifest.of(head, tail));
   }
   rebuild(values) {
-    return ImmutableFirstClassCollection.of(values);
+    return ManifestEntries.of(values);
   }
   static standard() {
-    return new InstallationManifest([
-      err2("sensors/aidlc-deep-spec-ir-valid.md"),
+    return InstallationManifest.of(err2("sensors/aidlc-deep-spec-ir-valid.md"), [
       err2("sensors/aidlc-deep-spec-verify-smt.md"),
       err2("sensors/aidlc-deep-spec-verify-quint.md"),
       err2("tools/aidlc-sensor-deep-spec-ir-valid.ts"),
@@ -2425,6 +2827,16 @@ class InstallationManifest extends NonEmptyFirstClassCollectionBase {
       err2("tools/data/deep-spec-refinement-map-schema.json"),
       err2("knowledge/aidlc-architect-agent/deep-spec-refinement-map-authoring.md")
     ]);
+  }
+  checkedBy(isInstalled) {
+    let statuses = InstalledStatuses.empty();
+    for (const entry of this.#entries) {
+      const present = isInstalled(entry);
+      if (!present.ok)
+        return err(present.error);
+      statuses = statuses.add(InstalledStatus.of(entry, present.value));
+    }
+    return ok(statuses);
   }
   *[Symbol.iterator]() {
     yield* this.#entries;
@@ -2528,24 +2940,6 @@ class InstalledRelease {
     return this.#reference;
   }
 }
-// src/doctor/domain/installed-status.ts
-class InstalledStatus {
-  #entry;
-  #present;
-  constructor(entry, present) {
-    this.#entry = entry;
-    this.#present = present;
-  }
-  static of(entry, present) {
-    return new InstalledStatus(entry, present);
-  }
-  entry() {
-    return this.#entry;
-  }
-  isPresent() {
-    return this.#present;
-  }
-}
 // src/doctor/domain/intent-location.ts
 class IntentLocation {
   #space;
@@ -2597,6 +2991,13 @@ class PluginVersion {
   }
   equals(other) {
     return this.#major === other.#major && this.#minor === other.#minor && this.#patch === other.#patch;
+  }
+  hashCode() {
+    return combinedHash([
+      hashOfNumber(Number(this.#major)),
+      hashOfNumber(Number(this.#minor)),
+      hashOfNumber(Number(this.#patch))
+    ]);
   }
   asString() {
     return `${this.#major}.${this.#minor}.${this.#patch}`;
@@ -2670,6 +3071,12 @@ class StableReleases extends FirstClassCollectionBase {
   static of(versions) {
     return new StableReleases(versions);
   }
+  map(transform) {
+    return this.mapTo(transform, StableReleases.of);
+  }
+  combine(other) {
+    return this.combineTo(other, StableReleases.of);
+  }
   static parse(versions) {
     return parseConstruction(() => new StableReleases(versions));
   }
@@ -2700,6 +3107,9 @@ class StageScope {
   equals(other) {
     return this.#value === other.#value;
   }
+  hashCode() {
+    return hashOfString(this.#value);
+  }
   asString() {
     return this.#value;
   }
@@ -2717,50 +3127,17 @@ class StageScopes extends FirstClassCollectionBase {
   static of(values) {
     return new StageScopes(values);
   }
+  map(transform) {
+    return this.mapTo(transform, StageScopes.of);
+  }
+  combine(other) {
+    return this.combineTo(other, StageScopes.of);
+  }
   static parse(values) {
     return parseConstruction(() => new StageScopes(values));
   }
   *[Symbol.iterator]() {
     yield* this.#values;
-  }
-}
-// src/doctor/domain/structural-debt.ts
-class StructuralDebt extends FirstClassCollectionBase {
-  #observations;
-  constructor(observations) {
-    super();
-    this.#observations = boundedCollectionSnapshot(observations, 65536, "too-many-structural-observations");
-  }
-  rebuild(values) {
-    return new StructuralDebt(values);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#observations;
-  }
-  static of(observations) {
-    return new StructuralDebt(observations);
-  }
-  static parse(observations) {
-    return parseConstruction(() => new StructuralDebt(observations));
-  }
-  hasScans() {
-    return this.#observations.some((observation) => observation.wasScanned());
-  }
-  isComplete() {
-    return this.#observations.every((observation) => observation.isComplete());
-  }
-  scannedCount() {
-    return this.#observations.filter((observation) => observation.wasScanned()).length;
-  }
-  totalFindings() {
-    return this.#observations.reduce((sum, observation) => sum + observation.match({
-      complete: (findings) => findings.asNumber(),
-      partial: (findings) => findings.asNumber(),
-      unavailable: () => 0
-    }), 0);
-  }
-  rows() {
-    return this.#observations.filter((observation) => !observation.isComplete() || observation.hasDebt());
   }
 }
 // src/doctor/domain/structural-observation.ts
@@ -2809,6 +3186,22 @@ class StructuralObservation {
     if (this.#state.kind === "partial" && other.#state.kind === "partial")
       return this.#state.findings.asNumber() === other.#state.findings.asNumber() && this.#state.reason.equals(other.#state.reason);
     return false;
+  }
+  hashCode() {
+    if (this.#state.kind === "complete")
+      return combinedHash([
+        this.#artifact.hashCode(),
+        hashOfString(this.#state.kind),
+        hashOfNumber(this.#state.findings.asNumber())
+      ]);
+    if (this.#state.kind === "partial")
+      return combinedHash([
+        this.#artifact.hashCode(),
+        hashOfString(this.#state.kind),
+        hashOfNumber(this.#state.findings.asNumber()),
+        this.#state.reason.hashCode()
+      ]);
+    return combinedHash([this.#artifact.hashCode(), hashOfString(this.#state.kind), this.#state.reason.hashCode()]);
   }
 }
 // src/doctor/domain/unit-coverage.ts
@@ -2894,6 +3287,14 @@ class VerificationEvidence {
       const otherUnit = other.#checkedUnits[index];
       return otherUnit !== undefined && unit.equals(otherUnit);
     });
+  }
+  hashCode() {
+    return combinedHash([
+      this.#irHash.hashCode(),
+      hashOfNullable(this.#unavailable, (reason) => reason.hashCode()),
+      ...this.#skippedReasons.map((reason) => hashOfString(reason.asString())),
+      ...this.#checkedUnits.map((unit) => unit.hashCode())
+    ]);
   }
 }
 // src/doctor/domain/verification-staleness.ts
@@ -3494,7 +3895,7 @@ class DoctorPresenter {
   installation(result) {
     if (!result.ok)
       return [this.#acquisitionFailure("installation manifest", result.error, CheckSeverity.error())];
-    return result.value.map((s) => Check.of({
+    return result.value.toArray().map((s) => Check.of({
       pass: s.isPresent(),
       label: `deep-spec-analysis: ${s.entry().rel()} installed`,
       fix: `Run \`bun ${this.#harnessDir}/tools/aidlc-utility.ts plugin-sync\` (or re-run the plugin's \`hooks/compose.ts\`).`,
@@ -4267,7 +4668,7 @@ class CheckInstallationUseCase {
     this.#files = files;
   }
   execute() {
-    return traverseResult([...InstallationManifest.standard()], (entry) => flatMapResult(this.#files.isInstalled(entry), (present) => ok(InstalledStatus.of(entry, present))));
+    return InstallationManifest.standard().checkedBy((entry) => this.#files.isInstalled(entry));
   }
 }
 // src/doctor/usecase/check-solvers-usecase.ts
@@ -4291,12 +4692,7 @@ class CheckStructuralDebtUseCase {
   execute() {
     return matchResult(this.#workspace.designArtifacts(), {
       err: (error) => err(error),
-      ok: (artifacts) => {
-        const observations = [];
-        for (const artifact of artifacts)
-          observations.push(this.#backend.observe(artifact));
-        return ok(StructuralDebt.of(observations));
-      }
+      ok: (artifacts) => ok(artifacts.observedBy((artifact) => this.#backend.observe(artifact)))
     });
   }
 }

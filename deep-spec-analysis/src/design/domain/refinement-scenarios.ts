@@ -1,4 +1,4 @@
-import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
   type ParseError,
@@ -22,6 +22,14 @@ export class RefinementScenarios extends FirstClassCollectionBase<RefinementScen
 
   static of(values: readonly RefinementScenario[]): RefinementScenarios {
     return new RefinementScenarios(values);
+  }
+
+  override map(transform: (element: RefinementScenario) => RefinementScenario): RefinementScenarios {
+    return this.mapTo(transform, RefinementScenarios.of);
+  }
+
+  override combine(other: RefinementScenarios): RefinementScenarios {
+    return this.combineTo(other, RefinementScenarios.of);
   }
 
   static parse(values: readonly RefinementScenario[]): Result<RefinementScenarios, ParseError> {
@@ -48,6 +56,11 @@ export class RefinementScenarios extends FirstClassCollectionBase<RefinementScen
     return new RefinementScenarios(
       [...this.#values].sort((a, b) => a.id().asTargetId().compareTo(b.id().asTargetId())),
     );
+  }
+
+  // シナリオ id を検査対象 id として読む（宣言順のまま）。
+  targetIds(): TargetIdentifiers {
+    return TargetIdentifiers.of(this.#values.map((scenario) => scenario.id().asTargetId()));
   }
 
   toArray(): readonly RefinementScenario[] {

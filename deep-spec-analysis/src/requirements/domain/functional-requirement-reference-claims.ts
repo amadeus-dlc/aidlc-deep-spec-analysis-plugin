@@ -29,6 +29,16 @@ export class FunctionalRequirementReferenceClaims
     return new FunctionalRequirementReferenceClaims(values);
   }
 
+  override map(
+    transform: (element: FunctionalRequirementReferenceClaim) => FunctionalRequirementReferenceClaim,
+  ): FunctionalRequirementReferenceClaims {
+    return this.mapTo(transform, FunctionalRequirementReferenceClaims.of);
+  }
+
+  override combine(other: FunctionalRequirementReferenceClaims): FunctionalRequirementReferenceClaims {
+    return this.combineTo(other, FunctionalRequirementReferenceClaims.of);
+  }
+
   static parse(
     values: readonly FunctionalRequirementReferenceClaim[],
   ): Result<FunctionalRequirementReferenceClaims, ParseError> {

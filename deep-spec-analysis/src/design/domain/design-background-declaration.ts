@@ -1,6 +1,14 @@
 import type { Expression } from "@deep-spec-analysis/kernel-domain";
 import { ErrorMessage, ErrorMessages, ExpressionTree } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignAttributeCatalog } from "./design-attribute-catalog.ts";
 // 設計 IR の背景仮定宣言。抱える式の列挙と prime 禁止（背景仮定は常に
 // 無prime）は宣言自身が所有する——波3の義務／シナリオと同じ裁定（#71 波4）。
@@ -32,12 +40,21 @@ export class DesignBackgroundDeclaration {
     return this.#id.equals(other.#id) && sameExpression(this.#assert, other.#assert);
   }
 
+  hashCode(): number {
+    return combinedHash([
+      this.#id.hashCode(),
+      hashOfNullable(this.#assert, (expression) => hashOfString(canonicalStringify(expression))),
+    ]);
+  }
+
   diagnostics(catalog: DesignAttributeCatalog): ErrorMessages {
     const context = `background ${this.#id.asString()}`;
     const errors: string[] = [];
     if (this.#assert !== undefined)
-      for (const message of catalog.expressionDiagnostics(this.#assert, context, false))
-        errors.push(message.asString());
+      catalog.expressionDiagnostics(this.#assert, context, false).foldLeft(errors, (acc, message) => {
+        acc.push(message.asString());
+        return acc;
+      });
     return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
 

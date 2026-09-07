@@ -1,4 +1,5 @@
 import type { ArtifactPath } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
 import type { IntentLocation } from "./intent-location.ts";
 
 type DesignArtifactReferenceParam = {
@@ -44,5 +45,15 @@ export class DesignArtifactReference {
       this.#artifactPath.equals(other.#artifactPath) &&
       this.#relativePath.equals(other.#relativePath)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#location.space().hashCode(),
+      this.#location.intent().hashCode(),
+      this.#tool.hashCode(),
+      this.#artifactPath.hashCode(),
+      this.#relativePath.hashCode(),
+    ]);
   }
 }

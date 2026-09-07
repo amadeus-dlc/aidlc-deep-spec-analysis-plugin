@@ -23,6 +23,14 @@ export class DesignUnitDeclarations extends FirstClassCollectionBase<DesignUnitD
     return new DesignUnitDeclarations(values);
   }
 
+  override map(transform: (element: DesignUnitDeclaration) => DesignUnitDeclaration): DesignUnitDeclarations {
+    return this.mapTo(transform, DesignUnitDeclarations.of);
+  }
+
+  override combine(other: DesignUnitDeclarations): DesignUnitDeclarations {
+    return this.combineTo(other, DesignUnitDeclarations.of);
+  }
+
   static parse(values: readonly DesignUnitDeclaration[]): Result<DesignUnitDeclarations, ParseError> {
     return parseConstruction(() => new DesignUnitDeclarations(values));
   }

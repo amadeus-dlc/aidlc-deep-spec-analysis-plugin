@@ -101,7 +101,7 @@ test("a nonzero exit remains a run failure even with normal-looking logs", () =>
 
     expect(result.match({ checked: () => true, unavailable: () => false, uncompilable: () => false })).toBe(true);
     const report = result.reportFor(input, VerificationReportIdentifier.of(ArtifactPath.of("/verify"), "quint"));
-    expect(report.skipped().toArray().length).toBeGreaterThan(0);
+    expect(report.skipped().count()).toBeGreaterThan(0);
     expect(
       report
         .skipped()
@@ -126,7 +126,7 @@ test.each(["SIGTERM", "SIGKILL"] as const)("a child %s is a run failure, not a t
 
     expect(result.match({ checked: () => true, unavailable: () => false, uncompilable: () => false })).toBe(true);
     const report = result.reportFor(input, VerificationReportIdentifier.of(ArtifactPath.of("/verify"), "quint"));
-    expect(report.skipped().toArray().length).toBeGreaterThan(0);
+    expect(report.skipped().count()).toBeGreaterThan(0);
     expect(
       report
         .skipped()

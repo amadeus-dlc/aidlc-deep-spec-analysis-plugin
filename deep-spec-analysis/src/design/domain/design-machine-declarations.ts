@@ -26,6 +26,14 @@ export class DesignMachineDeclarations extends FirstClassCollectionBase<
     return new DesignMachineDeclarations(values);
   }
 
+  override map(transform: (element: DesignMachineDeclaration) => DesignMachineDeclaration): DesignMachineDeclarations {
+    return this.mapTo(transform, DesignMachineDeclarations.of);
+  }
+
+  override combine(other: DesignMachineDeclarations): DesignMachineDeclarations {
+    return this.combineTo(other, DesignMachineDeclarations.of);
+  }
+
   static parse(values: readonly DesignMachineDeclaration[]): Result<DesignMachineDeclarations, ParseError> {
     return parseConstruction(() => new DesignMachineDeclarations(values));
   }

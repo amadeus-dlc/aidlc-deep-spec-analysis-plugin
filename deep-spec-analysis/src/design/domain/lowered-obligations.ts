@@ -25,6 +25,14 @@ export class LoweredObligations extends FirstClassCollectionBase<LoweredObligati
     return new LoweredObligations(values);
   }
 
+  override map(transform: (element: LoweredObligation) => LoweredObligation): LoweredObligations {
+    return this.mapTo(transform, LoweredObligations.of);
+  }
+
+  override combine(other: LoweredObligations): LoweredObligations {
+    return this.combineTo(other, LoweredObligations.of);
+  }
+
   static parse(values: readonly LoweredObligation[]): Result<LoweredObligations, ParseError> {
     return parseConstruction(() => new LoweredObligations(values));
   }
@@ -37,7 +45,7 @@ export class LoweredObligations extends FirstClassCollectionBase<LoweredObligati
     yield* this.#values;
   }
 
-  count(): number {
+  override count(): number {
     return this.#values.length;
   }
 

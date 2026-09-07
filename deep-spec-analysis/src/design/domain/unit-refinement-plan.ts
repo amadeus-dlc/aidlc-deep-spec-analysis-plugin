@@ -51,7 +51,7 @@ export class UnitRefinementPlan {
     const obligations: (readonly [ObligationIdentifier, RefinementStatus])[] = [];
     const transitions: (readonly [ObligationIdentifier, readonly TransitionReference[]])[] = [];
     const scenarios: (readonly [ScenarioIdentifier, RefinementStatus])[] = [];
-    const gaps = [...map.attrMap().diagnostics(unit, requirements, map, artifact)];
+    let gaps = map.attrMap().diagnostics(unit, requirements, map, artifact);
     for (const obligation of requirements.obligations().sortedCanonically()) {
       const status = obligation.coverageIn(map, unit);
       obligations.push([obligation.id(), status]);
@@ -63,7 +63,7 @@ export class UnitRefinementPlan {
         map,
         artifact,
       );
-      if (finding !== null) gaps.push(finding);
+      if (finding !== null) gaps = gaps.add(finding);
     }
     for (const scenario of requirements.scenarios().sortedCanonically()) {
       const status = scenario.coverageIn(map);
@@ -74,7 +74,7 @@ export class UnitRefinementPlan {
         map,
         artifact,
       );
-      if (finding !== null) gaps.push(finding);
+      if (finding !== null) gaps = gaps.add(finding);
     }
     this.#unit = unit;
     this.#requirements = requirements;
@@ -82,7 +82,7 @@ export class UnitRefinementPlan {
     this.#obligationStatus = KeyedIndex.of(obligations);
     this.#scenarioStatus = KeyedIndex.of(scenarios);
     this.#eventTransitions = KeyedIndex.of(transitions);
-    this.#gaps = DesignFindings.of(gaps);
+    this.#gaps = gaps;
   }
 
   static of(
@@ -135,15 +135,11 @@ export class UnitRefinementPlan {
   }
 
   quintTimedOut(report: DesignReport): DesignReport {
-    const skipped = DesignSkips.of(
-      [...this.quintInvariants(this.#requirements)].map((invariant) =>
-        DesignSkipped.of({
-          target: invariant.reqTarget(),
-          reason: SkipReason.timeout(),
-          unit: UnitName.of(this.#unit.name()),
-          detail: "the per-run backend budget was exhausted before the refinement pass",
-        }),
-      ),
+    const skipped = DesignSkips.forTargets(
+      this.quintInvariants(this.#requirements).reqTargets(),
+      UnitName.of(this.#unit.name()),
+      SkipReason.timeout(),
+      "the per-run backend budget was exhausted before the refinement pass",
     );
     return report.withEvidence(DesignFindings.of([]), skipped);
   }
@@ -159,11 +155,7 @@ export class UnitRefinementPlan {
   unverifiedIn(report: DesignReport, reason: SkipReason, detail: string): DesignReport {
     return report.withEvidence(
       DesignFindings.of([]),
-      DesignSkips.of(
-        [...this.#requirements.allTargetIds()].map((target) =>
-          DesignSkipped.of({ target, reason, detail, unit: UnitName.of(this.#unit.name()) }),
-        ),
-      ),
+      DesignSkips.forTargets(this.#requirements.allTargetIds(), UnitName.of(this.#unit.name()), reason, detail),
     );
   }
 
@@ -270,16 +262,19 @@ export class UnitRefinementPlan {
   // Quint 側の refinement 追加不変量：checkable な invariant/numeric ごとの
   // alpha(P)（旧 refinementQuintInvariants）。
   quintInvariants(req: RefinementRequirements): RefinementQuintInvariants {
-    const out: RefinementQuintInvariant[] = [];
-    for (const ob of req.obligations().sortedCanonically()) {
-      if (!this.#obligationStatus.get(ob.id())?.isCheckable()) continue;
-      const assertion = ob.assertion();
-      if (!ob.isInvariantLike() || assertion === undefined) continue;
-      const substituted = this.#mappings.substitute(assertion, false);
-      // 欠陥は quintStatusSkips が compile-error skip として記録する（SMT 側と対）。
-      if (substituted.ok)
-        out.push(RefinementQuintInvariant.of(ob.id(), ob.functionalRequirementReferences(), substituted.value));
-    }
+    const out = req
+      .obligations()
+      .sortedCanonically()
+      .foldLeft<RefinementQuintInvariant[]>([], (acc, ob) => {
+        if (!this.#obligationStatus.get(ob.id())?.isCheckable()) return acc;
+        const assertion = ob.assertion();
+        if (!ob.isInvariantLike() || assertion === undefined) return acc;
+        const substituted = this.#mappings.substitute(assertion, false);
+        // 欠陥は quintStatusSkips が compile-error skip として記録する（SMT 側と対）。
+        if (substituted.ok)
+          acc.push(RefinementQuintInvariant.of(ob.id(), ob.functionalRequirementReferences(), substituted.value));
+        return acc;
+      });
     return RefinementQuintInvariants.of(out);
   }
 }

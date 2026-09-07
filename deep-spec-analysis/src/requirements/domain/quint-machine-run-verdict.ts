@@ -2,7 +2,7 @@ import {
   FindingKind,
   FindingTargets,
   SkipReason,
-  TargetIdentifiers,
+  type TargetIdentifiers,
   type VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
 import { err, ok, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
@@ -80,33 +80,29 @@ export class QuintMachineRunVerdict {
   skipsFor(targets: TargetIdentifiers, bounded: boolean): VerificationSkipped[] {
     const kind = this.#kind;
     if (kind === "missing")
-      return [...targets].map((target) =>
-        VerificationSkipped.of({
-          target,
-          reason: SkipReason.unavailable(),
-          detail: "quint returned no machine run: the event machine was not decided",
-        }),
+      return this.#skipEach(
+        targets,
+        SkipReason.unavailable(),
+        "quint returned no machine run: the event machine was not decided",
       );
-    if (kind === "timeout") {
-      return [...targets].map((target) =>
-        VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("timeout"),
-          detail: "machine invariant check exceeded its budget",
-        }),
+    if (kind === "timeout")
+      return this.#skipEach(targets, SkipReason.of("timeout"), "machine invariant check exceeded its budget");
+    if (kind === "run-failed")
+      return this.#skipEach(
+        targets,
+        SkipReason.of("unavailable"),
+        `quint ${bounded ? "verify" : "run"} failed unexpectedly: ${this.#outputTail}`,
       );
-    }
-    if (kind === "run-failed") {
-      const outputTail = this.#outputTail;
-      return [...targets].map((target) =>
-        VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("unavailable"),
-          detail: `quint ${bounded ? "verify" : "run"} failed unexpectedly: ${outputTail}`,
-        }),
-      );
-    }
     return [];
+  }
+
+  // 対象ごとに同じ理由・同じ文言の skip を、対象の順で並べる。呼び手の
+  // 配列面（凍結）に合わせるため、畳み込みの蓄積器は配列 1 本だけ。
+  #skipEach(targets: TargetIdentifiers, reason: SkipReason, detail: string): VerificationSkipped[] {
+    return targets.foldLeft<VerificationSkipped[]>([], (skips, target) => {
+      skips.push(VerificationSkipped.of({ target, reason, detail }));
+      return skips;
+    });
   }
 
   interpret(
@@ -116,10 +112,7 @@ export class QuintMachineRunVerdict {
     method: VerificationMethod,
   ): Result<{ findings: VerificationFindings; skipped: VerificationSkips }, ParseError> {
     const findings: VerificationFinding[] = [];
-    const machineTargets = TargetIdentifiers.of([
-      ...components.ids().toTargetIds(),
-      ...events.toTargetIds(),
-    ]).sortedUniqueCanonically();
+    const machineTargets = components.ids().toTargetIds().combine(events.toTargetIds()).sortedUniqueCanonically();
     const eventTargets = events.toTargetIds();
     if (this.isDeadlock()) {
       const [head, ...tail] = events.isEmpty() ? machineTargets : eventTargets.sortedCanonically();
@@ -149,7 +142,7 @@ export class QuintMachineRunVerdict {
         VerificationFinding.of({
           kind: FindingKind.conflict(),
           functionalRequirementReferences: model.functionalRequirementReferencesOf(
-            TargetIdentifiers.of([...targets, ...eventTargets]).sortedUniqueCanonically(),
+            targets.combine(eventTargets).sortedUniqueCanonically(),
           ),
           targets: parsedTargets.value,
           witness: this.witness(),
@@ -175,7 +168,7 @@ export class QuintMachineRunVerdict {
   // へ退避する（凍結挙動）。
   witness(): VerificationWitness {
     const trace = this.#trace;
-    return trace !== null ? VerificationWitness.trace(trace.toArray()) : VerificationWitness.model({});
+    return trace !== null ? VerificationWitness.traceOf(trace) : VerificationWitness.model({});
   }
 
   // 帰属評価に使う最終状態（violation のトレース末尾。trace を欠けば空状態）。

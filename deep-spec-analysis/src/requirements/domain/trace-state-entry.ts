@@ -1,4 +1,5 @@
 import type { AttributePath } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
 import type { TraceValue } from "./trace-value.ts";
 
 // トレース状態の索引項目。属性パスを落とすと toDocument/valueAt の意味を保てないため、
@@ -26,5 +27,9 @@ export class TraceStateEntry {
 
   equals(other: TraceStateEntry): boolean {
     return this.#path.equals(other.#path) && this.#value.equals(other.#value);
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#path.hashCode(), this.#value.hashCode()]);
   }
 }

@@ -1,5 +1,7 @@
 import {
   boundedCollectionSnapshot,
+  combinedHash,
+  hashOfString,
   type ParseError,
   parseConstruction,
   type Result,
@@ -27,6 +29,14 @@ export class DeclaredBindings
     return new DeclaredBindings(values);
   }
 
+  override map(transform: (element: BindingDeclaration) => BindingDeclaration): DeclaredBindings {
+    return this.mapTo(transform, DeclaredBindings.of);
+  }
+
+  override combine(other: DeclaredBindings): DeclaredBindings {
+    return this.combineTo(other, DeclaredBindings.of);
+  }
+
   static parse(values: readonly BindingDeclaration[]): Result<DeclaredBindings, ParseError> {
     return parseConstruction(() => new DeclaredBindings(values));
   }
@@ -40,6 +50,31 @@ export class DeclaredBindings
   override *[Symbol.iterator](): Iterator<BindingDeclaration> {
     yield* this.#values;
   }
+  // 逐語比較。値は describe() の文字列一致で見るので、JSON のキー順まで揃わないと
+  // 等しくない。要素自身の equals（Declaration の jsonEquals、キー順非依存）より
+  // 厳しい関係で、IR 宣言の往復同一性を見る面が使う。
+  matchesVerbatim(other: DeclaredBindings): boolean {
+    if (this.count() !== other.count()) return false;
+    const otherValues = other.#values;
+    return !this.#values.some((binding, index) => {
+      const counterpart = otherValues[index];
+      return (
+        counterpart === undefined ||
+        !binding.path().equals(counterpart.path()) ||
+        binding.value().describe() !== counterpart.value().describe()
+      );
+    });
+  }
+
+  // matchesVerbatim と対のハッシュ。
+  verbatimHashCode(): number {
+    return combinedHash(
+      this.#values.map((binding) =>
+        combinedHash([binding.path().hashCode(), hashOfString(binding.value().describe())]),
+      ),
+    );
+  }
+
   toArray(): readonly BindingDeclaration[] {
     return this.#values;
   }

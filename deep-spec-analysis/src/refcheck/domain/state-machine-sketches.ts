@@ -28,6 +28,14 @@ export class StateMachineSketches
     return new StateMachineSketches(values);
   }
 
+  override map(transform: (element: StateMachineSketch) => StateMachineSketch): StateMachineSketches {
+    return this.mapTo(transform, StateMachineSketches.of);
+  }
+
+  override combine(other: StateMachineSketches): StateMachineSketches {
+    return this.combineTo(other, StateMachineSketches.of);
+  }
+
   static parse(values: readonly StateMachineSketch[]): Result<StateMachineSketches, ParseError> {
     return parseConstruction(() => new StateMachineSketches(values));
   }

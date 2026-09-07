@@ -21,6 +21,7 @@ import type { DesignAttributeDeclaration } from "./design-attribute-declaration.
 import { DesignAttributeDeclarations } from "./design-attribute-declarations.ts";
 import { DesignEntityDeclaration } from "./design-entity-declaration.ts";
 import { DesignEntityDeclarations } from "./design-entity-declarations.ts";
+import type { DesignEntityName } from "./design-entity-name.ts";
 
 export class DesignAttributeCatalog extends FirstClassCollectionBase<
   DesignAttributeCatalogEntry,
@@ -30,8 +31,10 @@ export class DesignAttributeCatalog extends FirstClassCollectionBase<
   readonly #byPath: KeyedIndex<AttributePath, DesignAttributeDeclaration>;
   readonly #entries: readonly DesignAttributeCatalogEntry[];
 
-  private constructor(declarations: DesignEntityDeclarations) {
+  private constructor(declarations: DesignEntityDeclarations, retained?: readonly DesignAttributeCatalogEntry[]) {
     super();
+    if (retained !== undefined && retained.length > 65_536)
+      throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: retained.length });
     let count = 0;
     for (const entity of declarations) {
       if (++count > 65_536) throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
@@ -44,11 +47,21 @@ export class DesignAttributeCatalog extends FirstClassCollectionBase<
       throw new IllegalArgumentException({ kind: "ambiguous-design-attributes" });
     const attributes = new Map<string, DesignAttributeDeclaration>();
     const entries: DesignAttributeCatalogEntry[] = [];
-    for (const entity of declarations)
-      entity.inspectAttributes((path, attribute) => {
-        attributes.set(path, attribute);
-        entries.push(DesignAttributeCatalogEntry.of(entity.name(), attribute));
-      });
+    if (retained === undefined) {
+      for (const entity of declarations)
+        entity.inspectAttributes((path, attribute) => {
+          attributes.set(path, attribute);
+          entries.push(DesignAttributeCatalogEntry.of(entity.name(), attribute));
+        });
+    } else {
+      for (const entry of retained) {
+        const path = entry.path().asString();
+        if (attributes.has(path))
+          throw new IllegalArgumentException({ kind: "ambiguous-design-attributes", raw: path });
+        attributes.set(path, entry.attribute());
+        entries.push(entry);
+      }
+    }
     this.#declarations = declarations;
     this.#entries = Object.freeze(entries);
     this.#byPath = KeyedIndex.of(
@@ -57,22 +70,59 @@ export class DesignAttributeCatalog extends FirstClassCollectionBase<
   }
 
   protected override rebuild(values: readonly DesignAttributeCatalogEntry[]): DesignAttributeCatalog {
-    const selectedByOwner = new Map<string, Set<DesignAttributeDeclaration>>();
+    return this.#rebuildWithContexts(values, [this.#declarations]);
+  }
+
+  #rebuildWithContexts(
+    values: readonly DesignAttributeCatalogEntry[],
+    contexts: readonly DesignEntityDeclarations[],
+  ): DesignAttributeCatalog {
+    const grouped = new Map<string, { owner: DesignEntityName; attributes: DesignAttributeDeclaration[] }>();
     for (const entry of values) {
-      const selected = selectedByOwner.get(entry.owner().asString()) ?? new Set<DesignAttributeDeclaration>();
-      selected.add(entry.attribute());
-      selectedByOwner.set(entry.owner().asString(), selected);
+      const key = entry.owner().asString();
+      const group = grouped.get(key) ?? { owner: entry.owner(), attributes: [] };
+      group.attributes.push(entry.attribute());
+      grouped.set(key, group);
     }
-    const declarations = [...this.#declarations].map((entity) =>
-      DesignEntityDeclaration.of({
+    const metadata = new Map<string, DesignEntityDeclaration>();
+    for (const context of contexts)
+      for (const entity of context) {
+        const key = entity.name().asString();
+        const prior = metadata.get(key);
+        if (prior !== undefined && prior.description() !== entity.description())
+          throw new IllegalArgumentException({ kind: "conflicting-design-entity-metadata", raw: key });
+        if (prior === undefined) metadata.set(key, entity);
+      }
+    const declarations = [...metadata.values()].map((entity) => {
+      const group = grouped.get(entity.name().asString());
+      return DesignEntityDeclaration.of({
         name: entity.name(),
         ...(entity.description() !== undefined ? { description: entity.description() } : {}),
-        attributes: DesignAttributeDeclarations.of(
-          [...entity.attributes()].filter((attribute) => selectedByOwner.get(entity.name().asString())?.has(attribute)),
-        ),
-      }),
+        attributes: DesignAttributeDeclarations.of(group?.attributes ?? []),
+      });
+    });
+    for (const group of grouped.values()) {
+      if (metadata.has(group.owner.asString())) continue;
+      declarations.push(
+        DesignEntityDeclaration.of({
+          name: group.owner,
+          attributes: DesignAttributeDeclarations.of(group.attributes),
+        }),
+      );
+    }
+    return new DesignAttributeCatalog(DesignEntityDeclarations.of(declarations), values);
+  }
+
+  override map(
+    transform: (element: DesignAttributeCatalogEntry) => DesignAttributeCatalogEntry,
+  ): DesignAttributeCatalog {
+    return this.mapTo(transform, (values) => this.rebuild(values));
+  }
+
+  override combine(other: DesignAttributeCatalog): DesignAttributeCatalog {
+    return this.combineTo(other, (values) =>
+      this.#rebuildWithContexts(values, [this.#declarations, other.#declarations]),
     );
-    return new DesignAttributeCatalog(DesignEntityDeclarations.of(declarations));
   }
 
   override *[Symbol.iterator](): Iterator<DesignAttributeCatalogEntry> {

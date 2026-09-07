@@ -1,4 +1,5 @@
 import { type EnumerationMembers, ErrorMessage, ErrorMessages } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 
 import type { DesignAttributeCatalog } from "./design-attribute-catalog.ts";
 
@@ -50,6 +51,16 @@ export class DesignMachineDeclaration {
     );
   }
 
+  hashCode(): number {
+    return combinedHash([
+      this.#id.hashCode(),
+      hashOfString(this.#attrPath),
+      this.#initial.hashCode(),
+      this.#transitions.hashCode(),
+      this.#ignores.hashCode(),
+    ]);
+  }
+
   id(): DesignMachineIdentifier {
     return this.#id;
   }
@@ -88,40 +99,44 @@ export class DesignMachineDeclaration {
       errors.push(`${ctx}: initial state "${s}" is not a value of ${attrPath}`);
     }
     const transitionCells = new Set<string>();
-    for (const tr of this.transitions()) {
+    this.transitions().foldLeft(errors, (acc, tr) => {
       const tctx = `transition ${tr.id().asString()}`;
       for (const [k, v] of tr.stateEntries()) {
         if (v !== undefined && !states.exists((state) => state.matchesLiteral(v))) {
-          errors.push(`${tctx}: ${k} state "${v}" is not a value of ${attrPath}`);
+          acc.push(`${tctx}: ${k} state "${v}" is not a value of ${attrPath}`);
         }
       }
       const cellKey = tr.cellKey();
       if (cellKey !== null) transitionCells.add(cellKey);
       tr.inspectExpressions((expression, primesAllowed) => {
-        for (const message of catalog.expressionDiagnostics(expression, tctx, primesAllowed))
-          errors.push(message.asString());
+        catalog.expressionDiagnostics(expression, tctx, primesAllowed).foldLeft(acc, (messages, message) => {
+          messages.push(message.asString());
+          return messages;
+        });
       });
       if (tr.assignsPrimedReferenceTo(attrPath)) {
-        errors.push(`${tctx}: the effect assigns the machine's own attribute "${attrPath}" — state' = to is implicit`);
+        acc.push(`${tctx}: the effect assigns the machine's own attribute "${attrPath}" — state' = to is implicit`);
       }
-    }
-    for (const ig of this.ignores()) {
+      return acc;
+    });
+    this.ignores().foldLeft(errors, (acc, ig) => {
       if (!ig.isStateAmong(states)) {
-        errors.push(`${ctx}: ignores state "${ig.state()}" is not a value of ${attrPath}`);
+        acc.push(`${ctx}: ignores state "${ig.state()}" is not a value of ${attrPath}`);
       }
       if (transitionCells.has(ig.cellKey())) {
-        errors.push(
+        acc.push(
           `${ctx}: ignores (${ig.state()}, ${ig.trigger().asString()}) collides with a declared transition for the same (state, trigger)`,
         );
       }
-    }
+      return acc;
+    });
     return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
 
   // 初期状態のうち状態集合に属さないもの（宣言順——文言の発生順を決める凍結面）。
   initialStatesOutside(states: EnumerationMembers): string[] {
-    return [...this.#initial]
+    return this.#initial
       .filter((state) => !states.exists((declared) => declared.matchesLiteral(state.asString())))
-      .map((state) => state.asString());
+      .toStrings();
   }
 }

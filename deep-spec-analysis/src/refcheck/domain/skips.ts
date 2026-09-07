@@ -1,6 +1,7 @@
 import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
+  type Json,
   type ParseError,
   parseConstruction,
   type Result,
@@ -21,6 +22,14 @@ export class Skips extends FirstClassCollectionBase<Skipped, Skips> implements F
     return new Skips(values);
   }
 
+  override map(transform: (element: Skipped) => Skipped): Skips {
+    return this.mapTo(transform, Skips.of);
+  }
+
+  override combine(other: Skips): Skips {
+    return this.combineTo(other, Skips.of);
+  }
+
   static parse(values: readonly Skipped[]): Result<Skips, ParseError> {
     return parseConstruction(() => new Skips(values));
   }
@@ -37,12 +46,17 @@ export class Skips extends FirstClassCollectionBase<Skipped, Skips> implements F
     yield* this.#values;
   }
 
-  count(): number {
+  override count(): number {
     return this.#values.length;
   }
 
   sortedCanonically(): Skips {
     return new Skips([...this.#values].sort((a, b) => a.compareTo(b)));
+  }
+
+  // 境界: 描画専用。skipped[] は保持順（sortedCanonically 済みの凍結正準順）。
+  toDocuments(): Json[] {
+    return this.#values.map((skipped) => skipped.toDocument());
   }
 
   toArray(): readonly Skipped[] {

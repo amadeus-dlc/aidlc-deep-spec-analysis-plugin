@@ -1,3 +1,5 @@
+import { hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
+
 // 到達性の判定。非到達は検査した範囲内の結論で、未検証とは別の値である。
 // null / undefined に判定を割り当てず、消費側には三つの分岐を要求する。
 type ReachabilityKind = "reached" | "not-reached-within-bound" | "unverified";
@@ -23,6 +25,10 @@ export class ReachabilityVerdict {
 
   equals(other: ReachabilityVerdict): boolean {
     return this.#kind === other.#kind;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#kind);
   }
 
   match<T>(handlers: { reached: () => T; notReachedWithinBound: () => T; unverified: () => T }): T {

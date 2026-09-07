@@ -39,6 +39,14 @@ export class EffectAssignments extends FirstClassCollectionBase<EffectAssignment
     return new EffectAssignments(values);
   }
 
+  override map(transform: (element: EffectAssignment) => EffectAssignment): EffectAssignments {
+    return this.mapTo(transform, EffectAssignments.of);
+  }
+
+  override combine(other: EffectAssignments): EffectAssignments {
+    return this.combineTo(other, EffectAssignments.of);
+  }
+
   static parse(values: readonly EffectAssignment[]): Result<EffectAssignments, ParseError> {
     return parseConstruction(() => new EffectAssignments(values));
   }

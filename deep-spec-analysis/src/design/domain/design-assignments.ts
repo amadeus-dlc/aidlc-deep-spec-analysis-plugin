@@ -38,6 +38,14 @@ export class DesignAssignments extends FirstClassCollectionBase<DesignAssignment
     yield* this.#values.values();
   }
 
+  override map(transform: (element: DesignAssignment) => DesignAssignment): DesignAssignments {
+    return this.mapTo(transform, DesignAssignments.of);
+  }
+
+  override combine(other: DesignAssignments): DesignAssignments {
+    return this.combineTo(other, DesignAssignments.of);
+  }
+
   static parse(values: readonly DesignAssignment[]): Result<DesignAssignments, ParseError> {
     return parseConstruction(() => new DesignAssignments(values));
   }

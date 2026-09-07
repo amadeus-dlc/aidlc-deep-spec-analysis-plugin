@@ -23,6 +23,14 @@ export class BackgroundAssumptions
     return new BackgroundAssumptions(values);
   }
 
+  override map(transform: (element: BackgroundAssumption) => BackgroundAssumption): BackgroundAssumptions {
+    return this.mapTo(transform, BackgroundAssumptions.of);
+  }
+
+  override combine(other: BackgroundAssumptions): BackgroundAssumptions {
+    return this.combineTo(other, BackgroundAssumptions.of);
+  }
+
   static parse(values: readonly BackgroundAssumption[]): Result<BackgroundAssumptions, ParseError> {
     return parseConstruction(() => new BackgroundAssumptions(values));
   }

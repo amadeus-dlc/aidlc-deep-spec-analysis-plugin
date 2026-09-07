@@ -100,7 +100,7 @@ test("functional-design parser reads only own YAML properties", () => {
     absent: () => -1,
     wrongFenceCount: () => -1,
     unparseable: () => -1,
-    extracted: (model) => model.entities().toArray().length,
+    extracted: (model) => model.entities().count(),
   });
   expect(entityCount).toBe(0);
 });

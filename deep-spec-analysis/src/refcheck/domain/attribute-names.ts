@@ -26,6 +26,14 @@ export class AttributeNames
     return new AttributeNames(values);
   }
 
+  override map(transform: (element: AttributeName) => AttributeName): AttributeNames {
+    return this.mapTo(transform, AttributeNames.of);
+  }
+
+  override combine(other: AttributeNames): AttributeNames {
+    return this.combineTo(other, AttributeNames.of);
+  }
+
   static parse(values: readonly AttributeName[]): Result<AttributeNames, ParseError> {
     return parseConstruction(() => new AttributeNames(values));
   }
@@ -42,13 +50,21 @@ export class AttributeNames
     yield* this.#values;
   }
 
-  count(): number {
+  override count(): number {
     return this.#values.length;
   }
 
   // 正規化名での被覆判定（XS-3 の照合知識）。
   coversNormalized(name: AttributeName): boolean {
     return this.#values.some((v) => v.normalized().equals(name.normalized()));
+  }
+
+  // XS-3: other が覆っていない属性の名を値の昇順で（凍結順）。
+  namesNotCoveredBy(other: AttributeNames): string[] {
+    return this.#values
+      .filter((name) => !other.coversNormalized(name))
+      .map((name) => name.asString())
+      .sort();
   }
 
   // 境界: 描画・アダプタ専用。

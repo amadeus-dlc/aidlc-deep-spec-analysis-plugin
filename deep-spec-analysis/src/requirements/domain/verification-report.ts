@@ -16,12 +16,17 @@ import {
 // degraded は契約適合の降格形（findings/skipped/crossChecked を空にして
 // unavailable 理由だけ残す——旧 writeFindingsDoc の自己検証降格と同じ姿）。
 
-import type { Json, ParseError } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
+  type Json,
+  type ParseError,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { CrossCheckedEntries } from "./cross-checked-entries.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import { VerificationFindings } from "./verification-findings.ts";
 import type { VerificationReportIdentifier } from "./verification-report-identifier.ts";
-import { VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationSkips } from "./verification-skips.ts";
 
 export const SUPPORTED_IR_MAJOR = 1;
@@ -87,14 +92,10 @@ export class VerificationReport {
       irHash: model.irHash(),
       method,
       findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of(
-        [...model.allTargets()].map((t) =>
-          VerificationSkipped.of({
-            target: t,
-            reason: SkipReason.of("ir-version-mismatch"),
-            detail: `IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_IR_MAJOR}.x.x)`,
-          }),
-        ),
+      skipped: VerificationSkips.coveringAll(
+        model.allTargets(),
+        SkipReason.of("ir-version-mismatch"),
+        `IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_IR_MAJOR}.x.x)`,
       ),
     });
   }
@@ -113,18 +114,13 @@ export class VerificationReport {
       irHash: model.irHash(),
       method: "exhaustive",
       findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([
-        ...planSkipped.toArray(),
-        ...[...model.allTargets()]
-          .filter((t) => !planSkipped.toArray().some((s) => s.isFor(t)))
-          .map((t) =>
-            VerificationSkipped.of({
-              target: t,
-              reason: SkipReason.of("unavailable"),
-              detail: "z3 could not be executed",
-            }),
-          ),
-      ]),
+      skipped: planSkipped.combine(
+        VerificationSkips.coveringAll(
+          model.allTargets().filter((t) => !planSkipped.exists((s) => s.isFor(t))),
+          SkipReason.of("unavailable"),
+          "z3 could not be executed",
+        ),
+      ),
       unavailableReason: reason,
     });
   }
@@ -137,11 +133,7 @@ export class VerificationReport {
       irHash: model.irHash(),
       method: "simulation",
       findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of(
-        [...model.allTargets()].map((t) =>
-          VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail: "quint CLI missing" }),
-        ),
-      ),
+      skipped: VerificationSkips.coveringAll(model.allTargets(), SkipReason.of("unavailable"), "quint CLI missing"),
       unavailableReason: "quint CLI is not available (install: npm i -g @informalsystems/quint)",
     });
   }
@@ -160,11 +152,7 @@ export class VerificationReport {
       irHash: model.irHash(),
       method: "simulation",
       findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of(
-        [...model.allTargets()].map((t) =>
-          VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail }),
-        ),
-      ),
+      skipped: VerificationSkips.coveringAll(model.allTargets(), SkipReason.of("unavailable"), detail),
       unavailableReason: detail,
     });
   }
@@ -182,28 +170,8 @@ export class VerificationReport {
       irHash: model.irHash(),
       method,
       findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([
-        ...model
-          .obligations()
-          .toArray()
-          .map((ob) =>
-            VerificationSkipped.of({
-              target: ob.id().asTargetId(),
-              reason: SkipReason.of("compile-error"),
-              detail: machineError,
-            }),
-          ),
-        ...model
-          .scenarios()
-          .toArray()
-          .map((sc) =>
-            VerificationSkipped.of({
-              target: sc.id().asTargetId(),
-              reason: SkipReason.of("compile-error"),
-              detail: machineError,
-            }),
-          ),
-      ]),
+      // 対象は義務 id ＋シナリオ id の全体（compose が正準順へ整える）。
+      skipped: VerificationSkips.coveringAll(model.allTargets(), SkipReason.of("compile-error"), machineError),
     });
   }
 
@@ -271,11 +239,10 @@ export class VerificationReport {
     const backend = this.#id.backendName();
     if (!this.#irHash.equals(irHash) || this.isUnavailable())
       return ScenarioVerdict.unavailable(backend, this.#irHash, target, null);
-    for (const skip of this.#skipped)
-      if (skip.isFor(target)) return ScenarioVerdict.skipped(backend, this.#irHash, target, null);
-    for (const finding of this.#findings)
-      if (finding.isKind("scenario-violation") && finding.implicates(target))
-        return ScenarioVerdict.violated(backend, this.#irHash, target, null);
+    if (this.#skipped.exists((skip) => skip.isFor(target)))
+      return ScenarioVerdict.skipped(backend, this.#irHash, target, null);
+    if (this.#findings.exists((finding) => finding.isKind("scenario-violation") && finding.implicates(target)))
+      return ScenarioVerdict.violated(backend, this.#irHash, target, null);
     return ScenarioVerdict.clean(backend, this.#irHash, target, null);
   }
 
@@ -308,22 +275,33 @@ export class VerificationReport {
   }
 
   equals(other: VerificationReport): boolean {
-    const sameValues = <T extends { equals(value: T): boolean }>(left: readonly T[], right: readonly T[]): boolean =>
-      left.length === right.length && left.every((value, index) => value.equals(right[index] as T));
     const crossCheckedEqual =
       this.#crossChecked === null
         ? other.#crossChecked === null
-        : other.#crossChecked !== null && sameValues(this.#crossChecked.toArray(), other.#crossChecked.toArray());
+        : other.#crossChecked !== null && this.#crossChecked.equals(other.#crossChecked);
     return (
       this.#id.equals(other.#id) &&
       this.#irVersion.equals(other.#irVersion) &&
       this.#irHash.equals(other.#irHash) &&
       this.#method.equals(other.#method) &&
-      sameValues(this.#findings.toArray(), other.#findings.toArray()) &&
-      sameValues(this.#skipped.toArray(), other.#skipped.toArray()) &&
+      this.#findings.equals(other.#findings) &&
+      this.#skipped.equals(other.#skipped) &&
       crossCheckedEqual &&
       this.#unavailableReason === other.#unavailableReason
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#id.hashCode(),
+      this.#irVersion.hashCode(),
+      this.#irHash.hashCode(),
+      this.#method.hashCode(),
+      this.#findings.hashCode(),
+      this.#skipped.hashCode(),
+      hashOfNullable(this.#crossChecked, (entries) => entries.hashCode()),
+      hashOfNullable(this.#unavailableReason, hashOfString),
+    ]);
   }
 
   unavailableReason(): string | null {
@@ -359,33 +337,11 @@ export class VerificationReport {
     };
     const reason = this.#unavailableReason;
     if (reason !== null) ordered.unavailable = { reason };
-    // コレクションは境界（描画）で toArray() へ落とす——中身は契約2 の素の JSON
-    // 形。キー順は旧構築サイトの挿入順そのもの（golden バイト凍結）：finding は
-    // (kind, frRefs, targets, witness, detail)、skip は (target, reason,
-    // detail?)。witness ユニオンの内側は素通し値（材料）で逐語描画。
-    ordered.findings = this.#findings.toArray().map((f) => {
-      const out: { [k: string]: Json } = {
-        kind: f.kind(),
-        frRefs: f.functionalRequirementReferences().toStrings() as unknown as Json,
-        targets: f.targets().toStrings() as unknown as Json,
-        witness: f.witness().toDocument() as unknown as Json,
-        detail: f.detail(),
-      };
-      return out as Json;
-    });
-    ordered.skipped = this.#skipped.toArray().map((sk) => {
-      const out: { [k: string]: Json } = { target: sk.target().asString(), reason: sk.reason() };
-      const detail = sk.detail();
-      if (detail !== undefined) out.detail = detail;
-      return out as Json;
-    });
+    // 要素 1 件の文書像とその凍結キー順は、それぞれのコレクションが所有する。
+    ordered.findings = this.#findings.toDocuments();
+    ordered.skipped = this.#skipped.toDocuments();
     const crossChecked = this.#crossChecked;
-    // crossChecked エントリの凍結キー順は (backend, targets)。
-    if (crossChecked !== null) {
-      ordered.crossChecked = crossChecked
-        .toArray()
-        .map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }) as unknown as Json);
-    }
+    if (crossChecked !== null) ordered.crossChecked = crossChecked.toDocuments();
     return ordered;
   }
 

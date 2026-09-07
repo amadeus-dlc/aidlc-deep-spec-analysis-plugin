@@ -1,4 +1,4 @@
-import { KeySet, TargetIdentifiers, type VerificationMethod } from "@deep-spec-analysis/kernel-domain";
+import { KeySet, type TargetIdentifiers, type VerificationMethod } from "@deep-spec-analysis/kernel-domain";
 import { ok, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 
 // 機械成分・イベント義務・初期化可能シナリオを保持する検証計画。
@@ -10,10 +10,8 @@ import type { QuintMachineComponents } from "./quint-machine-components.ts";
 import type { QuintRuns } from "./quint-runs.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { ScenarioIdentifier } from "./scenario-identifier.ts";
-import type { VerificationFinding } from "./verification-finding.ts";
-import { VerificationFindings } from "./verification-findings.ts";
-import type { VerificationSkipped } from "./verification-skipped.ts";
-import { VerificationSkips } from "./verification-skips.ts";
+import type { VerificationFindings } from "./verification-findings.ts";
+import type { VerificationSkips } from "./verification-skips.ts";
 
 export class QuintMachinePlan {
   readonly #invariantComponents: QuintMachineComponents;
@@ -44,15 +42,11 @@ export class QuintMachinePlan {
 
   // 機械フェーズが検査する対象の全 id（成分 + イベント義務、正準順・一意）。
   machineTargets(): TargetIdentifiers {
-    return TargetIdentifiers.of([
-      ...this.#invariantComponents.ids().toTargetIds(),
-      ...this.#eventIds.toTargetIds(),
-    ]).sortedUniqueCanonically();
-  }
-
-  // 全属性が束縛され init アクションが emit されたシナリオか。
-  #hasInitFor(id: ScenarioIdentifier): boolean {
-    return this.#scenariosWithInit.has(id);
+    return this.#invariantComponents
+      .ids()
+      .toTargetIds()
+      .combine(this.#eventIds.toTargetIds())
+      .sortedUniqueCanonically();
   }
 
   interpret(
@@ -61,32 +55,19 @@ export class QuintMachinePlan {
     method: VerificationMethod,
     runs: QuintRuns,
   ): Result<{ findings: VerificationFindings; skipped: VerificationSkips }, ParseError> {
-    const findings: VerificationFinding[] = [];
-    const skipped: VerificationSkipped[] = [...compileSkips];
-    const collect = (evidence: { findings: VerificationFindings; skipped: VerificationSkips }): void => {
-      findings.push(...evidence.findings);
-      skipped.push(...evidence.skipped);
-    };
     const machine = runs.machineRun().interpret(model, this.#invariantComponents, this.#eventIds, method);
     if (!machine.ok) return machine;
-    collect(machine.value);
-    for (const obligation of model.obligations()) {
-      if (!skipped.some((skip) => skip.isFor(obligation.id().asTargetId()))) {
-        const temporal = obligation.interpretQuintTemporal(method, runs.temporalOf(obligation.id()));
-        if (!temporal.ok) return temporal;
-        collect(temporal.value);
-      }
-    }
-    for (const scenario of model.scenarios()) {
-      const interpreted = scenario.interpretQuint(
-        model,
-        runs.scenarioOf(scenario.id()),
-        this.#hasInitFor(scenario.id()),
-        this.#invariantComponents,
-      );
-      if (!interpreted.ok) return interpreted;
-      collect(interpreted.value);
-    }
-    return ok({ findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) });
+    // 時相フェーズはコンパイル時 skip と機械フェーズの skip を引き継ぎ、
+    // 既に skip された義務を再評価しない。
+    const temporal = model
+      .obligations()
+      .interpretQuintTemporal(method, runs, compileSkips.combine(machine.value.skipped));
+    if (!temporal.ok) return temporal;
+    const scenarios = model.scenarios().interpretQuint(model, runs, this.#scenariosWithInit, this.#invariantComponents);
+    if (!scenarios.ok) return scenarios;
+    return ok({
+      findings: machine.value.findings.combine(temporal.value.findings).combine(scenarios.value.findings),
+      skipped: temporal.value.skipped.combine(scenarios.value.skipped),
+    });
   }
 }

@@ -30,6 +30,14 @@ export class CheckFamilies
     return new CheckFamilies(values);
   }
 
+  override map(transform: (element: CheckFamily) => CheckFamily): CheckFamilies {
+    return this.mapTo(transform, CheckFamilies.of);
+  }
+
+  override combine(other: CheckFamilies): CheckFamilies {
+    return this.combineTo(other, CheckFamilies.of);
+  }
+
   static parse(values: readonly CheckFamily[]): Result<CheckFamilies, ParseError> {
     return parseConstruction(() => new CheckFamilies(values));
   }

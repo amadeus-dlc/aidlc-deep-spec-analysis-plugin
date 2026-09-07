@@ -44,39 +44,26 @@ export class IntermediateRepresentationModelDeclaration {
   }
 
   // ModelWellFormedness — スキーマを超えた意味的整合性（旧
-  // modelWellFormednessErrors の逐語移植）。
+  // modelWellFormednessErrors の逐語移植）。診断は文字列で積んでから collect
+  // へ渡す——表現予算を超えても検査そのものを panic で失わないため。
   diagnostics(): ErrorMessages {
-    const errors: string[] = [];
-    for (const message of this.#entities.diagnostics()) errors.push(message.asString());
+    return ErrorMessages.collect(this.diagnosticStrings().map(ErrorMessage.parse));
+  }
+
+  // 境界: 診断の表現予算は呼び手の ErrorMessages.collect が守るので、
+  // ここは文字列のまま返す。
+  diagnosticStrings(): string[] {
+    const errors: string[] = [...this.#entities.diagnosticStrings()];
     const parsed = IntermediateRepresentationAttributeCatalog.parse(this.#entities);
     const catalog = parsed.ok ? parsed.value : null;
     if (!parsed.ok && parsed.error.kind !== "ambiguous-requirement-attributes")
       errors.push(`schema: attribute catalog: ${parsed.error.kind}`);
-    if (catalog !== null) for (const message of catalog.diagnostics()) errors.push(message.asString());
+    if (catalog !== null) errors.push(...catalog.diagnosticStrings());
+    // id は宣言の種別をまたいで一意——既出 id の台帳を 3 つの宣言列で持ち回る。
     const seenIds = new Set<string>();
-    const dupCheck = (id: string, where: string): void => {
-      if (seenIds.has(id)) errors.push(`${where}: duplicate id "${id}"`);
-      seenIds.add(id);
-    };
-
-    for (const ob of this.#obligations) {
-      const where = `obligation ${ob.id().asString()}`;
-      dupCheck(ob.id().asString(), where);
-      if (catalog !== null) for (const message of ob.diagnostics(catalog)) errors.push(message.asString());
-    }
-
-    for (const sc of this.#scenarios) {
-      const where = `scenario ${sc.id().asString()}`;
-      dupCheck(sc.id().asString(), where);
-      if (catalog !== null) for (const message of sc.diagnostics(catalog)) errors.push(message.asString());
-    }
-
-    for (const bg of this.#background) {
-      const where = `background ${bg.id().asString()}`;
-      dupCheck(bg.id().asString(), where);
-      if (catalog !== null) for (const message of bg.diagnostics(catalog)) errors.push(message.asString());
-    }
-
-    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+    errors.push(...this.#obligations.diagnosticStrings(catalog, seenIds));
+    errors.push(...this.#scenarios.diagnosticStrings(catalog, seenIds));
+    errors.push(...this.#background.diagnosticStrings(catalog, seenIds));
+    return errors;
   }
 }

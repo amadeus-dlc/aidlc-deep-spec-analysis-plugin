@@ -36,6 +36,14 @@ export class UnitDeclarations
     return new UnitDeclarations(values);
   }
 
+  override map(transform: (element: UnitDeclaration) => UnitDeclaration): UnitDeclarations {
+    return this.mapTo(transform, UnitDeclarations.of);
+  }
+
+  override combine(other: UnitDeclarations): UnitDeclarations {
+    return this.combineTo(other, UnitDeclarations.of);
+  }
+
   static parse(values: readonly UnitDeclaration[]): Result<UnitDeclarations, ParseError> {
     return parseConstruction(() => new UnitDeclarations(values));
   }

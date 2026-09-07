@@ -34,6 +34,14 @@ export class VerificationReports
     return new VerificationReports(values);
   }
 
+  override map(transform: (element: VerificationReport) => VerificationReport): VerificationReports {
+    return this.mapTo(transform, VerificationReports.of);
+  }
+
+  override combine(other: VerificationReports): VerificationReports {
+    return this.combineTo(other, VerificationReports.of);
+  }
+
   static parse(values: readonly VerificationReport[]): Result<VerificationReports, ParseError> {
     return parseConstruction(() => new VerificationReports(values));
   }
@@ -44,6 +52,18 @@ export class VerificationReports
 
   add(value: VerificationReport): VerificationReports {
     return new VerificationReports([...this.#values, value]);
+  }
+
+  // 同じファイル名の report を置換し、無ければファイル名順の位置へ挿す——
+  // 読み出し（ファイル名順）が与える全順序を崩さないため。
+  replacingByFileName(candidate: VerificationReport): VerificationReports {
+    const fileName = candidate.id().fileName();
+    const merged = this.#values.map((sibling) => (sibling.id().fileName() === fileName ? candidate : sibling));
+    if (this.#values.some((sibling) => sibling.id().fileName() === fileName)) return new VerificationReports(merged);
+    const at = merged.findIndex((sibling) => sibling.id().fileName() > fileName);
+    return new VerificationReports(
+      at < 0 ? [...merged, candidate] : [...merged.slice(0, at), candidate, ...merged.slice(at)],
+    );
   }
 
   override *[Symbol.iterator](): Iterator<VerificationReport> {

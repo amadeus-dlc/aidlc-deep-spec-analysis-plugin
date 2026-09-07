@@ -12,10 +12,11 @@ import {
   DeclaredBindingValue,
   EnumerationMember,
   EnumerationMembers,
+  type Equatable,
   FindingKind,
   FindingTargets,
+  type FirstClassCollection,
   FunctionalRequirementReferences,
-  ImmutableFirstClassCollection,
   IntermediateRepresentationVersion,
   ObligationNature,
   QueryLabel,
@@ -82,6 +83,36 @@ import {
   VerificationSkips,
   VerificationWitness,
 } from "@deep-spec-analysis/requirements-domain";
+
+const preserve = <T>(value: T): T => value;
+
+function verifyNormalCollection<
+  E extends Equatable<E>,
+  C extends FirstClassCollection<E> & {
+    map(transform: (element: E) => E): C;
+    combine(other: C): C;
+    tail(): C;
+    filter(predicate: (element: E) => boolean): C;
+  },
+>(collection: C): void {
+  const before = [...collection];
+  const first = before[0];
+  if (first === undefined) throw new Error("fixture must be non-empty");
+  const mapped = collection.map(preserve);
+  expect(mapped).not.toBe(collection);
+  expect([...mapped].map((value, index) => value.equals(before[index] ?? first))).toEqual(before.map(() => true));
+  const empty = collection.filter(() => false);
+  expect(empty.isEmpty()).toBe(true);
+  expect(collection.combine(empty)).not.toBe(collection);
+  expect(empty.combine(collection)).not.toBe(collection);
+  expect([...collection.combine(empty)].map((value, index) => value.equals(before[index] ?? first))).toEqual(
+    before.map(() => true),
+  );
+  expect([...empty.combine(collection)].map((value, index) => value.equals(before[index] ?? first))).toEqual(
+    before.map(() => true),
+  );
+  expect([...collection]).not.toHaveLength(0);
+}
 
 type BoolExpression = { readonly op: "bool"; readonly value: boolean };
 const expression: BoolExpression = { op: "bool", value: true };
@@ -222,7 +253,7 @@ const report = (detail = "detail"): VerificationReport =>
     unavailableReason: null,
   });
 
-test("requirementsの全FCCはtail/filterで具体型を保ち、入力順と不変性を保つ", () => {
+test("requirementsの全FCCはmap/tail/filterで具体型を保ち、入力順と不変性を保つ", () => {
   const claim = FunctionalRequirementReferenceClaim.of("OB-1", refs());
   const attribute = irAttribute();
   const entities = IntermediateRepresentationEntityDeclarations.of([irEntity(attribute)]);
@@ -297,14 +328,46 @@ test("requirementsの全FCCはtail/filterで具体型を保ち、入力順と不
   expect(entryResult.ok).toBe(true);
 
   for (const [collection, type] of cases) {
+    expect(collection.map(preserve)).toBeInstanceOf(type);
     expect(collection.tail()).toBeInstanceOf(type);
     expect(collection.filter(() => true)).toBeInstanceOf(type);
     expect(collection.filter(() => false).isEmpty()).toBe(true);
   }
+  const normalChecks: readonly (() => void)[] = [
+    () => verifyNormalCollection(BackgroundAssumptions.of([background()])),
+    () => verifyNormalCollection(CrossCheckedEntries.of([crossChecked()])),
+    () => verifyNormalCollection(FunctionalRequirementReferenceClaims.of([claim])),
+    () => verifyNormalCollection(FunctionalRequirementReferenceIndex.of([claim])),
+    () => verifyNormalCollection(IntermediateRepresentationAttributeCatalog.of(entities)),
+    () => verifyNormalCollection(IntermediateRepresentationAttributeDeclarations.of([attribute])),
+    () => verifyNormalCollection(IntermediateRepresentationBackgroundDeclarations.of([irBackground()])),
+    () => verifyNormalCollection(IntermediateRepresentationEntityDeclarations.of([irEntity()])),
+    () => verifyNormalCollection(IntermediateRepresentationObligationDeclarations.of([irObligation()])),
+    () => verifyNormalCollection(IntermediateRepresentationScenarioDeclarations.of([irScenario()])),
+    () => verifyNormalCollection(ObligationIdentifiers.of([ObligationIdentifier.of("OB-1")])),
+    () => verifyNormalCollection(Obligations.of([obligation()])),
+    () => verifyNormalCollection(QuintMachineComponents.of([machineComponent()])),
+    () =>
+      verifyNormalCollection(
+        RequirementAttributeDeclarations.of([
+          RequirementAttributeDeclaration.of({ path: AttributePath.of("Account.active"), kind: "bool" }),
+        ]),
+      ),
+    () => verifyNormalCollection(SatisfiabilityModuloTheoriesEventPairProbes.of([eventPairProbe()])),
+    () => verifyNormalCollection(SatisfiabilityModuloTheoriesQueryVerdicts.of([queryEntry()])),
+    () => verifyNormalCollection(Scenarios.of([scenario()])),
+    () => verifyNormalCollection(TraceState.of([traceEntry()])),
+    () => verifyNormalCollection(TraceStates.of([state])),
+    () => verifyNormalCollection(VerificationFindings.of([finding()])),
+    () => verifyNormalCollection(VerificationReports.of([report()])),
+    () => verifyNormalCollection(VerificationSkips.of([skipped()])),
+  ];
+  for (const check of normalChecks) check();
   const source = [background(), background({ op: "bool", value: false })];
   const owned = BackgroundAssumptions.of(source);
   source.length = 0;
   expect([...owned].map((value) => value.id().asString())).toEqual(["BG-1", "BG-1"]);
+  expect(owned.foldLeft("", (accumulator, value) => accumulator + value.id().asString())).toBe("BG-1BG-1");
   const index = FunctionalRequirementReferenceIndex.of([claim]);
   expect(index.missingErrors(RequirementIdentifiers.of([]))).toEqual([
     'frRef "FR-1" (used by OB-1) does not exist in requirements.md',
@@ -446,5 +509,6 @@ test("bounded constructorはofで例外、parseでResultを返し、上限内は
   expect(SatisfiabilityModuloTheoriesQueryVerdicts.parse(entries).ok).toBe(true);
   expect(() => SatisfiabilityModuloTheoriesQueryVerdicts.of([...entries, queryEntry()])).toThrow();
   expect(SatisfiabilityModuloTheoriesQueryVerdicts.parse([...entries, queryEntry()]).ok).toBe(false);
-  expect(ImmutableFirstClassCollection.of([TargetIdentifier.of("OB-1")])).toBeInstanceOf(ImmutableFirstClassCollection);
+  const findingTargets = FindingTargets.of(TargetIdentifier.of("OB-1"), []);
+  expect(findingTargets.map((target) => target)).toBeInstanceOf(FindingTargets);
 });

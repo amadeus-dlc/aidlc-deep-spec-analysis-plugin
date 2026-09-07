@@ -1,5 +1,13 @@
 import { ArtifactPath } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
+  type Json,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import { ElementPath } from "./element-path.ts";
 
 // refcheck finding の witness ref——成果物・要素パス・任意の値。finding が指す
@@ -44,6 +52,21 @@ export class WitnessReference {
     return (
       this.#artifact.equals(other.#artifact) && this.#element.equals(other.#element) && this.#value === other.#value
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#artifact.hashCode(),
+      this.#element.hashCode(),
+      hashOfNullable(this.#value, hashOfString),
+    ]);
+  }
+
+  // 境界: 描画専用。キー順 (artifact, element, value?) は契約2 の凍結形。
+  toDocument(): { [k: string]: Json } {
+    const out: { [k: string]: Json } = { artifact: this.#artifact.asString(), element: this.#element.asString() };
+    if (this.#value !== undefined) out.value = this.#value;
+    return out;
   }
 
   pointsAt(artifact: string, element: string): boolean {

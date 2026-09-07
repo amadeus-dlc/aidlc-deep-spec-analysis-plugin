@@ -2721,6 +2721,8 @@ The old scope that appears in the historical records above reflects the name in 
 
 ## Typed first-class collection operations (2026-09-06)
 
+The generic mapping result in this historical decision is superseded by [ADR 0001: preserve domain collection types](adr/0001-concrete-collection-mapping.md).
+
 The common collection contract now expresses element operations, following the owner's requested Scala-like interface. `NonEmptyFirstClassCollection<E>` defines iteration, `at`, `head`, `tail`, `include`, `exists`, `filter`, and `map`. `FirstClassCollection<E>` extends it with `isEmpty`. This inheritance shares operations; concrete construction contracts establish non-emptiness. `FindingTargets.of(head, tail)` and the fixed standard installation manifest retain their non-empty construction rules.
 
 Elements and mapped results implement `Equatable`. Membership delegates to domain equality, including ownership and value content where required. `exists` stops at the first match. `tail` and `filter` preserve the concrete collection when its invariants permit; operations that can empty a non-empty collection return an empty-capable collection. `map` returns `FirstClassCollection<U>` without requiring callers to supply a destination factory.
@@ -2740,3 +2742,20 @@ This supersedes the positional comparison added with the common collection opera
 Every accepted attribute key must survive document construction, including names that coincide with properties of JavaScript's object prototype. Document construction must create data properties without interpreting keys as prototype setters.
 
 The ITF decoder returns a validated `TraceStates` in its Result. Both each state's attribute count and the whole trace's step count are validated with their collection parsers. Deadlock, invariant-violation, and temporal-verification paths consume that collection directly and report decoding failures through the existing unavailable diagnostics. They do not reconstruct externally supplied arrays with `of` or catch constructor panics. The existing document-size and collection-size budgets are unchanged.
+
+## Forbid collection-contract bypasses by layer (2026-09-07)
+
+A type-aware lint detects paths that drop a first-class collection into an array or a raw traversal. It reports four shapes: `for...of` over a collection, spread expansion (`[...c]`), `Array.from`, and a `toArray()` call. Only an expression whose type — or one of its base types — reaches the shared contract declaration counts as a collection, so arrays and `Set`s that merely share method names are not reported. A collection's own implementation (the body of a class whose heritage clause names the contract, by `extends` or `implements`) is exempt: traversal and materialization are that type's own duty.
+
+The rule applies by layer. The domain, use case, and infrastructure layers may not bypass the contract. The interface adapter layer and the composition root are the boundary with the outside world, where translating the domain model into SMT or Quint text is the duty itself, so both traversal and materialization are allowed there. Tests and scripts are outside every rule: a test is where a collection's public surface is checked against its promises, and forbidding the traversal itself would make the contract unverifiable.
+
+A bypass is resolved either by moving to an operation the contract already has, or by naming the ordering or projection and making it an operation of the collection type. A form that takes a comparator from the caller is not used; orderings get names. Folding a loop that accumulates two or more values, or that catches exceptions, into `foldLeft` hurts readability, so such traversals move inside a named operation of the collection type instead.
+
+Where moving a traversal into a contract operation would break either its meaning or its readability, the site stays and is recorded in an exemption table with a reason and a count. Exemptions are tabulated: no implicit exclusions, no exceptions by name matching. Because each entry carries a count, a new bypass in an exempted place still fails, and an entry that outlives its violations fails as stale. Adding or removing an exemption always means editing the table.
+
+The kernel collections gained openings that spare the caller from materializing. `FindingTargets.parseWithTail` names the head and takes the rest from the target collection itself; `ErrorMessages.asDiagnostics` returns the held diagnostics in the form `collect` accepts. `DeclaredBindings.matchesVerbatim` and `verbatimHashCode` name the verbatim relation that compares values by `describe()` string equality - a stricter relation than the elements' own equality (`Declaration`'s key-order-insensitive `jsonEquals`), used by the surface that checks an IR declaration's round-trip identity.
+
+## Revisit the bundle size ceiling (2026-09-07)
+
+The per-bundle ceiling rises from 512 KiB to 1 MiB. The ceiling exists to detect abnormal growth, not to enforce a particular number. When 512 KiB was set on 2026-09-03 the measured range was 49-300 KB; domain types added since then brought the three design bundles to 533 KB, over the ceiling. Rather than choosing units or interpretations that make the threshold pass, the ceiling itself moves to roughly twice the measured size, and the measured range recorded in the test is updated to match.
+

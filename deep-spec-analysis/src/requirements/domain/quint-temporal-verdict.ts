@@ -68,6 +68,6 @@ export class QuintTemporalVerdict {
   // witness 材料面：反例のステップトレース（欠けは空 model——凍結挙動）。
   witness(): VerificationWitness {
     const trace = this.#trace;
-    return trace !== null ? VerificationWitness.trace(trace.toArray()) : VerificationWitness.model({});
+    return trace !== null ? VerificationWitness.traceOf(trace) : VerificationWitness.model({});
   }
 }

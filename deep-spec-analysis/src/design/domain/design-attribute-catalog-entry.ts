@@ -1,5 +1,10 @@
 import { AttributePath } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  combinedHash,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignAttributeDeclaration } from "./design-attribute-declaration.ts";
 import type { DesignEntityName } from "./design-entity-name.ts";
 
@@ -42,5 +47,9 @@ export class DesignAttributeCatalogEntry {
     return (
       this.#path.equals(other.#path) && this.#owner.equals(other.#owner) && this.#attribute.equals(other.#attribute)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#path.hashCode(), this.#owner.hashCode(), this.#attribute.hashCode()]);
   }
 }

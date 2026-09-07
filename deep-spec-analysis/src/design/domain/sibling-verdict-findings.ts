@@ -24,6 +24,14 @@ export class SiblingVerdictFindings extends FirstClassCollectionBase<SiblingVerd
     return new SiblingVerdictFindings(values);
   }
 
+  override map(transform: (element: SiblingVerdictFinding) => SiblingVerdictFinding): SiblingVerdictFindings {
+    return this.mapTo(transform, SiblingVerdictFindings.of);
+  }
+
+  override combine(other: SiblingVerdictFindings): SiblingVerdictFindings {
+    return this.combineTo(other, SiblingVerdictFindings.of);
+  }
+
   static parse(values: readonly SiblingVerdictFinding[]): Result<SiblingVerdictFindings, ParseError> {
     return parseConstruction(() => new SiblingVerdictFindings(values));
   }

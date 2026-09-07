@@ -1,6 +1,7 @@
 import {
   boundedValueSnapshot,
   canonicalStringify,
+  hashOfString,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -124,5 +125,10 @@ export class ExpressionTree {
 
   equals(other: ExpressionTree): boolean {
     return this.isCanonicallyEqual(other);
+  }
+
+  // isCanonicallyEqual と同じ正準文字列からハッシュ化する。
+  hashCode(): number {
+    return hashOfString(canonicalStringify(this.#root));
   }
 }

@@ -1,4 +1,5 @@
 import type { ArtifactPath } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
 import { CheckSeverity } from "./check-severity.ts";
 
 // 設置台帳の 1 エントリ——harness 相対パスと、欠けたときの深刻度。
@@ -26,5 +27,9 @@ export class ManifestEntry {
 
   equals(other: ManifestEntry): boolean {
     return this.#rel.equals(other.#rel) && this.#severity.equals(other.#severity);
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#rel.hashCode(), this.#severity.hashCode()]);
   }
 }

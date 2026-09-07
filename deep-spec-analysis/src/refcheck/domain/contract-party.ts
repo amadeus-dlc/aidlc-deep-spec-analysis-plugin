@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 // contracts テーブルの Provider / Consumer / Owner セルの値。空欄・
 // `External: …` 宣言の判別はセル自身の知識（CD-1 の凍結挙動）。
 export class ContractParty {
@@ -22,6 +27,10 @@ export class ContractParty {
 
   equals(other: ContractParty): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   asString(): string {

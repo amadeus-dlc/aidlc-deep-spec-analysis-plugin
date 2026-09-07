@@ -1,4 +1,5 @@
 import type { EnumerationMembers, TriggerName } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 
 // 契約3 設計 IR の ignore 宣言（well-formedness 検査材料）。状態の所属判定と
 // (state, trigger) セルのキーは宣言自身の知識（#71 波13）。state は enum
@@ -21,6 +22,10 @@ export class DesignIgnoreDeclaration {
 
   equals(other: DesignIgnoreDeclaration): boolean {
     return this.#state === other.#state && this.#trigger.equals(other.#trigger);
+  }
+
+  hashCode(): number {
+    return combinedHash([hashOfString(this.#state), this.#trigger.hashCode()]);
   }
 
   state(): string {

@@ -2,7 +2,6 @@ import { type ErrorMessage, SkipReason, UnitName } from "@deep-spec-analysis/ker
 import { DesignFindings } from "./design-findings.ts";
 import type { DesignModel } from "./design-model.ts";
 import type { DesignReport } from "./design-report.ts";
-import { DesignSkipped } from "./design-skipped.ts";
 import { DesignSkips } from "./design-skips.ts";
 import type { DesignUnit } from "./design-unit.ts";
 import type { LoweredUnit } from "./lowered-unit.ts";
@@ -70,15 +69,11 @@ export class SiblingVerificationResult {
     }
     return {
       findings: DesignFindings.of([]),
-      skipped: DesignSkips.of(
-        [...invariants].map((invariant) =>
-          DesignSkipped.of({
-            target: invariant.reqTarget(),
-            unit: UnitName.of(unit.name()),
-            reason: SkipReason.unavailable(),
-            detail: failure ?? undefined,
-          }),
-        ),
+      skipped: DesignSkips.forTargets(
+        invariants.reqTargets(),
+        UnitName.of(unit.name()),
+        SkipReason.unavailable(),
+        failure ?? undefined,
       ),
     };
   }

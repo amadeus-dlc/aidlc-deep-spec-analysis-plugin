@@ -1,6 +1,6 @@
 import { FirstClassCollectionBase, KeyedIndex, TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
 import {
-  boundedCollectionSnapshot,
+  IllegalArgumentException,
   type ParseError,
   parseConstruction,
   type Result,
@@ -12,35 +12,48 @@ import { RuleSubsumptionProbe } from "./rule-subsumption-probe.ts";
 
 export class DesignEventRuleCatalog extends FirstClassCollectionBase<DesignEventRule, DesignEventRuleCatalog> {
   readonly #events: KeyedIndex<TargetIdentifier, DesignEventRule>;
-  readonly #unit: DesignUnit;
 
-  private constructor(unit: DesignUnit, retained?: readonly DesignEventRule[]) {
+  private constructor(events: Iterable<DesignEventRule>) {
     super();
-    this.#unit = unit;
-    const events: DesignEventRule[] = [];
-    if (retained === undefined) {
-      for (const obligation of unit.obligations().sortedCanonically()) {
-        const event = obligation.asEventRule();
-        if (event !== null) events.push(event);
-      }
-      for (const machine of unit.machines().sortedCanonically())
-        for (const transition of machine.transitions().sortedCanonically())
-          events.push(transition.asEventRule(DesignMachines.attrPathOf(machine)));
-    } else events.push(...retained);
-    const snapshot = boundedCollectionSnapshot(events, 65_536, "too-many-design-event-rules");
+    const snapshot: DesignEventRule[] = [];
+    const references = new Set<string>();
+    for (const event of events) {
+      if (snapshot.length >= 65_536)
+        throw new IllegalArgumentException({ kind: "too-many-design-event-rules", raw: snapshot.length + 1 });
+      const reference = event.reference().asString();
+      if (references.has(reference))
+        throw new IllegalArgumentException({ kind: "duplicate-design-event-rule", raw: reference });
+      references.add(reference);
+      snapshot.push(event);
+    }
     this.#events = KeyedIndex.of(
       snapshot.map((event) => [TargetIdentifier.of(event.reference().asString()), event] as const),
     );
   }
 
   protected override rebuild(values: readonly DesignEventRule[]): DesignEventRuleCatalog {
-    return new DesignEventRuleCatalog(this.#unit, values);
+    return new DesignEventRuleCatalog(values);
+  }
+  override map(transform: (element: DesignEventRule) => DesignEventRule): DesignEventRuleCatalog {
+    return this.mapTo(transform, (values) => this.rebuild(values));
+  }
+  override combine(other: DesignEventRuleCatalog): DesignEventRuleCatalog {
+    return this.combineTo(other, (values) => this.rebuild(values));
   }
   static of(unit: DesignUnit): DesignEventRuleCatalog {
-    return new DesignEventRuleCatalog(unit);
+    return new DesignEventRuleCatalog(DesignEventRuleCatalog.eventsOf(unit));
   }
   static parse(unit: DesignUnit): Result<DesignEventRuleCatalog, ParseError> {
-    return parseConstruction(() => new DesignEventRuleCatalog(unit));
+    return parseConstruction(() => new DesignEventRuleCatalog(DesignEventRuleCatalog.eventsOf(unit)));
+  }
+  private static *eventsOf(unit: DesignUnit): Iterable<DesignEventRule> {
+    for (const obligation of unit.obligations().sortedCanonically()) {
+      const event = obligation.asEventRule();
+      if (event !== null) yield event;
+    }
+    for (const machine of unit.machines().sortedCanonically())
+      for (const transition of machine.transitions().sortedCanonically())
+        yield transition.asEventRule(DesignMachines.attrPathOf(machine));
   }
   eventOf(id: TargetIdentifier): DesignEventRule | null {
     const event = this.#events.get(id);

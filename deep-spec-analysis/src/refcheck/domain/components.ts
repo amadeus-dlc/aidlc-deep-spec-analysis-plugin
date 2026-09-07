@@ -44,6 +44,14 @@ export class Components
     return new Components(values);
   }
 
+  override map(transform: (element: Component) => Component): Components {
+    return this.mapTo(transform, Components.of);
+  }
+
+  override combine(other: Components): Components {
+    return this.combineTo(other, Components.of);
+  }
+
   static parse(values: readonly Component[]): Result<Components, ParseError> {
     return parseConstruction(() => new Components(values));
   }
@@ -60,7 +68,7 @@ export class Components
     yield* this.#values;
   }
 
-  count(): number {
+  override count(): number {
     return this.#values.length;
   }
 

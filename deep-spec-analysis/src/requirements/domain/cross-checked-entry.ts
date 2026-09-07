@@ -1,5 +1,6 @@
 import type { BackendName, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import {
+  combinedHash,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -18,9 +19,9 @@ export class CrossCheckedEntry {
 
   private constructor(props: CrossCheckedEntryParam) {
     this.#backend = props.backend;
-    for (const target of props.targets)
-      if (!target.asString().startsWith("SC-"))
-        throw new IllegalArgumentException({ kind: "invalid-cross-checked-target", raw: target.asString() });
+    const outside = props.targets.filter((target) => !target.asString().startsWith("SC-"));
+    if (!outside.isEmpty())
+      throw new IllegalArgumentException({ kind: "invalid-cross-checked-target", raw: outside.head().asString() });
     this.#targets = props.targets;
   }
 
@@ -41,13 +42,11 @@ export class CrossCheckedEntry {
   }
 
   equals(other: CrossCheckedEntry): boolean {
-    const targets = this.#targets.toArray();
-    const otherTargets = other.#targets.toArray();
-    return (
-      this.#backend.equals(other.#backend) &&
-      targets.length === otherTargets.length &&
-      targets.every((target, index) => target.equals(otherTargets[index] as (typeof targets)[number]))
-    );
+    return this.#backend.equals(other.#backend) && this.#targets.equals(other.#targets);
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#backend.hashCode(), this.#targets.hashCode()]);
   }
 
   compareByBackend(other: CrossCheckedEntry): number {

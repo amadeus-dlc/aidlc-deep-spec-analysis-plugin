@@ -1,6 +1,11 @@
 import { NormalizedName } from "@deep-spec-analysis/kernel-domain";
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 export class AllowedValue {
   readonly #value: string;
@@ -19,6 +24,9 @@ export class AllowedValue {
   }
   equals(other: AllowedValue): boolean {
     return this.#value === other.#value;
+  }
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
   asString(): string {
     return this.#value;

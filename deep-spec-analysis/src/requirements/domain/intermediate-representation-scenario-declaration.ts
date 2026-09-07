@@ -1,6 +1,15 @@
 import type { Expression } from "@deep-spec-analysis/kernel-domain";
 import { type DeclaredBindings, ErrorMessage, ErrorMessages, ExpressionTree } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combinedHash,
+  hashOfBoolean,
+  hashOfNullable,
+  hashOfString,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { IntermediateRepresentationAttributeCatalog } from "./intermediate-representation-attribute-catalog.ts";
 import type { ScenarioIdentifier } from "./scenario-identifier.ts";
 
@@ -36,13 +45,18 @@ export class IntermediateRepresentationScenarioDeclaration {
   }
 
   diagnostics(catalog: IntermediateRepresentationAttributeCatalog): ErrorMessages {
+    return ErrorMessages.collect(this.diagnosticStrings(catalog).map(ErrorMessage.parse));
+  }
+
+  // 境界: 診断の表現予算は呼び手の ErrorMessages.collect が守るので、
+  // ここは文字列のまま返す。
+  diagnosticStrings(catalog: IntermediateRepresentationAttributeCatalog): string[] {
     const context = `scenario ${this.#id.asString()}`;
-    const errors: string[] = [];
-    for (const message of catalog.bindingDiagnostics(this.#bindings, context)) errors.push(message.asString());
-    if (this.#expect !== undefined)
-      for (const message of catalog.expressionDiagnostics(this.#expect, context, this.#hasEvent))
-        errors.push(message.asString());
-    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+    const errors: string[] = [...catalog.bindingDiagnosticStrings(this.#bindings, context)];
+    const expectation = this.#expect;
+    if (expectation !== undefined)
+      errors.push(...catalog.expressionDiagnosticStrings(expectation, context, this.#hasEvent));
+    return errors;
   }
 
   id(): ScenarioIdentifier {
@@ -55,18 +69,20 @@ export class IntermediateRepresentationScenarioDeclaration {
         ? other.#expect === undefined
         : other.#expect !== undefined &&
           ExpressionTree.of(this.#expect).isCanonicallyEqual(ExpressionTree.of(other.#expect));
-    const bindings = this.#bindings.toArray();
-    const otherBindings = other.#bindings.toArray();
-    const bindingsEqual =
-      bindings.length === otherBindings.length &&
-      bindings.every((binding, index) => {
-        const otherBinding = otherBindings[index];
-        return (
-          otherBinding !== undefined &&
-          binding.path().equals(otherBinding.path()) &&
-          binding.value().describe() === otherBinding.value().describe()
-        );
-      });
-    return this.#id.equals(other.#id) && this.#hasEvent === other.#hasEvent && bindingsEqual && expressionEqual;
+    return (
+      this.#id.equals(other.#id) &&
+      this.#hasEvent === other.#hasEvent &&
+      this.#bindings.matchesVerbatim(other.#bindings) &&
+      expressionEqual
+    );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#id.hashCode(),
+      hashOfBoolean(this.#hasEvent),
+      this.#bindings.verbatimHashCode(),
+      hashOfNullable(this.#expect, (expr) => hashOfString(canonicalStringify(expr))),
+    ]);
   }
 }

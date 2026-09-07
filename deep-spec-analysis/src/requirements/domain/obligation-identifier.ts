@@ -2,6 +2,7 @@ import { TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
 import {
   compareCanonically,
+  hashOfString,
   IllegalArgumentException,
   parseConstruction,
   type Result,
@@ -27,6 +28,10 @@ export class ObligationIdentifier {
 
   equals(other: ObligationIdentifier): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   // 正準順（英字骨格→数値セグメント）は共通の比較器で求める。

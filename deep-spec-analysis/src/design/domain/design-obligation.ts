@@ -6,7 +6,15 @@ import {
   type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
 
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import { DesignEventRule } from "./design-event-rule.ts";
 // 設計義務。分類、rules 起源の参照要件、event 完全性、式の役割を所有する。
 
@@ -109,6 +117,30 @@ export class DesignObligation {
           sameExpression(left.to, right.to),
       )
     );
+  }
+
+  hashCode(): number {
+    const hashExpression = (expression: Expression | undefined): number =>
+      hashOfNullable(expression, (value) => hashOfString(canonicalStringify(value)));
+    return combinedHash([
+      this.#id.hashCode(),
+      this.#nature.hashCode(),
+      this.#origin.hashCode(),
+      this.#businessRuleReferences.hashCode(),
+      this.#functionalRequirementReferences.hashCode(),
+      hashOfNullable(this.#trigger, (trigger) => trigger.hashCode()),
+      hashExpression(this.#assert),
+      hashExpression(this.#guard),
+      hashExpression(this.#effect),
+      hashOfNullable(this.#temporal, (temporal) =>
+        combinedHash([
+          hashOfString(temporal.pattern),
+          hashExpression(temporal.assert),
+          hashExpression(temporal.from),
+          hashExpression(temporal.to),
+        ]),
+      ),
+    ]);
   }
 
   id(): DesignObligationIdentifier {

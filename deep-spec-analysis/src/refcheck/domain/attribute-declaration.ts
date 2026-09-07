@@ -5,6 +5,7 @@ import {
   TargetIdentifier,
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfBoolean, hashOfNullable } from "@deep-spec-analysis/kernel-infrastructure";
 import type { AllowedValues } from "./allowed-values.ts";
 import type { AttributeDefault } from "./attribute-default.ts";
 import type { AttributeName } from "./attribute-name.ts";
@@ -221,30 +222,35 @@ export class AttributeDeclaration {
   equals(other: AttributeDeclaration): boolean {
     const optionalEqual = <T extends { equals(value: T): boolean }>(left: T | null, right: T | null): boolean =>
       left === null ? right === null : right !== null && left.equals(right);
-    const allowedEqual =
-      this.#allowed === null
-        ? other.#allowed === null
-        : other.#allowed !== null &&
-          this.#allowed.toArray().length === other.#allowed.toArray().length &&
-          this.#allowed
-            .toArray()
-            .every((value, index) => value.equals(other.#allowed?.toArray()[index] as typeof value));
-    const defaultsEqual = optionalEqual(this.#def, other.#def);
-    const boundEqual = (left: NumericBound | null, right: NumericBound | null): boolean =>
-      left === null ? right === null : right !== null && left.equals(right);
     return (
       this.#name.equals(other.#name) &&
       this.#element.equals(other.#element) &&
       optionalEqual(this.#type, other.#type) &&
       this.#uniqueIsTrue === other.#uniqueIsTrue &&
       optionalEqual(this.#references, other.#references) &&
-      allowedEqual &&
-      defaultsEqual &&
+      optionalEqual(this.#allowed, other.#allowed) &&
+      optionalEqual(this.#def, other.#def) &&
       this.#minDeclared === other.#minDeclared &&
       this.#maxDeclared === other.#maxDeclared &&
-      boundEqual(this.#min, other.#min) &&
-      boundEqual(this.#max, other.#max)
+      optionalEqual(this.#min, other.#min) &&
+      optionalEqual(this.#max, other.#max)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#name.hashCode(),
+      this.#element.hashCode(),
+      hashOfNullable(this.#type, (type) => type.hashCode()),
+      hashOfBoolean(this.#uniqueIsTrue),
+      hashOfNullable(this.#references, (references) => references.hashCode()),
+      hashOfNullable(this.#allowed, (allowed) => allowed.hashCode()),
+      hashOfNullable(this.#def, (def) => def.hashCode()),
+      hashOfBoolean(this.#minDeclared),
+      hashOfBoolean(this.#maxDeclared),
+      hashOfNullable(this.#min, (min) => min.hashCode()),
+      hashOfNullable(this.#max, (max) => max.hashCode()),
+    ]);
   }
 
   hasAllowedValues(): boolean {

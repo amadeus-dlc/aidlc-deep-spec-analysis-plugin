@@ -6,7 +6,14 @@ import {
   type TargetIdentifier,
 } from "@deep-spec-analysis/kernel-domain";
 
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combinedHash,
+  hashOfString,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { ObligationIdentifier } from "@deep-spec-analysis/requirements-domain";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredObligation } from "./lowered-obligation.ts";
@@ -50,6 +57,10 @@ export class RefinementQuintInvariant {
 
   equals(other: RefinementQuintInvariant): boolean {
     return this.#reqId.equals(other.#reqId) && sameExpression(this.#expr, other.#expr);
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#reqId.hashCode(), hashOfString(canonicalStringify(this.#expr))]);
   }
 
   reqId(): ObligationIdentifier {

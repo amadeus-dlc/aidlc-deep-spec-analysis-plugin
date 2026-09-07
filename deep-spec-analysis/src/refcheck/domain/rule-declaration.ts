@@ -5,6 +5,7 @@ import {
   type RequirementIdentifiers,
   TargetIdentifier,
 } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfNullable, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 import type { AppliesTo } from "./applies-to.ts";
 import type { DeclaredRuleIdentifier } from "./declared-rule-identifier.ts";
 import type { ElementPath } from "./element-path.ts";
@@ -56,20 +57,26 @@ export class RuleDeclaration {
   equals(other: RuleDeclaration): boolean {
     const optionalEqual = <T extends { equals(value: T): boolean }>(left: T | null, right: T | null): boolean =>
       left === null ? right === null : right !== null && left.equals(right);
-    const sourceIds = this.#sourceIds.toArray();
-    const otherSourceIds = other.#sourceIds.toArray();
-    const sourceIdsEqual =
-      sourceIds.length === otherSourceIds.length &&
-      sourceIds.every((sourceId, index) => sourceId.equals(otherSourceIds[index] as (typeof sourceIds)[number]));
     return (
       (this.#id === null ? other.#id === null : other.#id !== null && this.#id.asString() === other.#id.asString()) &&
       this.#element.equals(other.#element) &&
       optionalEqual(this.#category, other.#category) &&
       optionalEqual(this.#appliesTo, other.#appliesTo) &&
-      sourceIdsEqual &&
+      this.#sourceIds.equals(other.#sourceIds) &&
       this.#missing.length === other.#missing.length &&
       this.#missing.every((missing, index) => missing === other.#missing[index])
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      hashOfNullable(this.#id, (id) => hashOfString(id.asString())),
+      this.#element.hashCode(),
+      hashOfNullable(this.#category, (category) => category.hashCode()),
+      hashOfNullable(this.#appliesTo, (appliesTo) => appliesTo.hashCode()),
+      this.#sourceIds.hashCode(),
+      combinedHash(this.#missing.map((missing) => hashOfString(missing))),
+    ]);
   }
 
   #findingTarget(fallback: string): string {

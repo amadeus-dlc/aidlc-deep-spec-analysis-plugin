@@ -45,7 +45,7 @@ test("YAML mappings keep __proto__ as data and do not expose inherited entities"
     absent: () => "absent",
     wrongFenceCount: (found) => `wrong-fence-count:${found}`,
     unparseable: (_line, error) => error,
-    extracted: (entities) => `extracted:${entities.entities().toArray().length}`,
+    extracted: (entities) => `extracted:${entities.entities().count()}`,
   });
   expect(detail).toBe("extracted:0");
 });

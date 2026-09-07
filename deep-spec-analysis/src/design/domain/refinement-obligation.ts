@@ -8,6 +8,10 @@ import {
 } from "@deep-spec-analysis/kernel-domain";
 
 import {
+  canonicalStringify,
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
   ok,
   type ParseError,
   parseConstruction,
@@ -73,6 +77,19 @@ export class RefinementObligation {
       sameExpression(this.#guard, other.#guard) &&
       sameExpression(this.#effect, other.#effect)
     );
+  }
+
+  hashCode(): number {
+    const hashOfExpression = (value: Expression): number => hashOfString(canonicalStringify(value));
+    return combinedHash([
+      this.#id.hashCode(),
+      this.#nature.hashCode(),
+      this.#functionalRequirementReferences.hashCode(),
+      hashOfNullable(this.#assert, hashOfExpression),
+      hashOfNullable(this.#trigger, (value) => value.hashCode()),
+      hashOfNullable(this.#guard, hashOfExpression),
+      hashOfNullable(this.#effect, hashOfExpression),
+    ]);
   }
 
   #coverage(

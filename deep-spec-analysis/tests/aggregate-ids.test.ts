@@ -283,7 +283,7 @@ describe("requirements first-class collections", () => {
         .byPath(AttributePath.of("o.qty"))
         ?.match({ bool: () => "b", int: (min, max) => `${min?.asNumber()}..${max?.asNumber()}`, enum: () => "e" }),
     ).toBe("0..5");
-    expect(attrs.toArray().length).toBe(1);
+    expect(attrs.count()).toBe(1);
 
     const obs = Obligations.of([]).add(
       Obligation.of({
@@ -296,7 +296,7 @@ describe("requirements first-class collections", () => {
     );
     expect(obs.byId("OB-1")?.nature().asString()).toBe("invariant");
     expect(obs.ids()).toEqual(["OB-1"]);
-    expect([...obs].length).toBe(1);
+    expect(obs.count()).toBe(1);
 
     const scs = Scenarios.of([]).add(
       Scenario.of({
@@ -312,7 +312,7 @@ describe("requirements first-class collections", () => {
     const bgs = BackgroundAssumptions.of([]).add(
       BackgroundAssumption.of({ id: BackgroundAssumptionIdentifier.of("BG-1"), assert: { op: "bool", value: true } }),
     );
-    expect([...bgs].length).toBe(1);
+    expect(bgs.count()).toBe(1);
     expect(bgs.toArray()[0]?.id().asString()).toBe("BG-1");
     expect(bgs.toArray()[0]?.assertion()).toEqual({ op: "bool", value: true });
 
@@ -349,10 +349,10 @@ describe("requirements first-class collections", () => {
         targets: TargetIdentifiers.of(Array.from(["SC-1"], (raw) => TargetIdentifier.of(raw))),
       }),
     );
-    expect([...cc].length).toBe(1);
+    expect(cc.count()).toBe(1);
     expect(cc.toArray()[0]?.backend().asString()).toBe("smt");
 
-    expect([...VerificationReports.of([])].length).toBe(0);
+    expect(VerificationReports.of([]).count()).toBe(0);
   });
 });
 
@@ -387,11 +387,9 @@ describe("design first-class collections", () => {
 
   test("immutable add, iteration, and set knowledge", () => {
     expect(DesignObligations.of([]).add(ob).ids()).toEqual(["DOB-1"]);
-    expect([...DesignObligations.of([ob])].length).toBe(1);
+    expect(DesignObligations.of([ob]).count()).toBe(1);
     expect(DesignMachines.of([]).add(machine).transitionIds()).toEqual(["TR-1"]);
-    expect([...DesignMachines.of([machine])].length).toBe(1);
-    expect(DesignMachines.of([machine]).toArray().length).toBe(1);
-    expect(DesignObligations.of([ob]).toArray().length).toBe(1);
+    expect(DesignMachines.of([machine]).count()).toBe(1);
     expect(
       DesignScenarios.of([
         DesignScenario.of({
@@ -401,7 +399,7 @@ describe("design first-class collections", () => {
           functionalRequirementReferences: FunctionalRequirementReferences.of([]),
           bindings: scenarioBindings({}),
         }),
-      ]).toArray().length,
+      ]).count(),
     ).toBe(1);
     expect(
       DesignScenarios.of([])
@@ -416,7 +414,7 @@ describe("design first-class collections", () => {
         )
         .ids(),
     ).toEqual(["DSC-1"]);
-    expect([...DesignScenarios.of([])].length).toBe(0);
+    expect(DesignScenarios.of([]).count()).toBe(0);
     expect(
       DesignBackgroundAssumptions.of([])
         .add(
@@ -425,9 +423,9 @@ describe("design first-class collections", () => {
             assert: { op: "bool", value: true },
           }),
         )
-        .toArray().length,
+        .count(),
     ).toBe(1);
-    expect([...DesignBackgroundAssumptions.of([])].length).toBe(0);
+    expect(DesignBackgroundAssumptions.of([]).count()).toBe(0);
     const paths = AttributePaths.of(["T.s"].map((value) => AttributePath.of(value))).add(AttributePath.of("T.x"));
     expect(paths.has(AttributePath.of("T.x"))).toBe(true);
     expect([...paths].map((value) => value.asString()).sort()).toEqual(["T.s", "T.x"]);
@@ -444,7 +442,7 @@ describe("design first-class collections", () => {
     const units = DesignUnits.of([]).add(u);
     expect(units.isEmpty()).toBe(false);
     expect(units.sortedByName().toArray()[0]?.name()).toBe("u2");
-    expect([...units].length).toBe(1);
+    expect(units.count()).toBe(1);
 
     const finding = DesignFinding.of({
       kind: FindingKind.of("conflict"),
@@ -457,7 +455,7 @@ describe("design first-class collections", () => {
     const fs = DesignFindings.of([]).add(finding);
     expect(fs.isEmpty()).toBe(false);
     expect(fs.count()).toBe(1);
-    expect([...fs.sortedCanonically()].length).toBe(1);
+    expect(fs.sortedCanonically().count()).toBe(1);
     const sk = DesignSkips.of([])
       .add(
         DesignSkipped.of({
@@ -477,7 +475,6 @@ describe("design first-class collections", () => {
       );
     expect(sk.count()).toBe(2);
     expect(sk.sortedCanonically().toArray()[0]?.target().asString()).toBe("DOB-0");
-    expect([...sk].length).toBe(2);
 
     const anchors = DesignInputAnchors.of([])
       .add(DesignInputAnchor.of({ artifact: "b.md", sha256: ContentHash.of("2".repeat(64)) }))
@@ -488,13 +485,13 @@ describe("design first-class collections", () => {
         .toArray()
         .map((a) => a.artifact()),
     ).toEqual(["a.md", "b.md"]);
-    expect([...anchors].length).toBe(2);
+    expect(anchors.count()).toBe(2);
 
     const checked = CheckedUnits.of(Array.from(["unit:u2", "unit:u1", "unit:u1"], (raw) => UnitName.of(raw))).add(
       UnitName.of("unit:u3"),
     );
     expect(checked.sortedUniqueCanonically().toStrings()).toEqual(["unit:u1", "unit:u2", "unit:u3"]);
-    expect([...checked].length).toBe(4);
+    expect(checked.count()).toBe(4);
 
     const cc = DesignCrossCheckedEntries.of([]).add(
       DesignCrossCheckedEntry.of({
@@ -504,9 +501,8 @@ describe("design first-class collections", () => {
       }),
     );
     expect(cc.toArray()[0]?.backend().asString()).toBe("smt");
-    expect([...cc].length).toBe(1);
-    expect([...DesignReports.of([])].length).toBe(0);
-    expect(DesignReports.of([]).toArray().length).toBe(0);
+    expect(cc.count()).toBe(1);
+    expect(DesignReports.of([]).count()).toBe(0);
   });
 });
 
@@ -548,7 +544,7 @@ describe("design part collections (first-class operations)", () => {
       businessRuleReferences: BusinessRuleReferences.of([]),
     });
     const trs = DesignTransitions.of([t2]).add(t1);
-    expect([...trs].length).toBe(2);
+    expect(trs.count()).toBe(2);
     expect(trs.ids()).toEqual(["TR-10", "TR-2"]);
     expect(
       trs
@@ -560,14 +556,13 @@ describe("design part collections (first-class operations)", () => {
     const igs = DesignIgnores.of([DesignIgnore.of({ state: "y", trigger: TriggerName.of("go") })]).add(
       DesignIgnore.of({ state: "x", trigger: TriggerName.of("go") }),
     );
-    expect([...igs].length).toBe(2);
+    expect(igs.count()).toBe(2);
     expect(
       igs
         .sortedByStateTrigger()
         .toArray()
         .map((i) => i.state()),
     ).toEqual(["x", "y"]);
-    expect(igs.toArray().length).toBe(2);
   });
 });
 

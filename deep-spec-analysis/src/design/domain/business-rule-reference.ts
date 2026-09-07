@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 // BusinessRuleReference — 設計要素が指す業務規則 id（BR1.2 …）のドメインプリミティブ
 //（種別規律の裁定 3-1、2026-09-03）。並びは rules.md 側の凍結挙動どおり
 // 単純な文字列順。
@@ -25,6 +30,10 @@ export class BusinessRuleReference {
 
   equals(other: BusinessRuleReference): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   compareTo(other: BusinessRuleReference): number {

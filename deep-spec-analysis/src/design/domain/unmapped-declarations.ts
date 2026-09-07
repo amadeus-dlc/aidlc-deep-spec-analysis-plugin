@@ -26,6 +26,14 @@ export class UnmappedDeclarations extends FirstClassCollectionBase<UnmappedTarge
     return new UnmappedDeclarations(values);
   }
 
+  override map(transform: (element: UnmappedTarget) => UnmappedTarget): UnmappedDeclarations {
+    return this.mapTo(transform, UnmappedDeclarations.of);
+  }
+
+  override combine(other: UnmappedDeclarations): UnmappedDeclarations {
+    return this.combineTo(other, UnmappedDeclarations.of);
+  }
+
   static parse(values: readonly UnmappedTarget[]): Result<UnmappedDeclarations, ParseError> {
     return parseConstruction(() => new UnmappedDeclarations(values));
   }

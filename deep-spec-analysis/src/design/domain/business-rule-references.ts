@@ -26,6 +26,14 @@ export class BusinessRuleReferences extends FirstClassCollectionBase<BusinessRul
     return new BusinessRuleReferences(values);
   }
 
+  override map(transform: (element: BusinessRuleReference) => BusinessRuleReference): BusinessRuleReferences {
+    return this.mapTo(transform, BusinessRuleReferences.of);
+  }
+
+  override combine(other: BusinessRuleReferences): BusinessRuleReferences {
+    return this.combineTo(other, BusinessRuleReferences.of);
+  }
+
   static parse(values: readonly BusinessRuleReference[]): Result<BusinessRuleReferences, ParseError> {
     return parseConstruction(() => new BusinessRuleReferences(values));
   }

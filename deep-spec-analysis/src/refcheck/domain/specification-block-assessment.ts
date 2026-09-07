@@ -1,4 +1,5 @@
 import { type ArtifactPath, FindingKind, FindingTargets, TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfNullable, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 import type { BlockIndex } from "./block-index.ts";
 import { CD_2 } from "./contract-check-families.ts";
 import type { LineNumber } from "./line-number.ts";
@@ -54,6 +55,15 @@ export class SpecificationBlockAssessment {
       this.#issue === other.#issue &&
       this.#error === other.#error
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#index.hashCode(),
+      this.#line.hashCode(),
+      hashOfString(this.#issue),
+      hashOfNullable(this.#error, hashOfString),
+    ]);
   }
 
   locationLabel(): string {

@@ -890,7 +890,7 @@ describe("quint degradation reports", () => {
 describe("quint plan collections (first-class operations)", () => {
   test("TraceStates and QuintMachineComponents own their step/attribution knowledge", () => {
     const traces = TraceStates.of([st({ "T.ok": true })]).add(st({ "T.ok": false }));
-    expect([...traces].length).toBe(2);
+    expect(traces.count()).toBe(2);
     expect(traces.finalState().toDocument()).toEqual({ "T.ok": false });
     expect(TraceStates.of([]).finalState().toDocument()).toEqual({});
     expect(traces.toArray().map((t) => t.toDocument())).toEqual([{ "T.ok": true }, { "T.ok": false }]);
@@ -899,7 +899,7 @@ describe("quint plan collections (first-class operations)", () => {
       QuintMachineComponent.of({ id: ObligationIdentifier.of("OB-1"), expression: { op: "ref", path: "T.ok" } }),
     );
     expect(comps.isEmpty()).toBe(false);
-    expect([...comps].length).toBe(1);
+    expect(comps.count()).toBe(1);
     expect(comps.ids().toStrings()).toEqual(["OB-1"]);
     expect(
       comps
@@ -908,7 +908,6 @@ describe("quint plan collections (first-class operations)", () => {
         .toStrings(),
     ).toEqual(["OB-1"]);
     expect(comps.violatedBy(st({ "T.ok": true })).isEmpty()).toBe(true);
-    expect(comps.toArray().length).toBe(1);
 
     const plan = QuintMachinePlan.of({
       invariantComponents: comps,

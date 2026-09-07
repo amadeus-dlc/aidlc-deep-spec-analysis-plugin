@@ -16,7 +16,6 @@ import {
   FindingTargets,
   FirstClassCollectionBase,
   FunctionalRequirementReferences,
-  ImmutableFirstClassCollection,
   RequirementIdentifier,
   RequirementIdentifiers,
   ScenarioBinding,
@@ -26,7 +25,14 @@ import {
   TargetIdentifier,
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
-import { IllegalArgumentException } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  boundedCollectionSnapshot,
+  hashOfNumber,
+  IllegalArgumentException,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 class NumberValue {
   readonly #value: number;
@@ -46,11 +52,53 @@ class NumberValue {
   equals(other: NumberValue): boolean {
     return this.#value === other.#value;
   }
+
+  hashCode(): number {
+    return hashOfNumber(this.#value);
+  }
 }
 
 const number = (value: number): NumberValue => NumberValue.of(value);
+const preserve = <T>(value: T): T => value;
 
-class ProbeCollection extends FirstClassCollectionBase<NumberValue, ImmutableFirstClassCollection<NumberValue>> {
+class NumberValues extends FirstClassCollectionBase<NumberValue, NumberValues> {
+  readonly #values: readonly NumberValue[];
+
+  private constructor(values: readonly NumberValue[]) {
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-number-values");
+  }
+
+  static of(values: readonly NumberValue[]): NumberValues {
+    return new NumberValues(values);
+  }
+
+  static parse(values: readonly NumberValue[]): Result<NumberValues, ParseError> {
+    return parseConstruction(() => new NumberValues(values));
+  }
+
+  protected override rebuild(values: readonly NumberValue[]): NumberValues {
+    return NumberValues.of(values);
+  }
+
+  override map(transform: (element: NumberValue) => NumberValue): NumberValues {
+    return this.mapTo(transform, NumberValues.of);
+  }
+
+  override combine(other: NumberValues): NumberValues {
+    return this.combineTo(other, NumberValues.of);
+  }
+
+  diagnostics(): ErrorMessages {
+    return this.mapTo((value) => ErrorMessage.of(`value:${value.asNumber()}`), ErrorMessages.of);
+  }
+
+  override *[Symbol.iterator](): Iterator<NumberValue> {
+    yield* this.#values;
+  }
+}
+
+class ProbeCollection extends FirstClassCollectionBase<NumberValue, ProbeCollection> {
   readonly #iteratorFactory: () => IterableIterator<NumberValue>;
 
   constructor(iteratorFactory: () => IterableIterator<NumberValue>) {
@@ -62,15 +110,23 @@ class ProbeCollection extends FirstClassCollectionBase<NumberValue, ImmutableFir
     return this.#iteratorFactory();
   }
 
-  protected override rebuild(values: readonly NumberValue[]): ImmutableFirstClassCollection<NumberValue> {
-    return ImmutableFirstClassCollection.of(values);
+  protected override rebuild(values: readonly NumberValue[]): ProbeCollection {
+    return new ProbeCollection(() => values[Symbol.iterator]());
+  }
+
+  override map(transform: (element: NumberValue) => NumberValue): ProbeCollection {
+    return this.mapTo(transform, (values) => new ProbeCollection(() => values[Symbol.iterator]()));
+  }
+
+  override combine(other: ProbeCollection): ProbeCollection {
+    return this.combineTo(other, (values) => new ProbeCollection(() => values[Symbol.iterator]()));
   }
 }
 
 describe("kernel first-class collection operations", () => {
-  test("ImmutableFirstClassCollection keeps order and exposes all operations", () => {
+  test("NumberValues keeps order and exposes all operations", () => {
     const source = [number(1), number(2), number(3)];
-    const values = ImmutableFirstClassCollection.of(source);
+    const values = NumberValues.of(source);
     source[0] = number(99);
 
     expect([...values].map((value) => value.asNumber())).toEqual([1, 2, 3]);
@@ -84,13 +140,35 @@ describe("kernel first-class collection operations", () => {
     expect([...values.filter((value) => value.asNumber() !== 2)].map((value) => value.asNumber())).toEqual([1, 3]);
 
     const mapped = values.map((value) => number(value.asNumber() * 10));
-    expect(mapped).toBeInstanceOf(ImmutableFirstClassCollection);
+    expect(mapped).toBeInstanceOf(NumberValues);
     expect([...mapped].map((value) => value.asNumber())).toEqual([10, 20, 30]);
     expect([...values].map((value) => value.asNumber())).toEqual([1, 2, 3]);
+    expect(values.count()).toBe(3);
+    expect(NumberValues.of([]).count()).toBe(0);
+    expect(values.foldLeft("", (accumulator, value) => `${accumulator}${value.asNumber()}`)).toBe("123");
+    expect(values.foldLeft(0, (accumulator, value) => accumulator * 10 + value.asNumber())).toBe(123);
+    const initial = { count: 0 };
+    expect(NumberValues.of([]).foldLeft(initial, (accumulator) => accumulator)).toBe(initial);
+  });
+
+  test("combine preserves order, has empty units, and owns a new snapshot", () => {
+    const left = NumberValues.of([number(1), number(2)]);
+    const right = NumberValues.of([number(3)]);
+    const combined = left.combine(right);
+
+    expect(combined).toBeInstanceOf(NumberValues);
+    expect([...combined].map((value) => value.asNumber())).toEqual([1, 2, 3]);
+    expect([...left.combine(NumberValues.of([]))].map((value) => value.asNumber())).toEqual([1, 2]);
+    expect([...NumberValues.of([]).combine(right)].map((value) => value.asNumber())).toEqual([3]);
+    expect(combined).not.toBe(left);
+    expect(combined).not.toBe(right);
+    expect([...left.combine(left)].map((value) => value.asNumber())).toEqual([1, 2, 1, 2]);
+    expect([...left].map((value) => value.asNumber())).toEqual([1, 2]);
+    expect([...right].map((value) => value.asNumber())).toEqual([3]);
   });
 
   test("invalid positions and empty head/tail are rejected at the public seam", () => {
-    const empty = ImmutableFirstClassCollection.of<NumberValue>([]);
+    const empty = NumberValues.of([]);
     expect(empty.isEmpty()).toBe(true);
     expect(empty.include(number(1))).toBe(false);
     expect(empty.exists(() => true)).toBe(false);
@@ -99,22 +177,30 @@ describe("kernel first-class collection operations", () => {
     expect(() => empty.at(-1)).toThrow(IllegalArgumentException);
     expect(() => empty.at(0)).toThrow(IllegalArgumentException);
     expect(() => empty.at(65_536)).toThrow(IllegalArgumentException);
-    expect(() => ImmutableFirstClassCollection.of([number(1)]).at(1.5)).toThrow(IllegalArgumentException);
-    expect(() => ImmutableFirstClassCollection.of([number(1)]).at(1)).toThrow(IllegalArgumentException);
+    expect(() => NumberValues.of([number(1)]).at(1.5)).toThrow(IllegalArgumentException);
+    expect(() => NumberValues.of([number(1)]).at(1)).toThrow(IllegalArgumentException);
   });
 
-  test("filter can become empty while map changes element type", () => {
-    const values = ImmutableFirstClassCollection.of([number(1), number(2)]);
+  test("filter can become empty while map preserves the concrete element type", () => {
+    const values = NumberValues.of([number(1), number(2)]);
     const filtered = values.filter((value) => value.asNumber() > 10);
     expect(filtered.isEmpty()).toBe(true);
     expect([...filtered]).toEqual([]);
 
-    const mapped = values.map((value) => ErrorMessage.of(`value:${value.asNumber()}`));
-    expect([...mapped].map((value) => value.asString())).toEqual(["value:1", "value:2"]);
+    const mapped = values.map((value) => number(value.asNumber() + 10));
+    expect(mapped).toBeInstanceOf(NumberValues);
+    expect([...mapped].map((value) => value.asNumber())).toEqual([11, 12]);
+    expect(values.diagnostics()).toBeInstanceOf(ErrorMessages);
+    expect(
+      values
+        .diagnostics()
+        .toArray()
+        .map((message) => message.asString()),
+    ).toEqual(["value:1", "value:2"]);
   });
 
   test("callbacks receive only the element and mapper failures escape", () => {
-    const values = ImmutableFirstClassCollection.of([number(1), number(2)]);
+    const values = NumberValues.of([number(1), number(2)]);
     const argumentCounts: number[] = [];
 
     values.exists((...args: NumberValue[]) => {
@@ -129,8 +215,12 @@ describe("kernel first-class collection operations", () => {
       argumentCounts.push(args.length);
       return number(args[0]?.asNumber() ?? 0);
     });
+    values.foldLeft(0, (...args: [number, NumberValue]) => {
+      argumentCounts.push(args.length);
+      return args[0] + args[1].asNumber();
+    });
 
-    expect(argumentCounts).toEqual([1, 1, 1, 1, 1]);
+    expect(argumentCounts).toEqual([1, 1, 1, 1, 1, 2, 2]);
     const mapperFailure = new Error("mapper failure");
     expect(() =>
       values.map(() => {
@@ -198,7 +288,28 @@ describe("kernel first-class collection operations", () => {
     expect(closes).toBe(2);
   });
 
-  test("the immutable constructor checks the budget before copying and while reading", () => {
+  test("foldLeft preserves left association and stops after mapper failure", () => {
+    const values = NumberValues.of([number(1), number(2), number(3)]);
+    expect(values.foldLeft("", (accumulator, value) => `(${accumulator}+${value.asNumber()})`)).toBe("(((+1)+2)+3)");
+
+    let reads = 0;
+    const failure = new Error("fold failure");
+    const source = new ProbeCollection(function* () {
+      for (const value of [number(1), number(2), number(3)]) {
+        reads++;
+        yield value;
+      }
+    });
+    expect(() =>
+      source.foldLeft(0, (accumulator, value) => {
+        if (value.asNumber() === 1) throw failure;
+        return accumulator + value.asNumber();
+      }),
+    ).toThrow(failure);
+    expect(reads).toBe(1);
+  });
+
+  test("the concrete constructor checks the budget before copying and while reading", () => {
     const value = number(1);
     const oversized = Array.from({ length: 65_537 }, () => value);
     let preflightReads = 0;
@@ -207,16 +318,16 @@ describe("kernel first-class collection operations", () => {
       preflightReads++;
       return originalOversizedIterator.call(oversized);
     };
-    expect(() => ImmutableFirstClassCollection.of(oversized)).toThrow(IllegalArgumentException);
+    expect(() => NumberValues.of(oversized)).toThrow(IllegalArgumentException);
     expect(preflightReads).toBe(0);
-    const parsed = ImmutableFirstClassCollection.parse(oversized);
+    const parsed = NumberValues.parse(oversized);
     expect(parsed.ok).toBe(false);
-    if (!parsed.ok) expect(parsed.error.kind).toBe("too-many-immutable-collection-elements");
+    if (!parsed.ok) expect(parsed.error.kind).toBe("too-many-number-values");
 
     const deceptive = [value];
     const overread = Array.from({ length: 65_537 }, () => value);
     deceptive[Symbol.iterator] = () => overread[Symbol.iterator]();
-    expect(() => ImmutableFirstClassCollection.of(deceptive)).toThrow(IllegalArgumentException);
+    expect(() => NumberValues.of(deceptive)).toThrow(IllegalArgumentException);
   });
 
   test("bounded operations reject an iterator that exceeds the shared scan budget", () => {
@@ -236,11 +347,33 @@ describe("kernel first-class collection operations", () => {
     operation("exists", (collection) => void collection.exists(() => false));
     operation("filter", (collection) => void collection.filter(() => true));
     operation("map", (collection) => void collection.map((value) => number(value.asNumber())));
+    operation("foldLeft", (collection) => void collection.foldLeft(0, (accumulator) => accumulator));
+    operation("count", (collection) => void collection.count());
+    expect(() =>
+      new ProbeCollection(function* () {
+        for (let index = 0; index < 65_536; index++) yield number(index);
+      }).combine(
+        new ProbeCollection(function* () {
+          yield number(65_536);
+        }),
+      ),
+    ).toThrow(IllegalArgumentException);
+
+    const overread = new ProbeCollection(function* () {
+      for (let index = 0; index < 65_537; index++) yield number(index);
+    });
+    expect(() =>
+      overread.combine(
+        new ProbeCollection(function* () {
+          yield number(1);
+        }),
+      ),
+    ).toThrow(IllegalArgumentException);
   });
 });
 
 describe("kernel concrete collection contracts", () => {
-  test("all ordinary kernel collections retain their concrete type for tail/filter", () => {
+  test("all ordinary kernel collections retain their concrete type for map/tail/filter", () => {
     const binding = BindingDeclaration.of(
       AttributePath.of("Ticket.open"),
       DeclaredBindingValue.of(Declaration.of(true)),
@@ -266,6 +399,7 @@ describe("kernel concrete collection contracts", () => {
     for (const [collection, type] of collections) {
       expect(collection.tail()).toBeInstanceOf(type);
       expect(collection.filter(() => true)).toBeInstanceOf(type);
+      expect(collection.map(preserve)).toBeInstanceOf(type);
     }
   });
 
@@ -278,6 +412,8 @@ describe("kernel concrete collection contracts", () => {
     expect(FindingTargets.of(TargetIdentifier.of("OB-1"), []).tail().isEmpty()).toBe(true);
     expect(targets.filter(() => false)).toBeInstanceOf(TargetIdentifiers);
     expect(targets.filter(() => false).isEmpty()).toBe(true);
+    expect(targets.map((target) => target)).toBeInstanceOf(FindingTargets);
+    expect(targets.combine(targets)).toBeInstanceOf(FindingTargets);
     expect(targets.include(TargetIdentifier.of("SC-1"))).toBe(true);
   });
 

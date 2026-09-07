@@ -1,11 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { InstallationManifest } from "@deep-spec-analysis/doctor-domain";
+import { InstallationManifest, ManifestEntries } from "@deep-spec-analysis/doctor-domain";
 import {
   AttributeKind,
   AttributePath,
   BackendName,
   FunctionalRequirementReferences,
-  ImmutableFirstClassCollection,
   KeyedIndex,
   QueryLabel,
   RequirementIdentifier,
@@ -237,12 +236,13 @@ describe("他コンテキストの共通コレクション操作", () => {
     expect(inspected).toBe(1);
   });
 
-  test("map は別の値オブジェクトを受け取り汎用不変コレクションを返す", () => {
-    const mapped = AllowedValues.of([AllowedValue.of("active")]).map((value) =>
-      TargetIdentifier.of(`state:${value.asString()}`),
-    );
-    expect(mapped).toBeInstanceOf(ImmutableFirstClassCollection);
-    expect([...mapped].map((value) => value.asString())).toEqual(["state:active"]);
+  test("map は同じ要素型を保ち具象コレクションを返す", () => {
+    const mapped = AllowedValues.of([AllowedValue.of("active")]).map((value) => AllowedValue.of(value.asString()));
+    expect(mapped).toBeInstanceOf(AllowedValues);
+    expect([...mapped].map((value) => value.asString())).toEqual(["active"]);
+    expect(mapped.foldLeft("", (accumulator, value) => accumulator + value.asString())).toBe("active");
+    expect(AllowedValues.of([]).combine(mapped)).toBeInstanceOf(AllowedValues);
+    expect(mapped.combine(AllowedValues.of([]))).toBeInstanceOf(AllowedValues);
   });
 
   test("入力配列を変更しても所有要素と派生コレクションは変わらない", () => {
@@ -412,11 +412,17 @@ describe("非空コレクション", () => {
     const manifest = InstallationManifest.standard();
     expect("isEmpty" in manifest).toBe(false);
     expect(manifest.head().rel()).toContain("sensors/");
+    expect(manifest.map((entry) => entry)).toBeInstanceOf(InstallationManifest);
+    const combined = manifest.combine(manifest);
+    expect(combined).toBeInstanceOf(InstallationManifest);
+    expect([...combined]).toHaveLength(52);
+    expect([...manifest]).toHaveLength(26);
+    expect(manifest.foldLeft(0, (count) => count + 1)).toBe(26);
     const tail = manifest.tail();
     const filtered = manifest.filter(() => false);
-    expect(tail).toBeInstanceOf(ImmutableFirstClassCollection);
-    expect(filtered).toBeInstanceOf(ImmutableFirstClassCollection);
+    expect(tail).toBeInstanceOf(ManifestEntries);
+    expect(filtered).toBeInstanceOf(ManifestEntries);
     expect(filtered.isEmpty()).toBe(true);
-    expect([...manifest].length).toBe(26);
+    expect(manifest.count()).toBe(26);
   });
 });

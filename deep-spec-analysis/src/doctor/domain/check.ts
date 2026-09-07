@@ -1,3 +1,4 @@
+import { combinedHash, hashOfBoolean, hashOfNullable, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 import type { CheckSeverity } from "./check-severity.ts";
 
 // doctor 検査行 1 件——合否・label・fix・深刻度。判定書はこの行に自分の
@@ -46,6 +47,15 @@ export class Check {
       this.#fix === other.#fix &&
       this.#severity.equals(other.#severity)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      hashOfBoolean(this.#pass),
+      hashOfString(this.#label),
+      hashOfNullable(this.#fix, hashOfString),
+      this.#severity.hashCode(),
+    ]);
   }
 
   // 判定書の 1 行（凍結のプロパティ順）。

@@ -1,6 +1,14 @@
 import type { Expression } from "@deep-spec-analysis/kernel-domain";
 import { ExpressionTree } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 // 契約1 要件 IR の時相宣言（well-formedness 検査材料）: always の assert、
 // leads-to の from / to。式の巡回（いずれも prime 禁止）は宣言自身の知識
@@ -39,6 +47,12 @@ export class IntermediateRepresentationTemporalDeclaration {
       expressionEqual(this.#from, other.#from) &&
       expressionEqual(this.#to, other.#to)
     );
+  }
+
+  hashCode(): number {
+    const expressionHash = (expression: Expression | undefined): number =>
+      hashOfNullable(expression, (value) => hashOfString(canonicalStringify(value)));
+    return combinedHash([expressionHash(this.#assert), expressionHash(this.#from), expressionHash(this.#to)]);
   }
 
   // assert → from → to の順に、存在する式だけを訪ねる（凍結順）。

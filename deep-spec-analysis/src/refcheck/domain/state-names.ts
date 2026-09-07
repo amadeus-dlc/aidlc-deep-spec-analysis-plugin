@@ -22,6 +22,14 @@ export class StateNames
     return new StateNames(values);
   }
 
+  override map(transform: (element: StateName) => StateName): StateNames {
+    return this.mapTo(transform, StateNames.of);
+  }
+
+  override combine(other: StateNames): StateNames {
+    return this.combineTo(other, StateNames.of);
+  }
+
   static parse(values: readonly StateName[]): Result<StateNames, ParseError> {
     return parseConstruction(() => new StateNames(values));
   }

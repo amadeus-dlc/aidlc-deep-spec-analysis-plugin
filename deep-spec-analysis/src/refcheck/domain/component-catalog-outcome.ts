@@ -106,15 +106,7 @@ export class ComponentCatalogOutcome {
         return null;
       },
       extracted: (components, shapeErrors) => {
-        for (const e of shapeErrors) {
-          report.finding(
-            DD_0,
-            FindingKind.structureInvalid(),
-            FindingTargets.of(TargetIdentifier.of(DD_0.asCheckTarget()), []),
-            [WitnessReference.at(art, e.element().asString())],
-            e.detail(),
-          );
-        }
+        shapeErrors.recordIn(DD_0, report, artifact);
         return shapeErrors.count() > 0 && components.count() === 0 ? null : components;
       },
     });

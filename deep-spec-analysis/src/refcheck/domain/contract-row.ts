@@ -5,6 +5,7 @@ import {
   TargetIdentifier,
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
 import { CD_1 } from "./contract-check-families.ts";
 import type { ContractIdentifier } from "./contract-identifier.ts";
 import type { ContractParty } from "./contract-party.ts";
@@ -55,6 +56,16 @@ export class ContractRow {
       this.#owner.equals(other.#owner) &&
       this.#line.equals(other.#line)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#id.hashCode(),
+      this.#provider.hashCode(),
+      this.#consumer.hashCode(),
+      this.#owner.hashCode(),
+      this.#line.hashCode(),
+    ]);
   }
 
   // 行が (from, to) の辺をどちらの向きでも結ぶか。

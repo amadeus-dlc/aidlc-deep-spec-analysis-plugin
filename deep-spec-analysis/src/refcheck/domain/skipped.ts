@@ -1,4 +1,5 @@
 import type { SkipReason, TargetIdentifier, UnitName } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfNullable, hashOfString, type Json } from "@deep-spec-analysis/kernel-infrastructure";
 
 // refcheck skip 記録（無沈黙台帳の 1 行）——対象・理由・任意の帰属ユニットと
 // 説明。正準順（target → reason）は記録自身の知識（#71 波17）。target は
@@ -49,6 +50,24 @@ export class Skipped {
         : other.#unit !== undefined && this.#unit.equals(other.#unit)) &&
       this.#detail === other.#detail
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#target.hashCode(),
+      hashOfString(this.#reason.asString()),
+      hashOfNullable(this.#unit, (unit) => unit.hashCode()),
+      hashOfNullable(this.#detail, hashOfString),
+    ]);
+  }
+
+  // 境界: 描画専用。キー順 (target, reason, detail?, unit?) は契約2 の凍結形。
+  toDocument(): { [k: string]: Json } {
+    const out: { [k: string]: Json } = { target: this.#target.asString(), reason: this.#reason.asString() };
+    if (this.#detail !== undefined) out.detail = this.#detail;
+    const unit = this.#unit?.asString();
+    if (unit !== undefined) out.unit = unit;
+    return out;
   }
 
   // 正準順: target の id 順、次いで reason の辞書順。

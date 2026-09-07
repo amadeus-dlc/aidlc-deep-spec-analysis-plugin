@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 // DesignModel内のユニット識別子。非空の名前を保持し、
 // 生値からの入力失敗はparse、内部の生成契約違反はofのpanicで扱う。
 
@@ -23,6 +28,10 @@ export class DesignUnitIdentifier {
 
   equals(other: DesignUnitIdentifier): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   // 境界: 文書・文言・写像キーに逐語で載るユニット名。

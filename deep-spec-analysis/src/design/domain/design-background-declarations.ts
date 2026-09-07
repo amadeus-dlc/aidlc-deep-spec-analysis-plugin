@@ -26,6 +26,16 @@ export class DesignBackgroundDeclarations extends FirstClassCollectionBase<
     return new DesignBackgroundDeclarations(values);
   }
 
+  override map(
+    transform: (element: DesignBackgroundDeclaration) => DesignBackgroundDeclaration,
+  ): DesignBackgroundDeclarations {
+    return this.mapTo(transform, DesignBackgroundDeclarations.of);
+  }
+
+  override combine(other: DesignBackgroundDeclarations): DesignBackgroundDeclarations {
+    return this.combineTo(other, DesignBackgroundDeclarations.of);
+  }
+
   static parse(values: readonly DesignBackgroundDeclaration[]): Result<DesignBackgroundDeclarations, ParseError> {
     return parseConstruction(() => new DesignBackgroundDeclarations(values));
   }

@@ -7,7 +7,15 @@ import {
   type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
 
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import { DesignEventRule } from "./design-event-rule.ts";
 import type { DesignMachine } from "./design-machine.ts";
 // 状態機械の遷移（契約3）。id はドメインプリミティブで運ぶ。
@@ -70,6 +78,17 @@ export class DesignTransition {
       sameExpression(this.#guard, other.#guard) &&
       sameExpression(this.#effect, other.#effect)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#id.hashCode(),
+      hashOfString(this.#from),
+      hashOfString(this.#to),
+      this.#trigger.hashCode(),
+      hashOfNullable(this.#guard, (value) => hashOfString(canonicalStringify(value))),
+      hashOfNullable(this.#effect, (value) => hashOfString(canonicalStringify(value))),
+    ]);
   }
 
   id(): DesignTransitionIdentifier {

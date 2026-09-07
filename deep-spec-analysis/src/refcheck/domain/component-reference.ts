@@ -1,3 +1,4 @@
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
 import type { ComponentName } from "./component-name.ts";
 import type { ElementPath } from "./element-path.ts";
 
@@ -34,5 +35,9 @@ export class ComponentReference {
 
   equals(other: ComponentReference): boolean {
     return this.#component.equals(other.#component) && this.#element.equals(other.#element);
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#component.hashCode(), this.#element.hashCode()]);
   }
 }

@@ -36,6 +36,14 @@ export class TargetIdentifiers
     return new TargetIdentifiers(values);
   }
 
+  override map(transform: (element: TargetIdentifier) => TargetIdentifier): TargetIdentifiers {
+    return this.mapTo(transform, TargetIdentifiers.of);
+  }
+
+  override combine(other: TargetIdentifiers): TargetIdentifiers {
+    return this.combineTo(other, TargetIdentifiers.of);
+  }
+
   static parse(values: readonly TargetIdentifier[]): Result<TargetIdentifiers, ParseError> {
     return parseConstruction(() => new TargetIdentifiers(values));
   }
@@ -60,7 +68,7 @@ export class TargetIdentifiers
     yield* this.#values;
   }
 
-  count(): number {
+  override count(): number {
     return this.#values.length;
   }
 

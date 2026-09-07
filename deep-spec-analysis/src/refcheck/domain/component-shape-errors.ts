@@ -1,11 +1,21 @@
-import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  FindingKind,
+  FindingTargets,
+  type FirstClassCollection,
+  FirstClassCollectionBase,
+  TargetIdentifier,
+} from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
   type ParseError,
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
+import type { CheckFamily } from "./check-family.ts";
 import type { ComponentShapeError } from "./component-shape-error.ts";
+import type { ReferenceCheckReport } from "./reference-check-report.ts";
+import { WitnessReference } from "./witness-reference.ts";
 
 export class ComponentShapeErrors
   extends FirstClassCollectionBase<ComponentShapeError, ComponentShapeErrors>
@@ -20,6 +30,14 @@ export class ComponentShapeErrors
 
   protected override rebuild(values: readonly ComponentShapeError[]): ComponentShapeErrors {
     return new ComponentShapeErrors(values);
+  }
+
+  override map(transform: (element: ComponentShapeError) => ComponentShapeError): ComponentShapeErrors {
+    return this.mapTo(transform, ComponentShapeErrors.of);
+  }
+
+  override combine(other: ComponentShapeErrors): ComponentShapeErrors {
+    return this.combineTo(other, ComponentShapeErrors.of);
   }
 
   static parse(values: readonly ComponentShapeError[]): Result<ComponentShapeErrors, ParseError> {
@@ -38,8 +56,20 @@ export class ComponentShapeErrors
     yield* this.#values;
   }
 
-  count(): number {
+  override count(): number {
     return this.#values.length;
+  }
+
+  // 形の誤りすべてを検出順のまま family の finding にする（DD-0）。
+  recordIn(family: CheckFamily, report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const error of this.#values)
+      report.finding(
+        family,
+        FindingKind.structureInvalid(),
+        FindingTargets.of(TargetIdentifier.of(family.asCheckTarget()), []),
+        [WitnessReference.at(artifact.asString(), error.element().asString())],
+        error.detail(),
+      );
   }
 
   toArray(): readonly ComponentShapeError[] {

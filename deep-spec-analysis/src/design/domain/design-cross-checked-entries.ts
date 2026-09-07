@@ -1,6 +1,7 @@
 import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
+  type Json,
   type ParseError,
   parseConstruction,
   type Result,
@@ -27,6 +28,14 @@ export class DesignCrossCheckedEntries extends FirstClassCollectionBase<
     return new DesignCrossCheckedEntries(values);
   }
 
+  override map(transform: (element: DesignCrossCheckedEntry) => DesignCrossCheckedEntry): DesignCrossCheckedEntries {
+    return this.mapTo(transform, DesignCrossCheckedEntries.of);
+  }
+
+  override combine(other: DesignCrossCheckedEntries): DesignCrossCheckedEntries {
+    return this.combineTo(other, DesignCrossCheckedEntries.of);
+  }
+
   static parse(values: readonly DesignCrossCheckedEntry[]): Result<DesignCrossCheckedEntries, ParseError> {
     return parseConstruction(() => new DesignCrossCheckedEntries(values));
   }
@@ -37,6 +46,15 @@ export class DesignCrossCheckedEntries extends FirstClassCollectionBase<
 
   override *[Symbol.iterator](): Iterator<DesignCrossCheckedEntry> {
     yield* this.#values;
+  }
+
+  // 境界: 描画専用。契約2 の crossChecked キー順（backend, unit, targets）。
+  toDocuments(): Json[] {
+    return this.#values.map((entry) => ({
+      backend: entry.backend().asString(),
+      unit: entry.unit().asString(),
+      targets: [...entry.targets().toStrings()],
+    }));
   }
 
   toArray(): readonly DesignCrossCheckedEntry[] {

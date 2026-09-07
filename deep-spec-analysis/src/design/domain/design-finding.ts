@@ -11,6 +11,7 @@ import {
   type TargetIdentifier,
   type UnitName,
 } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignWitness } from "./design-witness.ts";
 import { sameArray } from "./value-equality.ts";
 
@@ -57,9 +58,20 @@ export class DesignFinding {
         other.#functionalRequirementReferences.toStrings(),
         (left, right) => left === right,
       ) &&
-      sameArray(this.#targets.toArray(), other.#targets.toArray(), (left, right) => left.equals(right)) &&
+      this.#targets.equals(other.#targets) &&
       this.#witness.equals(other.#witness)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#kind.hashCode(),
+      this.#unit.hashCode(),
+      hashOfString(this.#detail),
+      combinedHash(this.#functionalRequirementReferences.toStrings().map((value) => hashOfString(value))),
+      this.#targets.hashCode(),
+      this.#witness.hashCode(),
+    ]);
   }
 
   kind(): string {
@@ -102,16 +114,19 @@ export class DesignFinding {
   // masked skip の勘定へ回す。
   asRefinementViolation(reqIds: ReadonlySet<string>, unit: UnitName): DesignFinding | null {
     if (!this.#kind.isConflict()) return null;
-    const reqHits = this.#targets.toArray().filter((t) => reqIds.has(t.asString()));
-    const [head, ...tail] = reqHits;
-    if (head === undefined) return null;
+    const reqHits = this.#targets.filter((t) => reqIds.has(t.asString()));
+    if (reqHits.isEmpty()) return null;
+    const tail = reqHits.tail().foldLeft<TargetIdentifier[]>([], (acc, target) => {
+      acc.push(target);
+      return acc;
+    });
     return new DesignFinding({
       kind: FindingKind.refinementViolation(),
       functionalRequirementReferences: this.#functionalRequirementReferences,
-      targets: FindingTargets.of(head, tail),
+      targets: FindingTargets.of(reqHits.head(), tail),
       witness: this.#witness,
       unit,
-      detail: `The design machine of unit ${unit.asString()} reaches a state that violates requirements obligation ${reqHits.map((t) => t.asString()).join(", ")} under the refinement map (step trace attached): the design can execute its way out of the verified requirements.`,
+      detail: `The design machine of unit ${unit.asString()} reaches a state that violates requirements obligation ${reqHits.joined(", ")} under the refinement map (step trace attached): the design can execute its way out of the verified requirements.`,
     });
   }
 

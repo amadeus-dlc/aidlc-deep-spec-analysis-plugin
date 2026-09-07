@@ -1,5 +1,6 @@
 import {
   compareCanonically,
+  hashOfString,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -38,6 +39,10 @@ export class TargetIdentifier {
 
   equals(other: TargetIdentifier): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   // 正準順序——skipped ソートと finding の targets 面（= golden バイト）を決める。

@@ -5,6 +5,7 @@ import {
   TargetIdentifier,
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash } from "@deep-spec-analysis/kernel-infrastructure";
 import type { AttributeDeclaration } from "./attribute-declaration.ts";
 import type { AttributeDeclarations } from "./attribute-declarations.ts";
 import type { AttributeName } from "./attribute-name.ts";
@@ -66,11 +67,7 @@ export class EntityDeclaration {
   }
 
   checkAttributes(entities: EntityDeclarations, report: ReferenceCheckReport, artifact: ArtifactPath): void {
-    for (const attribute of this.#attrs) {
-      attribute.checkType(report, this.#name, artifact);
-      attribute.checkBounds(report, this.#name, artifact);
-      attribute.checkReference(entities, report, this.#name, artifact);
-    }
+    this.#attrs.check(entities, report, this.#name, artifact);
   }
 
   name(): EntityName {
@@ -82,14 +79,21 @@ export class EntityDeclaration {
   }
 
   equals(other: EntityDeclaration): boolean {
-    const sameValues = <T extends { equals(value: T): boolean }>(left: readonly T[], right: readonly T[]): boolean =>
-      left.length === right.length && left.every((value, index) => value.equals(right[index] as T));
     return (
       this.#name.equals(other.#name) &&
       this.#element.equals(other.#element) &&
-      sameValues(this.#attrs.toArray(), other.#attrs.toArray()) &&
-      sameValues(this.#rels.toArray(), other.#rels.toArray())
+      this.#attrs.equals(other.#attrs) &&
+      this.#rels.equals(other.#rels)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#name.hashCode(),
+      this.#element.hashCode(),
+      this.#attrs.hashCode(),
+      this.#rels.hashCode(),
+    ]);
   }
 
   attributeNames(): AttributeNames {

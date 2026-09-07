@@ -1,5 +1,6 @@
 import type { BackendName, TargetIdentifiers, UnitName } from "@deep-spec-analysis/kernel-domain";
 import {
+  combinedHash,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -20,9 +21,9 @@ export class DesignCrossCheckedEntry {
   private constructor(props: DesignCrossCheckedEntryParam) {
     this.#backend = props.backend;
     this.#unit = props.unit;
-    for (const target of props.targets)
-      if (!target.asString().startsWith("DSC-"))
-        throw new IllegalArgumentException({ kind: "invalid-cross-checked-target", raw: target.asString() });
+    const outside = props.targets.filter((target) => !target.asString().startsWith("DSC-"));
+    if (!outside.isEmpty())
+      throw new IllegalArgumentException({ kind: "invalid-cross-checked-target", raw: outside.head().asString() });
     this.#targets = props.targets;
   }
 
@@ -35,14 +36,13 @@ export class DesignCrossCheckedEntry {
   }
 
   equals(other: DesignCrossCheckedEntry): boolean {
-    const left = [...this.#targets].map((target) => target.asString());
-    const right = [...other.#targets].map((target) => target.asString());
     return (
-      this.#backend.equals(other.#backend) &&
-      this.#unit.equals(other.#unit) &&
-      left.length === right.length &&
-      left.every((target, index) => target === right[index])
+      this.#backend.equals(other.#backend) && this.#unit.equals(other.#unit) && this.#targets.equals(other.#targets)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#backend.hashCode(), this.#unit.hashCode(), this.#targets.hashCode()]);
   }
 
   unit(): UnitName {

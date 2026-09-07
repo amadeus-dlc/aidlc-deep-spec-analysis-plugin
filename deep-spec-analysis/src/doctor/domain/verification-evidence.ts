@@ -1,6 +1,9 @@
 import type { ContentHash, ErrorMessage, SkipReason, UnitName } from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
   type ParseError,
   parseConstruction,
   type Result,
@@ -68,5 +71,14 @@ export class VerificationEvidence {
         return otherUnit !== undefined && unit.equals(otherUnit);
       })
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#irHash.hashCode(),
+      hashOfNullable(this.#unavailable, (reason) => reason.hashCode()),
+      ...this.#skippedReasons.map((reason) => hashOfString(reason.asString())),
+      ...this.#checkedUnits.map((unit) => unit.hashCode()),
+    ]);
   }
 }

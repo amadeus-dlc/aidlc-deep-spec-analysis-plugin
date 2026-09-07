@@ -1,6 +1,13 @@
 import type { Expression } from "@deep-spec-analysis/kernel-domain";
 import { ExpressionTree } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combinedHash,
+  hashOfString,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { sameExpression } from "./value-equality.ts";
@@ -28,6 +35,10 @@ export class LoweredBackground {
 
   equals(other: LoweredBackground): boolean {
     return this.#id.equals(other.#id) && sameExpression(this.#assert, other.#assert);
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#id.hashCode(), hashOfString(canonicalStringify(this.#assert))]);
   }
 
   id(): LoweredIdentifier {

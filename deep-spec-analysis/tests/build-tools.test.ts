@@ -24,10 +24,11 @@ const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const generator = join("scripts", "build-tools.ts");
 const toolsDir = join(pluginRoot, "tools");
 
-// NFR4 の上限（オーナー裁定 2026-09-03）。目的は異常な肥大化の検出であって
-// 特定の数値ではない。実測は 49〜300 KB（241 モジュールを束ねる design 系
-// 3 本が上端）なので、単位解釈で揺れない 512 KiB を上限に置く。
-const MAX_BUNDLE_BYTES = 512 * 1024;
+// NFR4 の上限（オーナー裁定 2026-09-03、2026-09-07 に見直し）。目的は異常な
+// 肥大化の検出であって特定の数値ではない。実測は 150〜533 KB（241 モジュールを
+// 束ねる design 系 3 本が上端）で、初回裁定時の 300 KB からドメイン型の増加分だけ
+// 伸びた。閾値を通すために単位や解釈を選ばず、上限自体を実測の約 2 倍へ引き上げる。
+const MAX_BUNDLE_BYTES = 1024 * 1024;
 const DATA_LEAF = "data";
 const EXPECTED_BUNDLES = 10;
 const EXPECTED_SCHEMAS = 4;

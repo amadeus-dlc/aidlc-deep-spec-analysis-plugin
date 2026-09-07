@@ -32,6 +32,14 @@ export class DomainEntitySketches
     return new DomainEntitySketches(values);
   }
 
+  override map(transform: (element: DomainEntitySketch) => DomainEntitySketch): DomainEntitySketches {
+    return this.mapTo(transform, DomainEntitySketches.of);
+  }
+
+  override combine(other: DomainEntitySketches): DomainEntitySketches {
+    return this.combineTo(other, DomainEntitySketches.of);
+  }
+
   static parse(values: readonly DomainEntitySketch[]): Result<DomainEntitySketches, ParseError> {
     return parseConstruction(() => new DomainEntitySketches(values));
   }

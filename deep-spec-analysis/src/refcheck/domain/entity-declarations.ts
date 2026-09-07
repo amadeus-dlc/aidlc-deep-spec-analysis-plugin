@@ -43,6 +43,14 @@ export class EntityDeclarations
     return new EntityDeclarations(values);
   }
 
+  override map(transform: (element: EntityDeclaration) => EntityDeclaration): EntityDeclarations {
+    return this.mapTo(transform, EntityDeclarations.of);
+  }
+
+  override combine(other: EntityDeclarations): EntityDeclarations {
+    return this.combineTo(other, EntityDeclarations.of);
+  }
+
   static parse(values: readonly EntityDeclaration[]): Result<EntityDeclarations, ParseError> {
     return parseConstruction(() => new EntityDeclarations(values));
   }
@@ -84,6 +92,16 @@ export class EntityDeclarations
         ],
         `entity "${duplicate.name().asString()}" is declared more than once`,
       );
+  }
+
+  // 各エンティティの属性重複を宣言順に検査する（FD-E1）。
+  checkDuplicateAttributes(report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const entity of this.#values) entity.checkDuplicateAttributes(report, artifact);
+  }
+
+  // 各エンティティの属性を宣言順に検査する（解決先はこの集合自身）。
+  checkAttributes(report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const entity of this.#values) entity.checkAttributes(this, report, artifact);
   }
 
   containsNamed(name: EntityName): boolean {

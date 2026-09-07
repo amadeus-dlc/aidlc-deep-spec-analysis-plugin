@@ -25,33 +25,44 @@ export class SiblingUnitIndex
   readonly #entries: readonly SiblingUnitIndexEntry[];
 
   /** XS一実行の予算はユニット数・実体宣言数それぞれ65,536件。索引化より先に検査する。 */
-  private constructor(units: KeyedIndex<UnitName, EntityDeclarations>, entries?: readonly SiblingUnitIndexEntry[]) {
+  private constructor(entries: Iterable<SiblingUnitIndexEntry>) {
     super();
-    if (units.size() > 65_536)
-      throw new IllegalArgumentException({ kind: "too-many-sibling-units", raw: units.size() });
+    const owned: SiblingUnitIndexEntry[] = [];
+    const unitNames = new Set<string>();
     let count = 0;
-    for (const declarations of units.values())
-      for (const _entity of declarations)
+    for (const entry of entries) {
+      if (owned.length >= 65_536)
+        throw new IllegalArgumentException({ kind: "too-many-sibling-units", raw: owned.length + 1 });
+      const unitName = entry.unit().asString();
+      if (unitNames.has(unitName))
+        throw new IllegalArgumentException({ kind: "duplicate-sibling-unit", raw: unitName });
+      unitNames.add(unitName);
+      for (const _entity of entry.declarations())
         if (++count > 65_536) throw new IllegalArgumentException({ kind: "too-many-sibling-entities", raw: count });
-    this.#entries = Object.freeze(
-      entries ?? [...units].map(([unit, declarations]) => SiblingUnitIndexEntry.of(unit, declarations)),
-    );
+      owned.push(entry);
+    }
+    this.#entries = Object.freeze(owned);
     this.#units = KeyedIndex.of(
-      [...units].map(
-        ([unit, declarations]) =>
+      owned.map(
+        (entry) =>
           [
-            unit,
-            KeyedIndex.of([...declarations].map((entity) => [entity.name().normalized(), entity] as const)),
+            entry.unit(),
+            KeyedIndex.of([...entry.declarations()].map((entity) => [entity.name().normalized(), entity] as const)),
           ] as const,
       ),
     );
   }
 
   protected override rebuild(values: readonly SiblingUnitIndexEntry[]): SiblingUnitIndex {
-    return new SiblingUnitIndex(
-      KeyedIndex.of(values.map((entry) => [entry.unit(), entry.declarations()] as const)),
-      values,
-    );
+    return new SiblingUnitIndex(values);
+  }
+
+  override map(transform: (element: SiblingUnitIndexEntry) => SiblingUnitIndexEntry): SiblingUnitIndex {
+    return this.mapTo(transform, (values) => this.rebuild(values));
+  }
+
+  override combine(other: SiblingUnitIndex): SiblingUnitIndex {
+    return this.combineTo(other, (values) => this.rebuild(values));
   }
 
   override *[Symbol.iterator](): Iterator<SiblingUnitIndexEntry> {
@@ -63,11 +74,15 @@ export class SiblingUnitIndex
   }
 
   static of(units: KeyedIndex<UnitName, EntityDeclarations>): SiblingUnitIndex {
-    return new SiblingUnitIndex(units);
+    return new SiblingUnitIndex(SiblingUnitIndex.entriesOf(units));
   }
 
   static parse(units: KeyedIndex<UnitName, EntityDeclarations>): Result<SiblingUnitIndex, ParseError> {
-    return parseConstruction(() => new SiblingUnitIndex(units));
+    return parseConstruction(() => new SiblingUnitIndex(SiblingUnitIndex.entriesOf(units)));
+  }
+
+  private static *entriesOf(units: KeyedIndex<UnitName, EntityDeclarations>): Iterable<SiblingUnitIndexEntry> {
+    for (const [unit, declarations] of units) yield SiblingUnitIndexEntry.of(unit, declarations);
   }
 
   definersOf(normalizedName: NormalizedName): UnitNames {

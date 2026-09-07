@@ -36,6 +36,14 @@ export class ScenarioVerdicts extends FirstClassCollectionBase<ScenarioVerdict, 
   static of(values: readonly ScenarioVerdict[]): ScenarioVerdicts {
     return new ScenarioVerdicts(values);
   }
+  override map(transform: (element: ScenarioVerdict) => ScenarioVerdict): ScenarioVerdicts {
+    return this.mapTo(transform, ScenarioVerdicts.of);
+  }
+
+  override combine(other: ScenarioVerdicts): ScenarioVerdicts {
+    return this.combineTo(other, ScenarioVerdicts.of);
+  }
+
   static parse(values: readonly ScenarioVerdict[]): Result<ScenarioVerdicts, ParseError> {
     return parseConstruction(() => new ScenarioVerdicts(values));
   }

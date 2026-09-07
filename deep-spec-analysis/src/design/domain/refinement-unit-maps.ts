@@ -26,6 +26,14 @@ export class RefinementUnitMaps extends FirstClassCollectionBase<RefinementUnitM
     return new RefinementUnitMaps(values);
   }
 
+  override map(transform: (element: RefinementUnitMap) => RefinementUnitMap): RefinementUnitMaps {
+    return this.mapTo(transform, RefinementUnitMaps.of);
+  }
+
+  override combine(other: RefinementUnitMaps): RefinementUnitMaps {
+    return this.combineTo(other, RefinementUnitMaps.of);
+  }
+
   static parse(values: readonly RefinementUnitMap[]): Result<RefinementUnitMaps, ParseError> {
     return parseConstruction(() => new RefinementUnitMaps(values));
   }

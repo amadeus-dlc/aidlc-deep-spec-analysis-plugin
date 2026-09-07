@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  hashOfString,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 // AttributeKind — IR（契約1／契約3）の属性型区分（bool / int / enum）の
 // ドメインプリミティブ（種別規律の裁定 3-2、2026-09-03）。型宣言が欠けた属性は
 // 空の区分で届く（旧実装はカタログへ登録した——参照解決の可否が変わるため保存）。
@@ -24,6 +29,10 @@ export class AttributeKind {
 
   equals(other: AttributeKind): boolean {
     return this.#value === other.#value;
+  }
+
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
 
   isBool(): boolean {

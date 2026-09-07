@@ -1,11 +1,13 @@
 import {
   boundedValueSnapshot,
   canonicalStringify,
+  hashOfString,
   type ParseError,
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { TraceState } from "./trace-state.ts";
+import type { TraceStates } from "./trace-states.ts";
 
 // 検証結果の証拠。生成済みの型付き文書を保持し、
 // 入力と出力を複製して外側の変更が保存済みの証拠へ伝わるのを防ぐ。
@@ -39,6 +41,11 @@ export class VerificationWitness {
     return VerificationWitness.of({ trace: states.map((state) => state.toDocument()) });
   }
 
+  // 復号済みトレースのコレクションから組む口（ステップ順のまま文書化する）。
+  static traceOf(states: TraceStates): VerificationWitness {
+    return VerificationWitness.of({ trace: states.toDocuments() });
+  }
+
   // 型付きの証拠を受け取る。型の実行時検査は行わない。
   static parse(value: WitnessDocument): Result<VerificationWitness, ParseError> {
     return parseConstruction(() => new VerificationWitness(value));
@@ -54,5 +61,9 @@ export class VerificationWitness {
 
   equals(other: VerificationWitness): boolean {
     return canonicalStringify(this.#document) === canonicalStringify(other.#document);
+  }
+
+  hashCode(): number {
+    return hashOfString(canonicalStringify(this.#document));
   }
 }

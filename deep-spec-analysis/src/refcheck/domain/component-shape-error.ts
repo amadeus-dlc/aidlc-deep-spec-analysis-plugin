@@ -1,3 +1,4 @@
+import { combinedHash, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 import type { ElementPath } from "./element-path.ts";
 
 // components.md の yaml ブロックの形の誤り 1 件——要素パスと文言。DD-0 は
@@ -25,5 +26,9 @@ export class ComponentShapeError {
 
   equals(other: ComponentShapeError): boolean {
     return this.#element.equals(other.#element) && this.#detail === other.#detail;
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#element.hashCode(), hashOfString(this.#detail)]);
   }
 }

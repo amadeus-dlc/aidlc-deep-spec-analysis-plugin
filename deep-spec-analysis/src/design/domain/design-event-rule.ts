@@ -7,6 +7,8 @@ import {
   type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
 import {
+  combinedHash,
+  hashOfString,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -54,7 +56,10 @@ export class DesignEventRule {
       const parsed = EffectAssignments.fromEffect(ExpressionTree.of(part));
       if (!parsed.ok) continue;
       interpretable = true;
-      for (const assignment of parsed.value) assignments.push(assignment.asDesignAssignment());
+      parsed.value.foldLeft(assignments, (acc, assignment) => {
+        acc.push(assignment.asDesignAssignment());
+        return acc;
+      });
     }
     this.#assignments = interpretable ? DesignAssignments.of(assignments) : null;
   }
@@ -72,6 +77,14 @@ export class DesignEventRule {
       this.#guard.equals(other.#guard) &&
       this.#effect.equals(other.#effect)
     );
+  }
+  hashCode(): number {
+    return combinedHash([
+      hashOfString(this.#reference.asString()),
+      this.#trigger.hashCode(),
+      this.#guard.hashCode(),
+      this.#effect.hashCode(),
+    ]);
   }
   trigger(): TriggerName {
     return this.#trigger;

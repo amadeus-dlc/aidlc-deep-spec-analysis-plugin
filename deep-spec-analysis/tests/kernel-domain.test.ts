@@ -384,7 +384,6 @@ describe("target id (the target vocabulary's primitive)", () => {
       .add(TargetIdentifier.of("OB-2"));
     expect(ids.toStrings()).toEqual(["OB-10", "OB-2", "OB-2"]);
     expect(ids.count()).toBe(3);
-    expect(ids.toArray().length).toBe(3);
     expect(ids.include(TargetIdentifier.of("OB-2"))).toBe(true);
     expect(ids.include(TargetIdentifier.of("OB-3"))).toBe(false);
     expect(ids.excluding(TargetIdentifier.of("OB-2")).toStrings()).toEqual(["OB-10"]);

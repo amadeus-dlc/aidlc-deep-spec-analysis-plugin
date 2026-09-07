@@ -1,4 +1,4 @@
-import { FirstClassCollectionBase, SkipReason, UnitName } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase, SkipReason, TargetIdentifiers, UnitName } from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
   type ParseError,
@@ -37,6 +37,14 @@ export class RefinementQuintInvariants extends FirstClassCollectionBase<
     return new RefinementQuintInvariants(values);
   }
 
+  override map(transform: (element: RefinementQuintInvariant) => RefinementQuintInvariant): RefinementQuintInvariants {
+    return this.mapTo(transform, RefinementQuintInvariants.of);
+  }
+
+  override combine(other: RefinementQuintInvariants): RefinementQuintInvariants {
+    return this.combineTo(other, RefinementQuintInvariants.of);
+  }
+
   static parse(values: readonly RefinementQuintInvariant[]): Result<RefinementQuintInvariants, ParseError> {
     return parseConstruction(() => new RefinementQuintInvariants(values));
   }
@@ -47,6 +55,11 @@ export class RefinementQuintInvariants extends FirstClassCollectionBase<
 
   override *[Symbol.iterator](): Iterator<RefinementQuintInvariant> {
     yield* this.#values;
+  }
+
+  // 追加不変量が指す要件対象の列（導出順のまま——skip 記録の凍結順）。
+  reqTargets(): TargetIdentifiers {
+    return TargetIdentifiers.of(this.#values.map((invariant) => invariant.reqTarget()));
   }
 
   reqIds(): ReadonlySet<string> {

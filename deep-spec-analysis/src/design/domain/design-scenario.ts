@@ -12,6 +12,10 @@ import {
   type UnitName,
 } from "@deep-spec-analysis/kernel-domain";
 import {
+  canonicalStringify,
+  combinedHash,
+  hashOfNullable,
+  hashOfString,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -79,6 +83,18 @@ export class DesignScenario {
         : this.#eventTrigger.equals(other.#eventTrigger)) &&
       sameExpression(this.#expect, other.#expect)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#id.hashCode(),
+      hashOfString(this.#expectation.asString()),
+      this.#businessRuleReferences.hashCode(),
+      this.#functionalRequirementReferences.hashCode(),
+      this.#bindings.hashCode(),
+      hashOfNullable(this.#eventTrigger, (trigger) => trigger.hashCode()),
+      hashOfNullable(this.#expect, (expression) => hashOfString(canonicalStringify(expression))),
+    ]);
   }
 
   crossCheckFinding(unit: UnitName, comparison: ScenarioComparison): DesignFinding | null {

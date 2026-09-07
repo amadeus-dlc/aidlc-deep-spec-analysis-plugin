@@ -5,7 +5,7 @@ import {
   TargetIdentifiers,
   type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
-import { ok, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import { combinedHash, ok, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { ObligationIdentifier } from "./obligation-identifier.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { SatisfiabilityModuloTheoriesQueryVerdicts } from "./satisfiability-modulo-theories-query-verdicts.ts";
@@ -90,6 +90,16 @@ export class SatisfiabilityModuloTheoriesEventPairProbe {
       this.#b.equals(other.#b) &&
       this.#trigger.equals(other.#trigger)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#qOverlap.hashCode(),
+      this.#qJoint.hashCode(),
+      this.#a.hashCode(),
+      this.#b.hashCode(),
+      this.#trigger.hashCode(),
+    ]);
   }
 
   #overlapVerdictIn(

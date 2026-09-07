@@ -1,5 +1,10 @@
 import { AttributePath } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  combinedHash,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { IntermediateRepresentationAttributeDeclaration } from "./intermediate-representation-attribute-declaration.ts";
 import type { IntermediateRepresentationEntityName } from "./intermediate-representation-entity-name.ts";
 
@@ -49,5 +54,9 @@ export class IntermediateRepresentationAttributeEntry {
     return (
       this.#owner.equals(other.#owner) && this.#path.equals(other.#path) && this.#attribute.equals(other.#attribute)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([this.#owner.hashCode(), this.#path.hashCode(), this.#attribute.hashCode()]);
   }
 }

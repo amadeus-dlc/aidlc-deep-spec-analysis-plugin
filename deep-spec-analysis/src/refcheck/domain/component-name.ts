@@ -1,6 +1,7 @@
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
 import {
   compareCanonically,
+  hashOfString,
   IllegalArgumentException,
   parseConstruction,
   type Result,
@@ -23,6 +24,9 @@ export class ComponentName {
   }
   equals(other: ComponentName): boolean {
     return this.#value === other.#value;
+  }
+  hashCode(): number {
+    return hashOfString(this.#value);
   }
   // 正準順（裁定 1）——kernel の TargetIdentifier が所有する順序に従う。
   compareTo(other: ComponentName): number {

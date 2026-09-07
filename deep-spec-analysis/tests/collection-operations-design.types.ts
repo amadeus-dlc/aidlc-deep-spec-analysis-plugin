@@ -4,6 +4,9 @@ import type { Equatable, FirstClassCollection, TargetIdentifier, UnitName } from
 type AssertCollection<
   E extends Equatable<E>,
   C extends FirstClassCollection<E> & {
+    map(transform: (element: E) => E): C;
+    combine(other: C): C;
+    foldLeft<A>(initial: A, accumulate: (accumulator: A, element: E) => A): A;
     tail(): C;
     filter(predicate: (element: E) => boolean): C;
   },

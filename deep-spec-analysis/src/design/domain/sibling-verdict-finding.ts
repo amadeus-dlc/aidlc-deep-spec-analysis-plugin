@@ -6,9 +6,9 @@ import {
   TargetIdentifier,
   type UnitName,
 } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, traverseResult } from "@deep-spec-analysis/kernel-infrastructure";
+import { combinedHash, hashOfString, type ParseError, traverseResult } from "@deep-spec-analysis/kernel-infrastructure";
 import { DesignFinding } from "./design-finding.ts";
-import { DesignSkipped } from "./design-skipped.ts";
+import type { DesignMachine } from "./design-machine.ts";
 import { DesignSkips } from "./design-skips.ts";
 import type { DesignWitness } from "./design-witness.ts";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
@@ -64,6 +64,16 @@ export class SiblingVerdictFinding {
     );
   }
 
+  hashCode(): number {
+    return combinedHash([
+      this.#kind.hashCode(),
+      hashOfString(this.#detail),
+      ...this.#targets.map((target) => hashOfString(target.asString())),
+      ...this.#functionalRequirementReferences.toStrings().map((reference) => hashOfString(reference)),
+      this.#witness.hashCode(),
+    ]);
+  }
+
   remap(
     unit: UnitName,
     index: LoweringIndex,
@@ -107,20 +117,19 @@ export class SiblingVerdictFinding {
     if (!parsedTargets.ok) return { kind: "invalid", error: parsedTargets.error };
     const targets = parsedTargets.value.sortedUniqueCanonically();
     if (this.isKind("conflict")) {
-      const machines = [...targets].map((target) => index.machineOfTransition(target.asString()));
+      const machines = targets.foldLeft<(DesignMachine | null)[]>([], (acc, target) => {
+        acc.push(index.machineOfTransition(target.asString()));
+        return acc;
+      });
       const machine = machines[0];
       if (machine?.waivesOverlapOf(machines))
         return {
           kind: "waived",
-          skipped: DesignSkips.of(
-            [...targets].map((target) =>
-              DesignSkipped.of({
-                target,
-                reason: SkipReason.waived(),
-                unit,
-                detail: `machine ${machine.id().asString()} declares deterministic: false — the same-(state,trigger) overlap check is waived by the model`,
-              }),
-            ),
+          skipped: DesignSkips.forTargets(
+            targets,
+            unit,
+            SkipReason.waived(),
+            `machine ${machine.id().asString()} declares deterministic: false — the same-(state,trigger) overlap check is waived by the model`,
           ),
         };
     }

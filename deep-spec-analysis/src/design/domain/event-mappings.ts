@@ -25,6 +25,14 @@ export class EventMappings extends FirstClassCollectionBase<EventMapping, EventM
     return new EventMappings(values);
   }
 
+  override map(transform: (element: EventMapping) => EventMapping): EventMappings {
+    return this.mapTo(transform, EventMappings.of);
+  }
+
+  override combine(other: EventMappings): EventMappings {
+    return this.combineTo(other, EventMappings.of);
+  }
+
   static parse(values: readonly EventMapping[]): Result<EventMappings, ParseError> {
     return parseConstruction(() => new EventMappings(values));
   }

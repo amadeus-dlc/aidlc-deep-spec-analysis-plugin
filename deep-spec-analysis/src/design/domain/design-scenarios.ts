@@ -24,6 +24,14 @@ export class DesignScenarios extends FirstClassCollectionBase<DesignScenario, De
     return new DesignScenarios(values);
   }
 
+  override map(transform: (element: DesignScenario) => DesignScenario): DesignScenarios {
+    return this.mapTo(transform, DesignScenarios.of);
+  }
+
+  override combine(other: DesignScenarios): DesignScenarios {
+    return this.combineTo(other, DesignScenarios.of);
+  }
+
   static parse(values: readonly DesignScenario[]): Result<DesignScenarios, ParseError> {
     return parseConstruction(() => new DesignScenarios(values));
   }

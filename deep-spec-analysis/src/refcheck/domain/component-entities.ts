@@ -1,4 +1,8 @@
-import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  type FirstClassCollection,
+  FirstClassCollectionBase,
+} from "@deep-spec-analysis/kernel-domain";
 import {
   boundedCollectionSnapshot,
   type ParseError,
@@ -6,7 +10,9 @@ import {
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { ComponentEntity } from "./component-entity.ts";
+import type { Components } from "./components.ts";
 import type { EntityName } from "./entity-name.ts";
+import type { ReferenceCheckReport } from "./reference-check-report.ts";
 
 export class ComponentEntities
   extends FirstClassCollectionBase<ComponentEntity, ComponentEntities>
@@ -21,6 +27,14 @@ export class ComponentEntities
 
   protected override rebuild(values: readonly ComponentEntity[]): ComponentEntities {
     return new ComponentEntities(values);
+  }
+
+  override map(transform: (element: ComponentEntity) => ComponentEntity): ComponentEntities {
+    return this.mapTo(transform, ComponentEntities.of);
+  }
+
+  override combine(other: ComponentEntities): ComponentEntities {
+    return this.combineTo(other, ComponentEntities.of);
   }
 
   static parse(values: readonly ComponentEntity[]): Result<ComponentEntities, ParseError> {
@@ -42,6 +56,21 @@ export class ComponentEntities
   // DD-6：owner がこの名前のエンティティを宣言しているか。
   declaresEntity(name: EntityName): boolean {
     return this.#values.some((e) => e.name().equals(name));
+  }
+
+  // DD-2: 所有エンティティすべての参照所有者を宣言順に検査する。
+  checkReferenceOwners(components: Components, report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const entity of this.#values) entity.checkReferenceOwners(components, report, artifact);
+  }
+
+  // DD-5: 所有エンティティすべての識別子の有無を宣言順に検査する。
+  checkIdentifiers(report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const entity of this.#values) entity.checkIdentifier(report, artifact);
+  }
+
+  // DD-6: 所有エンティティすべての参照先を宣言順に検査する。
+  checkReferenceTargets(components: Components, report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const entity of this.#values) entity.checkReferenceTargets(components, report, artifact);
   }
 
   toArray(): readonly ComponentEntity[] {

@@ -1,3 +1,4 @@
+import { combinedHash, hashOfNullable, hashOfString } from "@deep-spec-analysis/kernel-infrastructure";
 import type { BackendName } from "./backend-name.ts";
 import type { ContentHash } from "./content-hash.ts";
 
@@ -87,6 +88,16 @@ export class ScenarioVerdict {
       this.#target.equals(other.#target) &&
       (this.#unit === null ? other.#unit === null : other.#unit !== null && this.#unit.equals(other.#unit))
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#backend.hashCode(),
+      this.#modelHash.hashCode(),
+      hashOfString(this.#state),
+      this.#target.hashCode(),
+      hashOfNullable(this.#unit, (unit) => unit.hashCode()),
+    ]);
   }
   // 判定表の表示語彙。未検査を判定表へ載せる呼び出しは契約違反。
   verdictLabel(): "clean" | "violated" {

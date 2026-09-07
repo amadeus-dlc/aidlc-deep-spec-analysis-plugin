@@ -5,8 +5,9 @@ import {
   TargetIdentifier,
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
+import { combinedHash, hashOfNullable } from "@deep-spec-analysis/kernel-infrastructure";
 import type { AttributeName } from "./attribute-name.ts";
-import { DD_2, DD_5, DD_6 } from "./component-check-families.ts";
+import { DD_5 } from "./component-check-families.ts";
 import type { Components } from "./components.ts";
 import type { ElementPath } from "./element-path.ts";
 import type { EntityName } from "./entity-name.ts";
@@ -52,44 +53,10 @@ export class ComponentEntity {
       );
   }
   checkReferenceOwners(components: Components, report: ReferenceCheckReport, artifact: ArtifactPath): void {
-    for (const reference of this.#references) {
-      if (!components.declares(reference.ownedBy()))
-        report.finding(
-          DD_2,
-          FindingKind.referenceBroken(),
-          FindingTargets.of(
-            TargetIdentifier.of(TargetIdentifiers.safe("component", reference.ownedBy().asString())),
-            [],
-          ),
-          [
-            WitnessReference.at(
-              artifact.asString(),
-              `${reference.element().asString()}.owned_by`,
-              reference.ownedBy().asString(),
-            ),
-          ],
-          `entity "${this.#name.asString()}" references owner component "${reference.ownedBy().asString()}" which is not declared`,
-        );
-    }
+    this.#references.checkOwnersDeclared(this.#name, components, report, artifact);
   }
   checkReferenceTargets(components: Components, report: ReferenceCheckReport, artifact: ArtifactPath): void {
-    for (const reference of this.#references) {
-      const owner = components.byName(reference.ownedBy());
-      if (owner !== null && !owner.declaresEntity(reference.entity()))
-        report.finding(
-          DD_6,
-          FindingKind.referenceBroken(),
-          FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", reference.entity().asString())), []),
-          [
-            WitnessReference.at(
-              artifact.asString(),
-              `${reference.element().asString()}.entity`,
-              reference.entity().asString(),
-            ),
-          ],
-          `entity "${this.#name.asString()}" references "${reference.entity().asString()}" as owned by "${reference.ownedBy().asString()}", but "${reference.ownedBy().asString()}" declares no such entity`,
-        );
-    }
+    this.#references.checkTargetsDeclared(this.#name, components, report, artifact);
   }
 
   name(): EntityName {
@@ -110,8 +77,6 @@ export class ComponentEntity {
   }
 
   equals(other: ComponentEntity): boolean {
-    const references = this.#references.toArray();
-    const otherReferences = other.#references.toArray();
     const identifiersEqual =
       this.#identifier === null
         ? other.#identifier === null
@@ -120,8 +85,16 @@ export class ComponentEntity {
       this.#name.equals(other.#name) &&
       this.#element.equals(other.#element) &&
       identifiersEqual &&
-      references.length === otherReferences.length &&
-      references.every((reference, index) => reference.equals(otherReferences[index] as (typeof references)[number]))
+      this.#references.equals(other.#references)
     );
+  }
+
+  hashCode(): number {
+    return combinedHash([
+      this.#name.hashCode(),
+      this.#element.hashCode(),
+      hashOfNullable(this.#identifier, (identifier) => identifier.hashCode()),
+      this.#references.hashCode(),
+    ]);
   }
 }
