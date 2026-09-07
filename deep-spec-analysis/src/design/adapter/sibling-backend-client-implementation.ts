@@ -7,7 +7,7 @@
 // 旧 runSiblingBackend からの逐語移植。
 
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DesignUnit } from "@deep-spec-analysis/design-domain";
@@ -19,12 +19,19 @@ import {
   type UnitRefinementPlan,
 } from "@deep-spec-analysis/design-domain";
 import type { SiblingBackendClient } from "@deep-spec-analysis/design-usecase";
+import { readArtifactText } from "@deep-spec-analysis/kernel-adapter";
 import { ErrorMessage } from "@deep-spec-analysis/kernel-domain";
-import type { Json } from "@deep-spec-analysis/kernel-infrastructure";
+import { err, type Json, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
 import { renderLoweredDocument } from "./lowered-document-serializer.ts";
 import { reachabilityVariant } from "./reachability-variant.ts";
 import type { SiblingBackendClientConfiguration } from "./sibling-backend-client-configuration.ts";
 import { parseSiblingVerdictDocument } from "./sibling-document-parser.ts";
+
+function errorMessageOrFallback(raw: string, fallback: string): ErrorMessage {
+  const parsed = ErrorMessage.parse(raw);
+  return parsed.ok ? parsed.value : ErrorMessage.of(fallback);
+}
 
 export class SiblingBackendClientImplementation implements SiblingBackendClient {
   readonly #config: SiblingBackendClientConfiguration;
@@ -40,8 +47,16 @@ export class SiblingBackendClientImplementation implements SiblingBackendClient 
     wallTimeoutMs: number,
   ): SiblingVerificationResult {
     const run = this.#spawn(backend, renderLoweredDocument(unit, lowered), wallTimeoutMs);
-    const document = run.doc === null ? null : parseSiblingVerdictDocument(run.doc);
     const refinementFailure = ErrorMessage.of(`refinement pass could not run (${run.note.slice(0, 120)})`);
+    if (!run.document.ok)
+      return SiblingVerificationResult.incomplete(
+        errorMessageOrFallback(
+          `lowered v1 backend findings document could not be read (${this.#errorDetail(run.document.error)})`,
+          "lowered v1 backend findings document could not be read",
+        ),
+        refinementFailure,
+      );
+    const document = run.document.value === null ? null : parseSiblingVerdictDocument(run.document.value);
     if (run.exit === 127) {
       const reason =
         document?.unavailableReason() ??
@@ -80,15 +95,15 @@ export class SiblingBackendClientImplementation implements SiblingBackendClient 
       probe.state(),
     );
     const run = this.#spawn("quint", variant, wallTimeoutMs);
-    if (run.exit !== 0 || run.doc === null) return ReachabilityVerdict.unverified();
-    return parseSiblingVerdictDocument(run.doc).reachabilityOf(probe.attributePath(), probe.state());
+    if (run.exit !== 0 || !run.document.ok || run.document.value === null) return ReachabilityVerdict.unverified();
+    return parseSiblingVerdictDocument(run.document.value).reachabilityOf(probe.attributePath(), probe.state());
   }
 
   #spawn(
     backend: "smt" | "quint",
     loweredDoc: Json,
     wallTimeoutMs: number,
-  ): { exit: number | null; doc: Json | null; note: string } {
+  ): { exit: number | null; document: Result<Json | null, RepositoryError>; note: string } {
     const tool = this.#config.siblingToolPaths[backend];
     const work = mkdtempSync(join(tmpdir(), "deep-spec-design-lower-"));
     try {
@@ -109,16 +124,40 @@ export class SiblingBackendClientImplementation implements SiblingBackendClient 
         },
       );
       const findingsPath = join(work, "deep-spec-verify", `${backend}.json`);
-      let doc: Json | null = null;
-      try {
-        doc = JSON.parse(readFileSync(findingsPath, "utf-8")) as Json;
-      } catch {
-        doc = null;
-      }
+      const document = this.#readDocument(findingsPath);
       const note = res.error ? String(res.error) : ((res.stdout ?? "").trim().split("\n").pop() ?? "");
-      return { exit: res.status, doc, note };
+      return {
+        exit: res.status,
+        document,
+        note,
+      };
     } finally {
       rmSync(work, { recursive: true, force: true });
+    }
+  }
+
+  #readDocument(path: string): Result<Json | null, RepositoryError> {
+    const text = readArtifactText(path);
+    if (!text.ok) return text.error.kind === "not-found" ? ok(null) : err(text.error);
+    try {
+      return ok(JSON.parse(text.value) as Json);
+    } catch (error) {
+      return err({
+        kind: "corrupt",
+        path,
+        cause: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  #errorDetail(error: RepositoryError): string {
+    switch (error.kind) {
+      case "not-found":
+        return `not-found: ${error.path}`;
+      case "io-failed":
+        return `io-failed: ${error.cause}`;
+      case "corrupt":
+        return `corrupt: ${error.cause}`;
     }
   }
 }

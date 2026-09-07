@@ -25,10 +25,12 @@
 // 名前を分ける）——既定は設計の凍結名で、要件側が自分の名前を注入する。
 
 import { randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ArtifactPath } from "@deep-spec-analysis/kernel-domain";
-import type { Clock } from "@deep-spec-analysis/kernel-usecase";
+import { err, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import type { Clock, RepositoryError } from "@deep-spec-analysis/kernel-usecase";
+import { readArtifactText } from "./artifact-io.ts";
 import type { DirectoryFinalizationLockOutcome } from "./directory-finalization-lock-outcome.ts";
 import type { ProcessLiveness } from "./process-liveness.ts";
 
@@ -85,25 +87,25 @@ export class DirectoryFinalizationLock {
     }
     // 既存 lock がある。ここから先は回復判定だけで、待機も再試行もしない。
     const observed = this.#readMetadata(canonical);
-    if (observed === null) {
+    if (!observed.ok) {
       return { kind: "lock-contended", cause: `owner metadata is unreadable (${blocked})` };
     }
-    if (observed.state !== "held") {
-      return { kind: "lock-contended", cause: `owner metadata is in state "${observed.state}"` };
+    if (observed.value.state !== "held") {
+      return { kind: "lock-contended", cause: `owner metadata is in state "${observed.value.state}"` };
     }
-    if (this.#clock.now() < observed.leaseExpiresAtMs) {
+    if (this.#clock.now() < observed.value.leaseExpiresAtMs) {
       return { kind: "lock-contended", cause: "the lease has not expired" };
     }
     // lease 期限は回復判定を始めてよい時刻にすぎない。死亡は probe が確定する。
-    const status = this.#liveness.statusOf(observed.pid);
+    const status = this.#liveness.statusOf(observed.value.pid);
     if (status !== "absent") {
-      return { kind: "lock-contended", cause: `owner process ${observed.pid} is ${status}` };
+      return { kind: "lock-contended", cause: `owner process ${observed.value.pid} is ${status}` };
     }
     const reread = this.#readMetadata(canonical);
-    if (reread === null || reread.token !== observed.token) {
+    if (!reread.ok || reread.value.token !== observed.value.token) {
       return { kind: "lock-contended", cause: "the lock changed hands during the recovery check" };
     }
-    const stale = `${canonical}.stale.${observed.token}.${token}`;
+    const stale = `${canonical}.stale.${observed.value.token}.${token}`;
     try {
       renameSync(canonical, stale);
     } catch (e) {
@@ -117,7 +119,7 @@ export class DirectoryFinalizationLock {
       return { kind: "lock-recovery-failed", cause: lost };
     }
     this.#ownerTokens.set(canonical, token);
-    return { kind: "recovered", displacedToken: observed.token };
+    return { kind: "recovered", displacedToken: observed.value.token };
   }
 
   // 各公開の直前の fencing：canonical metadata が held かつ token が自分と一致。
@@ -126,7 +128,7 @@ export class DirectoryFinalizationLock {
     const mine = this.#ownerTokens.get(canonical);
     if (mine === undefined) return false;
     const observed = this.#readMetadata(canonical);
-    return observed !== null && observed.state === "held" && observed.token === mine;
+    return observed.ok && observed.value.state === "held" && observed.value.token === mine;
   }
 
   release(directory: ArtifactPath): DirectoryFinalizationLockOutcome {
@@ -137,7 +139,7 @@ export class DirectoryFinalizationLock {
     }
     this.#ownerTokens.delete(canonical);
     const observed = this.#readMetadata(canonical);
-    if (observed === null || observed.token !== mine) {
+    if (!observed.ok || observed.value.token !== mine) {
       // 既に他 owner のものになっている。canonical は削除しない。
       return { kind: "lock-release-failed", cause: "the canonical lock is no longer owned by this writer" };
     }
@@ -190,26 +192,30 @@ export class DirectoryFinalizationLock {
     }
   }
 
-  #readMetadata(canonical: string): OwnerMetadata | null {
+  #readMetadata(canonical: string): Result<OwnerMetadata, RepositoryError> {
+    const path = join(canonical, METADATA_BASENAME);
+    const read = readArtifactText(path);
+    if (!read.ok) return err(read.error);
     let raw: unknown;
     try {
-      raw = JSON.parse(readFileSync(join(canonical, METADATA_BASENAME), "utf-8")) as unknown;
-    } catch {
-      // 読めない owner metadata は「所有者不明」——呼び手は fail-closed で扱う。
-      return null;
+      raw = JSON.parse(read.value) as unknown;
+    } catch (error) {
+      return err({ kind: "corrupt", path, cause: error instanceof Error ? error.message : String(error) });
     }
-    if (typeof raw !== "object" || raw === null) return null;
+    if (typeof raw !== "object" || raw === null)
+      return err({ kind: "corrupt", path, cause: "owner metadata must be an object" });
     const doc = raw as { [k: string]: unknown };
-    if (typeof doc.state !== "string" || typeof doc.token !== "string") return null;
+    if (typeof doc.state !== "string" || typeof doc.token !== "string")
+      return err({ kind: "corrupt", path, cause: "owner metadata lacks state or token" });
     if (typeof doc.pid !== "number" || typeof doc.acquiredAtMs !== "number" || typeof doc.leaseExpiresAtMs !== "number")
-      return null;
-    return {
+      return err({ kind: "corrupt", path, cause: "owner metadata has invalid numeric fields" });
+    return ok({
       state: doc.state,
       token: doc.token,
       pid: doc.pid,
       acquiredAtMs: doc.acquiredAtMs,
       leaseExpiresAtMs: doc.leaseExpiresAtMs,
-    };
+    });
   }
 
   // owner 固有 path だけを消す（canonical には決して使わない）。

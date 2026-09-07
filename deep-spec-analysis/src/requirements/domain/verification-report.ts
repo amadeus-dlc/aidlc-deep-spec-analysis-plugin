@@ -1,5 +1,6 @@
 import {
   ContentHash,
+  type ErrorMessage,
   type FindingsSchema,
   IntermediateRepresentationVersion,
   ScenarioVerdict,
@@ -142,6 +143,29 @@ export class VerificationReport {
         ),
       ),
       unavailableReason: "quint CLI is not available (install: npm i -g @informalsystems/quint)",
+    });
+  }
+
+  // Quint の実行環境を調べる I/O に失敗した。CLI 不在（実行能力の欠如）や
+  // 機械のコンパイル不能とは異なり、原因を unavailable 理由へ残す。
+  static quintBackendUnavailable(
+    id: VerificationReportIdentifier,
+    model: RequirementsModel,
+    reason: ErrorMessage,
+  ): VerificationReport {
+    const detail = `quint backend unavailable: ${reason.asString()}`;
+    return VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method: "simulation",
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of(
+        [...model.allTargets()].map((t) =>
+          VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail }),
+        ),
+      ),
+      unavailableReason: detail,
     });
   }
 

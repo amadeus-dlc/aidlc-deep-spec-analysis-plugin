@@ -737,7 +737,7 @@ describe("phase-1 refcheck scenario — a defective design record through the re
     expect(summary?.pass).toBe(false);
   });
 
-  test("fixing the artifacts closes the loop: sensors pass, all families checked, doctor quiet", () => {
+  test("fixing supplied artifacts clears findings while partial unit checks remain visible", () => {
     copyDesignRecord("clean");
     for (const [id, stage, rel] of FIRES) {
       expect(dispatcherFire(id, stage, join(record, ...rel)).result).toBe("passed");
@@ -756,9 +756,12 @@ describe("phase-1 refcheck scenario — a defective design record through the re
     expect(functional.checked).toHaveLength(16);
 
     const checks = doctorChecks();
-    expect(checks.filter((c) => c.label.includes("reference-integrity finding"))).toHaveLength(0);
+    expect(checks.filter((c) => /has [1-9][0-9]* reference-integrity finding/.test(c.label))).toHaveLength(0);
+    expect(
+      checks.some((c) => c.label.includes("u2-billing") && c.label.includes("inspection incomplete") && !c.pass),
+    ).toBe(true);
     const summary = checks.find((c) => c.label.includes("design refcheck —"));
-    expect(summary?.pass).toBe(true);
+    expect(summary?.pass).toBe(false);
   });
 });
 

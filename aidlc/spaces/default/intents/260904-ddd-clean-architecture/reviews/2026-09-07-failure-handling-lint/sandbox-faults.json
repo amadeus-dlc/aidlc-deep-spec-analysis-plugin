@@ -1,0 +1,141 @@
+[
+  {
+    "case": "deep-spec-refcheck-domain-EISDIR",
+    "before": {
+      "exit": 0,
+      "stdout": "{\"pass\":true,\"findings_count\":0,\"skipped_count\":0,\"note\":\"not-applicable\"}\n",
+      "stderr": ""
+    },
+    "after": {
+      "exit": 1,
+      "stdout": "",
+      "stderr": "deep-spec-refcheck-domain: failed to read <sandbox-root>/failure-handling/aidlc/spaces/default/intents/260907-index-sandbox-refcheck/inception/domain-design/components.md: io-failed (EISDIR: illegal operation on a directory, read)\n"
+    }
+  },
+  {
+    "case": "deep-spec-refcheck-contract-EISDIR",
+    "before": {
+      "exit": 0,
+      "stdout": "{\"pass\":true,\"findings_count\":0,\"skipped_count\":0,\"note\":\"not-applicable\"}\n",
+      "stderr": ""
+    },
+    "after": {
+      "exit": 1,
+      "stdout": "",
+      "stderr": "deep-spec-refcheck-contract: failed to read <sandbox-root>/failure-handling/aidlc/spaces/default/intents/260907-index-sandbox-refcheck/inception/contract-design/contract-summary.md: io-failed (EISDIR: illegal operation on a directory, read)\n"
+    }
+  },
+  {
+    "case": "deep-spec-refcheck-functional-EISDIR",
+    "before": {
+      "exit": 0,
+      "stdout": "{\"pass\":true,\"findings_count\":0,\"skipped_count\":0,\"note\":\"not-applicable\"}\n",
+      "stderr": ""
+    },
+    "after": {
+      "exit": 1,
+      "stdout": "",
+      "stderr": "deep-spec-refcheck-functional: failed to read <sandbox-root>/failure-handling/aidlc/spaces/default/intents/260907-index-sandbox-refcheck/construction/u1-orders/functional-design/entities.md: io-failed (EISDIR: illegal operation on a directory, read)\n"
+    }
+  },
+  {
+    "case": "doctor-unreadable-workspace",
+    "before": [
+      {
+        "pass": true,
+        "label": "deep-spec-analysis: verification coverage — 0/0 eligible intents verified (scopes: enterprise, feature)",
+        "fix": "See the per-intent rows above for the exact command each unverified intent needs.",
+        "severity": "advisory"
+      }
+    ],
+    "after": [
+      {
+        "pass": false,
+        "label": "deep-spec-analysis: verification coverage unavailable — <sandbox-root>/failure-unreadable-workspace/aidlc/spaces: io-failed (ENOTDIR: not a directory, scandir '<sandbox-root>/failure-unreadable-workspace/aidlc/spaces')",
+        "fix": "Restore the artifact or directory and its read permissions, then run the doctor again.",
+        "severity": "advisory"
+      },
+      {
+        "pass": false,
+        "label": "deep-spec-analysis: design refcheck unavailable — <sandbox-root>/failure-unreadable-workspace/aidlc/spaces: io-failed (ENOTDIR: not a directory, scandir '<sandbox-root>/failure-unreadable-workspace/aidlc/spaces')",
+        "fix": "Restore the artifact or directory and its read permissions, then run the doctor again.",
+        "severity": "advisory"
+      },
+      {
+        "pass": false,
+        "label": "deep-spec-analysis: design verification coverage unavailable — <sandbox-root>/failure-unreadable-workspace/aidlc/spaces: io-failed (ENOTDIR: not a directory, scandir '<sandbox-root>/failure-unreadable-workspace/aidlc/spaces')",
+        "fix": "Restore the artifact or directory and its read permissions, then run the doctor again.",
+        "severity": "advisory"
+      }
+    ]
+  },
+  {
+    "case": "doctor-random-json",
+    "before": [
+      {
+        "pass": false,
+        "label": "deep-spec-analysis: verification coverage — 1/4 eligible intents verified (scopes: enterprise, feature)",
+        "fix": "See the per-intent rows above for the exact command each unverified intent needs.",
+        "severity": "advisory"
+      },
+      {
+        "pass": false,
+        "label": "deep-spec-analysis: intent default/260907-index-sandbox-refinement re-verified its requirements after the last design verification (refinement evidence is stale)",
+        "fix": "Make it the active intent (`bun .claude/tools/aidlc-utility.ts intent 260907-index-sandbox-refinement`), then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to re-check the design against the current requirements.",
+        "severity": "advisory"
+      },
+      {
+        "pass": false,
+        "label": "deep-spec-analysis: design verification coverage — 0/4 eligible units verified (scopes: enterprise, feature)",
+        "fix": "See the per-unit rows above for the exact command each unverified unit needs.",
+        "severity": "advisory"
+      }
+    ],
+    "after": [
+      {
+        "pass": false,
+        "label": "deep-spec-analysis: verification coverage — 0/4 eligible intents verified (scopes: enterprise, feature)",
+        "fix": "See the per-intent rows above for the exact command each unverified intent needs.",
+        "severity": "advisory"
+      },
+      {
+        "pass": false,
+        "label": "deep-spec-analysis: intent default/260907-index-sandbox-refinement re-verified its requirements after the last design verification (refinement evidence is stale)",
+        "fix": "Make it the active intent (`bun .claude/tools/aidlc-utility.ts intent 260907-index-sandbox-refinement`), then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to re-check the design against the current requirements.",
+        "severity": "advisory"
+      },
+      {
+        "pass": false,
+        "label": "deep-spec-analysis: design verification coverage — 0/4 eligible units verified (scopes: enterprise, feature)",
+        "fix": "See the per-unit rows above for the exact command each unverified unit needs.",
+        "severity": "advisory"
+      }
+    ]
+  },
+  {
+    "case": "doctor-manifest-directory",
+    "before": {
+      "pass": true,
+      "label": "deep-spec-analysis: sensors/aidlc-deep-spec-ir-valid.md installed",
+      "fix": "Run `bun .claude/tools/aidlc-utility.ts plugin-sync` (or re-run the plugin's `hooks/compose.ts`).",
+      "severity": "error"
+    },
+    "after": {
+      "pass": false,
+      "label": "deep-spec-analysis: sensors/aidlc-deep-spec-ir-valid.md installed",
+      "fix": "Run `bun .claude/tools/aidlc-utility.ts plugin-sync` (or re-run the plugin's `hooks/compose.ts`).",
+      "severity": "error"
+    }
+  },
+  {
+    "case": "doctor-manifest-unreadable",
+    "after": [
+      {
+        "pass": false,
+        "label": "deep-spec-analysis: installation manifest unavailable — <sandbox-root>/failure-handling/.claude/sensors/aidlc-deep-spec-ir-valid.md: io-failed (ENOTDIR: not a directory, stat '<sandbox-root>/failure-handling/.claude/sensors/aidlc-deep-spec-ir-valid.md')",
+        "fix": "Restore the artifact or directory and its read permissions, then run the doctor again.",
+        "severity": "error"
+      }
+    ]
+  }
+]

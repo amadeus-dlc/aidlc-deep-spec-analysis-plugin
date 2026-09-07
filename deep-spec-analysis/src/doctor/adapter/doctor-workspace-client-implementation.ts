@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import type { Dirent, Stats } from "node:fs";
 import { join } from "node:path";
 import {
   ArtifactModifiedAt,
@@ -16,21 +16,77 @@ import {
   VerificationObservation,
 } from "@deep-spec-analysis/doctor-domain";
 import type { DoctorWorkspaceClient } from "@deep-spec-analysis/doctor-usecase";
+import {
+  extractFences,
+  parseYamlSubset,
+  readArtifactBytes,
+  readArtifactStat,
+  readArtifactText,
+  readDirectory,
+} from "@deep-spec-analysis/kernel-adapter";
 import { ArtifactPath, ContentHash, ErrorMessage, UnitName } from "@deep-spec-analysis/kernel-domain";
-import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  err,
+  isObject,
+  type Json,
+  ok,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
+import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
+import { readBackendEvidence } from "./backend-evidence-reader.ts";
 import type { DoctorWorkspaceClientConfiguration } from "./doctor-workspace-client-configuration.ts";
 
-function invalidUnitProblem(location: IntentLocation, error: ParseError): UnitCoverageProblem {
-  const detail = ErrorMessage.parse(JSON.stringify(error));
-  if (!detail.ok) throw new Error(`defect: unit name diagnostic could not be represented (${detail.error.kind})`);
-  return UnitCoverageProblem.invalid(location, detail.value);
+function corrupt(path: string, cause: string): RepositoryError {
+  return { kind: "corrupt", path, cause };
 }
 
-// aidlc ワークスペース走査の実 Gateway。旧 doctor の scopesOfStage /
-// scanVerificationCoverage / scanDesignDebt / scanFunctionalCoverage の
-// 読取部からの逐語移植——走査順（spaces/intents は readdir の自然順、unit は
-// 昇順）、try/catch の黙殺範囲、anchor がある時だけ requirements をハッシュ
-// する遅延、fence 抽出の正規表現はすべて凍結挙動。
+function optionalText(path: string): Result<string | null, RepositoryError> {
+  const read = readArtifactText(path);
+  if (read.ok) return read;
+  return read.error.kind === "not-found" ? ok(null) : read;
+}
+
+function optionalBytes(path: string): Result<Uint8Array | null, RepositoryError> {
+  const read = readArtifactBytes(path);
+  if (read.ok) return read;
+  return read.error.kind === "not-found" ? ok(null) : read;
+}
+
+function optionalStat(path: string): Result<Stats | null, RepositoryError> {
+  const read = readArtifactStat(path);
+  if (read.ok) return read;
+  return read.error.kind === "not-found" ? ok(null) : read;
+}
+
+function optionalDirectory(path: string): Result<readonly Dirent[], RepositoryError> {
+  const read = readDirectory(path);
+  if (read.ok) return read;
+  return read.error.kind === "not-found" ? ok([]) : read;
+}
+
+function modelDocument(text: string, path: string): Result<{ [key: string]: Json }, RepositoryError> {
+  const fences = extractFences(text, "json");
+  if (fences.length !== 1) return err(corrupt(path, "model must contain exactly one JSON fence"));
+  let value: Json;
+  try {
+    value = JSON.parse(fences[0].body) as Json;
+  } catch (cause) {
+    if (!(cause instanceof SyntaxError)) throw cause;
+    return err(corrupt(path, cause.message));
+  }
+  return isObject(value) ? ok(value) : err(corrupt(path, "model must be a JSON object"));
+}
+
+function locationOf(space: string, intent: string, path: string): Result<IntentLocation, RepositoryError> {
+  const parsedSpace = ArtifactPath.parse(space);
+  const parsedIntent = ArtifactPath.parse(intent);
+  if (!parsedSpace.ok) return err(corrupt(path, JSON.stringify(parsedSpace.error)));
+  if (!parsedIntent.ok) return err(corrupt(path, JSON.stringify(parsedIntent.error)));
+  return ok(IntentLocation.of(parsedSpace.value, parsedIntent.value));
+}
+
+// 不在だけを任意入力の欠如として扱う。走査・読取・文書不正は取得結果で伝える。
 export class DoctorWorkspaceClientImplementation implements DoctorWorkspaceClient {
   readonly #projectDir: string;
   readonly #root: string;
@@ -44,285 +100,256 @@ export class DoctorWorkspaceClientImplementation implements DoctorWorkspaceClien
 
   static readonly #FALLBACK_STAGE_SCOPES = StageScopes.of([StageScope.of("enterprise"), StageScope.of("feature")]);
 
-  #scopesOfStage(...stagePath: string[]): StageScopes {
-    const stageFile = join(this.#root, "aidlc-common", "stages", ...stagePath);
-    let items: readonly string[] | null = null;
-    try {
-      const frontmatter = readFileSync(stageFile, "utf-8").split("\n---")[0];
-      const m = frontmatter.match(/^scopes:\n((?:\s+- .+\n)+)/m);
-      items = m?.[1]?.match(/- (\S+)/g)?.map((item) => item.slice(2)) ?? null;
-    } catch {
-      // fall through to the authored default
+  #scopesOfStage(phase: string, name: string): Result<StageScopes, RepositoryError> {
+    const path = join(this.#root, "aidlc-common", "stages", phase, name);
+    const read = optionalText(path);
+    if (!read.ok) return read;
+    if (read.value === null) return ok(DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES);
+    const frontmatter = read.value.split("\n---")[0];
+    const lines = frontmatter.split("\n");
+    const indexes = lines.flatMap((line, index) => (/^scopes\s*:/.test(line) ? [index] : []));
+    if (indexes.length === 0) return ok(DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES);
+    if (indexes.length !== 1) return err(corrupt(path, "stage scopes are duplicated"));
+    const start = indexes[0];
+    const section = [lines[start]];
+    for (let index = start + 1; index < lines.length && /^(?:\s|#|$)/.test(lines[index]); index++)
+      section.push(lines[index]);
+    const parsedYaml = parseYamlSubset(section.join("\n"));
+    if (parsedYaml.error !== undefined) return err(corrupt(path, parsedYaml.error));
+    if (parsedYaml.value === undefined || !isObject(parsedYaml.value) || !Array.isArray(parsedYaml.value.scopes))
+      return err(corrupt(path, "stage scopes must be a list"));
+    const values: StageScope[] = [];
+    for (const item of parsedYaml.value.scopes) {
+      if (typeof item !== "string") return err(corrupt(path, "stage scope must be a string"));
+      const scope = StageScope.parse(item);
+      if (!scope.ok) return err(corrupt(path, JSON.stringify(scope.error)));
+      values.push(scope.value);
     }
-    if (items === null) return DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES;
-    const scopes: StageScope[] = [];
-    for (const item of items) {
-      const parsed = StageScope.parse(item);
-      if (!parsed.ok) return DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES;
-      scopes.push(parsed.value);
+    const parsed = StageScopes.parse(values);
+    return parsed.ok ? parsed : err(corrupt(path, JSON.stringify(parsed.error)));
+  }
+
+  #records(): Result<readonly { path: string; location: IntentLocation }[], RepositoryError> {
+    const spacesPath = join(this.#projectDir, "aidlc", "spaces");
+    const spaces = optionalDirectory(spacesPath);
+    if (!spaces.ok) return spaces;
+    const records: { path: string; location: IntentLocation }[] = [];
+    for (const space of spaces.value) {
+      if (!space.isDirectory()) continue;
+      const intents = optionalDirectory(join(spacesPath, space.name, "intents"));
+      if (!intents.ok) return intents;
+      for (const intent of intents.value) {
+        if (!intent.isDirectory() || intent.name.startsWith(".")) continue;
+        const path = join(spacesPath, space.name, "intents", intent.name);
+        const location = locationOf(space.name, intent.name, path);
+        if (!location.ok) return location;
+        records.push({ path, location: location.value });
+      }
     }
-    const parsed = StageScopes.parse(scopes);
-    return parsed.ok ? parsed.value : DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES;
+    return ok(records);
   }
 
-  #verificationScopes(): StageScopes {
-    return this.#scopesOfStage("inception", "deep-spec-analysis-verify.md");
+  #scopeOf(record: string): Result<StageScope, RepositoryError> {
+    const path = join(record, "aidlc-state.md");
+    const state = readArtifactText(path);
+    if (!state.ok) return state;
+    const scope = state.value.match(/^- \*\*Scope\*\*: (\S+)/m)?.[1];
+    if (scope === undefined) return err(corrupt(path, "intent scope is missing"));
+    const parsed = StageScope.parse(scope);
+    return parsed.ok ? parsed : err(corrupt(path, JSON.stringify(parsed.error)));
   }
 
-  #functionalScopes(): StageScopes {
-    return this.#scopesOfStage("construction", "deep-spec-analysis-functional-verify.md");
-  }
-
-  #spaces(): string[] {
-    try {
-      return readdirSync(join(this.#projectDir, "aidlc", "spaces"), { withFileTypes: true })
-        .filter((e) => e.isDirectory())
-        .map((e) => e.name);
-    } catch {
-      return [];
-    }
-  }
-
-  #intents(space: string): string[] {
-    try {
-      return readdirSync(join(this.#projectDir, "aidlc", "spaces", space, "intents"), { withFileTypes: true })
-        .filter((e) => e.isDirectory() && !e.name.startsWith("."))
-        .map((e) => e.name);
-    } catch {
-      return [];
-    }
-  }
-
-  #record(space: string, intent: string): string {
-    return join(this.#projectDir, "aidlc", "spaces", space, "intents", intent);
-  }
-
-  #scopeOf(record: string): string | null {
-    let state = "";
-    try {
-      state = readFileSync(join(record, "aidlc-state.md"), "utf-8");
-    } catch {
-      return null;
-    }
-    return state.match(/^- \*\*Scope\*\*: (\S+)/m)?.[1] ?? null;
-  }
-
-  verificationCoverage(): CoverageAssessment {
-    const scopes = this.#verificationScopes();
-    const out: VerificationObservation[] = [];
-    for (const space of this.#spaces()) {
-      for (const intent of this.#intents(space)) {
-        const record = this.#record(space, intent);
-        const scope = this.#scopeOf(record);
-        if (!scope) continue;
-        const parsedScope = StageScope.parse(scope);
-        if (!parsedScope.ok || !scopes.include(parsedScope.value)) continue;
-        const requirements = join(record, "inception", "requirements-analysis", "requirements.md");
-        if (!existsSync(requirements)) continue;
-        const model = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
-        const verifyDir = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-verify");
-        let hasFindings = false;
-        try {
-          hasFindings = readdirSync(verifyDir).some((f) => f.endsWith(".json"));
-        } catch {
-          hasFindings = false;
+  verificationCoverage(): Result<CoverageAssessment, RepositoryError> {
+    const scopes = this.#scopesOfStage("inception", "deep-spec-analysis-verify.md");
+    if (!scopes.ok) return scopes;
+    const records = this.#records();
+    if (!records.ok) return records;
+    const observations: VerificationObservation[] = [];
+    for (const { path: record, location } of records.value) {
+      const scope = this.#scopeOf(record);
+      if (!scope.ok) return scope;
+      if (!scopes.value.include(scope.value)) continue;
+      const requirementsPath = join(record, "inception", "requirements-analysis", "requirements.md");
+      const requirements = optionalBytes(requirementsPath);
+      if (!requirements.ok) return requirements;
+      if (requirements.value === null) continue;
+      const modelPath = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
+      const model = optionalText(modelPath);
+      if (!model.ok) return model;
+      let anchor: DigestAnchor | null = null;
+      let hasFindings = false;
+      if (model.value !== null) {
+        const document = modelDocument(model.value, modelPath);
+        if (!document.ok) return document;
+        if (document.value.sourceDigest !== undefined) {
+          if (typeof document.value.sourceDigest !== "string")
+            return err(corrupt(modelPath, "sourceDigest must be a string"));
+          const digest = ContentHash.parse(document.value.sourceDigest);
+          if (!digest.ok) return err(corrupt(modelPath, JSON.stringify(digest.error)));
+          anchor = DigestAnchor.of(digest.value, ContentHash.ofBytes(requirements.value));
         }
-        const hasModel = existsSync(model);
-        if (!hasModel || !hasFindings) {
-          out.push(
-            VerificationObservation.of({
-              location: IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent)),
-              hasModel,
-              hasFindings,
-              anchor: null,
-            }),
-          );
-          continue;
-        }
-        // Content-based staleness の材料: モデルが sourceDigest を刻んでいれば
-        // その anchor と現在の requirements.md バイトの実測 sha256 の対を渡す
-        //（mtime の嘘に騙されない）。anchor を持たないモデルは対なし＝domain が
-        // 無条件 stale と判じる（後方互換の mtime 比較は裁定で削除）。
-        const anchored = readFileSync(model, "utf-8")
-          .match(/```json\n([\s\S]*?)```/)?.[1]
-          ?.match(/"sourceDigest"\s*:\s*"([0-9a-f]{64})"/)?.[1];
-        out.push(
-          VerificationObservation.of({
-            location: IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent)),
-            hasModel,
-            hasFindings,
-            anchor: anchored
-              ? DigestAnchor.of(ContentHash.of(anchored), ContentHash.ofBytes(readFileSync(requirements)))
-              : null,
+        const hash = ContentHash.ofText(canonicalStringify(document.value));
+        const evidence = readBackendEvidence(
+          join(record, "inception", "deep-spec-analysis-verify", "deep-spec-verify"),
+        );
+        if (!evidence.ok) return evidence;
+        hasFindings = evidence.value.some((report) => report.countsFor(hash));
+      }
+      observations.push(VerificationObservation.of({ location, hasModel: model.value !== null, hasFindings, anchor }));
+    }
+    const parsed = CoverageAssessment.parse(observations, scopes.value);
+    return parsed.ok ? parsed : err(corrupt(join(this.#projectDir, "aidlc"), JSON.stringify(parsed.error)));
+  }
+
+  designArtifacts(): Result<DesignArtifacts, RepositoryError> {
+    const records = this.#records();
+    if (!records.ok) return records;
+    const values: DesignArtifactReference[] = [];
+    for (const { path: record, location } of records.value) {
+      const append = (tool: string, path: string, label: string): Result<void, RepositoryError> => {
+        const present = optionalStat(path);
+        if (!present.ok) return present;
+        if (present.value === null) return ok(undefined);
+        const parsedPath = ArtifactPath.parse(path);
+        if (!parsedPath.ok) return err(corrupt(path, JSON.stringify(parsedPath.error)));
+        values.push(
+          DesignArtifactReference.of({
+            location,
+            tool: ArtifactPath.of(tool),
+            artifactPath: parsedPath.value,
+            relativePath: ArtifactPath.of(label),
           }),
         );
+        return ok(undefined);
+      };
+      for (const [tool, label] of [
+        [this.#refcheckToolNames.domain, "inception/domain-design/components.md"],
+        [this.#refcheckToolNames.contract, "inception/contract-design/contract-summary.md"],
+      ]) {
+        const appended = append(tool, join(record, label), label);
+        if (!appended.ok) return appended;
       }
-    }
-    return CoverageAssessment.of(out, scopes);
-  }
-
-  designArtifacts(): DesignArtifacts {
-    const out: DesignArtifactReference[] = [];
-    for (const space of this.#spaces()) {
-      for (const intent of this.#intents(space)) {
-        const record = this.#record(space, intent);
-        const ref = (tool: string, artifactPath: string, label: string): void => {
-          if (!existsSync(artifactPath)) return;
-          out.push(
-            DesignArtifactReference.of({
-              location: IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent)),
-              tool: ArtifactPath.of(tool),
-              artifactPath: ArtifactPath.of(artifactPath),
-              relativePath: ArtifactPath.of(label),
-            }),
+      const construction = join(record, "construction");
+      const units = optionalDirectory(construction);
+      if (!units.ok) return units;
+      for (const unit of [...units.value]
+        .filter((entry) => entry.isDirectory())
+        .sort((a, b) => a.name.localeCompare(b.name))) {
+        const directory = join(construction, unit.name, "functional-design");
+        for (const name of ["entities.md", "rules.md", "functional-spec.md"]) {
+          const path = join(directory, name);
+          const found = optionalStat(path);
+          if (!found.ok) return found;
+          if (found.value === null) continue;
+          const appended = append(
+            this.#refcheckToolNames.functional,
+            path,
+            `construction/${unit.name}/functional-design`,
           );
-        };
-        ref(
-          this.#refcheckToolNames.domain,
-          join(record, "inception", "domain-design", "components.md"),
-          "inception/domain-design/components.md",
-        );
-        ref(
-          this.#refcheckToolNames.contract,
-          join(record, "inception", "contract-design", "contract-summary.md"),
-          "inception/contract-design/contract-summary.md",
-        );
-        const constructionDir = join(record, "construction");
-        let units: string[] = [];
-        try {
-          units = readdirSync(constructionDir, { withFileTypes: true })
-            .filter((e) => e.isDirectory())
-            .map((e) => e.name)
-            .sort();
-        } catch {
-          units = [];
-        }
-        for (const unit of units) {
-          const fdDir = join(constructionDir, unit, "functional-design");
-          const trigger = ["entities.md", "rules.md", "functional-spec.md"]
-            .map((f) => join(fdDir, f))
-            .find((p) => existsSync(p));
-          if (trigger !== undefined) {
-            ref(this.#refcheckToolNames.functional, trigger, `construction/${unit}/functional-design`);
-          }
+          if (!appended.ok) return appended;
+          break;
         }
       }
     }
-    return DesignArtifacts.of(out);
+    const parsed = DesignArtifacts.parse(values);
+    return parsed.ok ? parsed : err(corrupt(join(this.#projectDir, "aidlc"), JSON.stringify(parsed.error)));
   }
 
-  functionalCoverage(): UnitCoverage {
-    const scopes = this.#functionalScopes();
-    const out: FunctionalObservation[] = [];
+  functionalCoverage(): Result<UnitCoverage, RepositoryError> {
+    const scopes = this.#scopesOfStage("construction", "deep-spec-analysis-functional-verify.md");
+    if (!scopes.ok) return scopes;
+    const records = this.#records();
+    if (!records.ok) return records;
+    const observations: FunctionalObservation[] = [];
     const invalidUnits: UnitCoverageProblem[] = [];
-    for (const space of this.#spaces()) {
-      for (const intent of this.#intents(space)) {
-        const record = this.#record(space, intent);
-        const scope = this.#scopeOf(record);
-        if (!scope) continue;
-        const parsedScope = StageScope.parse(scope);
-        if (!parsedScope.ok || !scopes.include(parsedScope.value)) continue;
-        const constructionDir = join(record, "construction");
-        let unitDirs: string[] = [];
-        try {
-          unitDirs = readdirSync(constructionDir, { withFileTypes: true })
-            .filter((e) => e.isDirectory() && existsSync(join(constructionDir, e.name, "functional-design")))
-            .map((e) => e.name)
-            .sort();
-        } catch {
+    for (const { path: record, location } of records.value) {
+      const scope = this.#scopeOf(record);
+      if (!scope.ok) return scope;
+      if (!scopes.value.include(scope.value)) continue;
+      const construction = join(record, "construction");
+      const listed = optionalDirectory(construction);
+      if (!listed.ok) return listed;
+      const units: FunctionalUnitObservation[] = [];
+      for (const unit of [...listed.value]
+        .filter((entry) => entry.isDirectory())
+        .sort((a, b) => a.name.localeCompare(b.name))) {
+        const directory = join(construction, unit.name, "functional-design");
+        const present = optionalStat(directory);
+        if (!present.ok) return present;
+        if (present.value === null) continue;
+        if (!present.value.isDirectory()) return err(corrupt(directory, "functional-design must be a directory"));
+        const name = UnitName.parse(unit.name);
+        if (!name.ok) {
+          const message = ErrorMessage.parse(JSON.stringify(name.error));
+          if (!message.ok) return err(corrupt(directory, JSON.stringify(message.error)));
+          invalidUnits.push(UnitCoverageProblem.invalid(location, message.value));
           continue;
         }
-        if (unitDirs.length === 0) continue;
-        const stageDir = join(constructionDir, "deep-spec-analysis-functional-verify");
-        const modelPath = join(stageDir, "deep-spec-analysis-functional-formal-model.md");
-        let modelUnits: string[] = [];
-        let modelMtime: number | null = null;
-        // Per-unit completion evidence: 実 backend 文書（cross-check でも
-        // unavailable でもない）の checked[] に載った unit だけが完了。
-        const completedUnits = new Set<string>();
-        let hasFindings = false;
-        if (existsSync(modelPath)) {
-          try {
-            modelMtime = statSync(modelPath).mtimeMs;
-            const fence = readFileSync(modelPath, "utf-8").match(/```json\n([\s\S]*?)```/);
-            const ir = fence ? JSON.parse(fence[1] ?? "{}") : {};
-            for (const u of Array.isArray(ir.units) ? ir.units : []) {
-              if (u && typeof u.unit === "string") modelUnits.push(u.unit);
-            }
-          } catch {
-            modelUnits = [];
-          }
-          try {
-            const verifyDir = join(stageDir, "deep-spec-design-verify");
-            for (const f of readdirSync(verifyDir)) {
-              if (!f.endsWith(".json") || f === "cross-check.json") continue;
-              try {
-                const doc = JSON.parse(readFileSync(join(verifyDir, f), "utf-8"));
-                if (doc && typeof doc === "object" && !doc.unavailable) {
-                  hasFindings = true;
-                  for (const t of Array.isArray(doc.checked) ? doc.checked : []) {
-                    if (typeof t === "string" && t.startsWith("unit:")) completedUnits.add(t.slice(5));
-                  }
-                }
-              } catch {
-                // unreadable sibling — its writer reports its own state
-              }
-            }
-          } catch {
-            hasFindings = false;
-          }
+        let newest = 0;
+        for (const filename of ["entities.md", "rules.md", "functional-spec.md"]) {
+          const modified = optionalStat(join(directory, filename));
+          if (!modified.ok) return modified;
+          if (modified.value !== null && !modified.value.isFile())
+            return err(corrupt(join(directory, filename), "functional-design artifact must be a file"));
+          if (modified.value !== null) newest = Math.max(newest, modified.value.mtimeMs);
         }
-        const location = IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent));
-        const units: FunctionalUnitObservation[] = [];
-        for (const unit of unitDirs) {
-          const fdDir = join(constructionDir, unit, "functional-design");
-          let newest = 0;
-          for (const f of ["entities.md", "rules.md", "functional-spec.md"]) {
-            const p = join(fdDir, f);
-            if (existsSync(p)) newest = Math.max(newest, statSync(p).mtimeMs);
-          }
-          const parsedUnit = UnitName.parse(unit);
-          if (!parsedUnit.ok) {
-            invalidUnits.push(invalidUnitProblem(location, parsedUnit.error));
-            continue;
-          }
-          units.push(FunctionalUnitObservation.of(parsedUnit.value, ArtifactModifiedAt.of(newest)));
-        }
-        const reqModel = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
-        const modelUnitValues: UnitName[] = [];
-        for (const name of modelUnits) {
-          const parsed = UnitName.parse(name);
-          if (parsed.ok) modelUnitValues.push(parsed.value);
-          else invalidUnits.push(invalidUnitProblem(location, parsed.error));
-        }
-        const completedUnitValues: UnitName[] = [];
-        for (const name of completedUnits) {
-          const parsed = UnitName.parse(name);
-          if (parsed.ok) completedUnitValues.push(parsed.value);
-          else invalidUnits.push(invalidUnitProblem(location, parsed.error));
-        }
-        const observation = FunctionalObservation.parse({
-          location,
-          units,
-          modelModifiedAt: modelMtime === null ? null : ArtifactModifiedAt.of(modelMtime),
-          modelUnits: modelUnitValues,
-          completedUnits: completedUnitValues,
-          hasFindings,
-          requirementsModelModifiedAt: existsSync(reqModel) ? ArtifactModifiedAt.of(statSync(reqModel).mtimeMs) : null,
-        });
-        if (observation.ok) out.push(observation.value);
-        else {
-          const detail = ErrorMessage.parse(`functional observation is unusable: ${observation.error.kind}`);
-          if (!detail.ok)
-            throw new Error(`defect: observation diagnostic could not be represented (${detail.error.kind})`);
-          return UnitCoverage.unavailable(scopes, detail.value);
-        }
+        const modified = ArtifactModifiedAt.parse(newest);
+        if (!modified.ok) return err(corrupt(directory, JSON.stringify(modified.error)));
+        units.push(FunctionalUnitObservation.of(name.value, modified.value));
       }
+      if (units.length === 0) continue;
+      const stage = join(construction, "deep-spec-analysis-functional-verify");
+      const modelPath = join(stage, "deep-spec-analysis-functional-formal-model.md");
+      const model = optionalText(modelPath);
+      if (!model.ok) return model;
+      const modelStat = optionalStat(modelPath);
+      if (!modelStat.ok) return modelStat;
+      const modelUnits: UnitName[] = [];
+      const completedUnits: UnitName[] = [];
+      let hasFindings = false;
+      if (model.value !== null) {
+        const document = modelDocument(model.value, modelPath);
+        if (!document.ok) return document;
+        if (!Array.isArray(document.value.units)) return err(corrupt(modelPath, "design model units must be an array"));
+        for (const unit of document.value.units) {
+          if (!isObject(unit) || typeof unit.unit !== "string")
+            return err(corrupt(modelPath, "design model unit name is missing"));
+          const name = UnitName.parse(unit.unit);
+          if (!name.ok) return err(corrupt(modelPath, JSON.stringify(name.error)));
+          modelUnits.push(name.value);
+        }
+        const hash = ContentHash.ofText(canonicalStringify(document.value));
+        const evidence = readBackendEvidence(join(stage, "deep-spec-design-verify"));
+        if (!evidence.ok) return evidence;
+        hasFindings = evidence.value.some((report) => report.countsFor(hash));
+        for (const report of evidence.value) completedUnits.push(...report.completedUnitsFor(hash));
+      }
+      const requirementsPath = join(
+        record,
+        "inception",
+        "deep-spec-analysis-verify",
+        "deep-spec-analysis-formal-model.md",
+      );
+      const requirementsStat = optionalStat(requirementsPath);
+      if (!requirementsStat.ok) return requirementsStat;
+      const modified = modelStat.value === null ? ok(null) : ArtifactModifiedAt.parse(modelStat.value.mtimeMs);
+      if (!modified.ok) return err(corrupt(modelPath, JSON.stringify(modified.error)));
+      const requirementsModified =
+        requirementsStat.value === null ? ok(null) : ArtifactModifiedAt.parse(requirementsStat.value.mtimeMs);
+      if (!requirementsModified.ok) return err(corrupt(requirementsPath, JSON.stringify(requirementsModified.error)));
+      const observation = FunctionalObservation.parse({
+        location,
+        units,
+        modelModifiedAt: modified.value,
+        modelUnits,
+        completedUnits,
+        hasFindings,
+        requirementsModelModifiedAt: requirementsModified.value,
+      });
+      if (!observation.ok) return err(corrupt(record, JSON.stringify(observation.error)));
+      observations.push(observation.value);
     }
-    const coverage = UnitCoverage.parse(out, scopes, invalidUnits);
-    if (coverage.ok) return coverage.value;
-    const detail = ErrorMessage.parse(`functional coverage is unusable: ${coverage.error.kind}`);
-    if (!detail.ok) throw new Error(`defect: coverage diagnostic could not be represented (${detail.error.kind})`);
-    return UnitCoverage.unavailable(scopes, detail.value);
+    const parsed = UnitCoverage.parse(observations, scopes.value, invalidUnits);
+    return parsed.ok ? parsed : err(corrupt(join(this.#projectDir, "aidlc"), JSON.stringify(parsed.error)));
   }
 }

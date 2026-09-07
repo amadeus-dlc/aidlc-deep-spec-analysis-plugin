@@ -1,5 +1,6 @@
 // doctor/adapter の公開 facade — 明示列挙のみ（export * 禁止）。
 
+export { readBackendEvidence } from "./backend-evidence-reader.ts";
 export { DoctorPresenter } from "./doctor-presenter.ts";
 export type { DoctorWorkspaceClientConfiguration } from "./doctor-workspace-client-configuration.ts";
 export { DoctorWorkspaceClientImplementation } from "./doctor-workspace-client-implementation.ts";

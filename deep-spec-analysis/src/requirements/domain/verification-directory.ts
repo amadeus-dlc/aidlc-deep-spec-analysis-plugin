@@ -6,7 +6,8 @@
 // 中身は 3 つ。backend ごとの report の集合（ファイル名順。backend 名で検索
 // されるので要素はエンティティ）、この実行が置こうとしている candidate、そして
 // クロスチェック文書。クロスチェックは「導けるとは限らない」可変部なので、
-// Repository のメソッドを分けるのではなく集約自身が不在（null）で持つ。
+// 集約は absent / present / unreadable を閉じた状態として持つ。unreadable は
+// Repository が観測した派生物の障害で、finalizing が兄弟から再導出すると消える。
 //
 // 不変条件は 2 つ:
 //   - backend ごとに report は 1 つ（finalizing は同じ backend を置換する）
@@ -14,8 +15,8 @@
 //     瞬間に古いクロスチェックは「いまの reports から導いたもの」でなくなる
 //     ので、finalizing は必ずそれを落とす
 
-import type { ArtifactPath, ContentHash, FindingsSchema } from "@deep-spec-analysis/kernel-domain";
-import { IllegalArgumentException } from "@deep-spec-analysis/kernel-infrastructure";
+import type { ArtifactPath, ContentHash, ErrorMessage, FindingsSchema } from "@deep-spec-analysis/kernel-domain";
+import { err, IllegalArgumentException, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { VerificationReport } from "./verification-report.ts";
 import { VerificationReportIdentifier } from "./verification-report-identifier.ts";
@@ -23,17 +24,22 @@ import { VerificationReports } from "./verification-reports.ts";
 
 const CROSS_CHECK_BACKEND = "cross-check";
 
+type CrossCheckState =
+  | { readonly kind: "absent" }
+  | { readonly kind: "present"; readonly report: VerificationReport }
+  | { readonly kind: "unreadable"; readonly error: ErrorMessage };
+
 export class VerificationDirectory {
   readonly #directory: ArtifactPath;
   readonly #reports: VerificationReports;
   readonly #candidate: VerificationReport | null;
-  readonly #crossCheck: VerificationReport | null;
+  readonly #crossCheck: CrossCheckState;
 
   private constructor(
     directory: ArtifactPath,
     reports: VerificationReports,
     candidate: VerificationReport | null,
-    crossCheck: VerificationReport | null,
+    crossCheck: CrossCheckState,
   ) {
     this.#directory = directory;
     this.#reports = reports;
@@ -48,7 +54,20 @@ export class VerificationDirectory {
     reports: VerificationReports,
     crossCheck: VerificationReport | null,
   ): VerificationDirectory {
-    return new VerificationDirectory(directory, reports, null, crossCheck);
+    return new VerificationDirectory(
+      directory,
+      reports,
+      null,
+      crossCheck === null ? { kind: "absent" } : { kind: "present", report: crossCheck },
+    );
+  }
+
+  static unreadableCrossCheck(
+    directory: ArtifactPath,
+    reports: VerificationReports,
+    error: ErrorMessage,
+  ): VerificationDirectory {
+    return new VerificationDirectory(directory, reports, null, { kind: "unreadable", error });
   }
 
   // この実行が公開しようとする report を候補として置く。同じ backend の旧
@@ -75,7 +94,7 @@ export class VerificationDirectory {
       if (at < 0) merged.push(candidate);
       else merged.splice(at, 0, candidate);
     }
-    return new VerificationDirectory(this.#directory, VerificationReports.of(merged), candidate, null);
+    return new VerificationDirectory(this.#directory, VerificationReports.of(merged), candidate, { kind: "absent" });
   }
 
   // 公開する候補の適合と、それに基づく cross-check の導出を一つの操作で行う。
@@ -92,7 +111,10 @@ export class VerificationDirectory {
       model,
       candidate.irHash(),
     );
-    return new VerificationDirectory(this.#directory, staged.#reports, staged.#candidate, derived.conformedTo(schema));
+    return new VerificationDirectory(this.#directory, staged.#reports, staged.#candidate, {
+      kind: "present",
+      report: derived.conformedTo(schema),
+    });
   }
 
   // いまの reports からクロスチェックを導く（同一 irHash の可用文書だけが
@@ -103,13 +125,16 @@ export class VerificationDirectory {
       model,
       irHash,
     );
-    return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, derived);
+    return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, {
+      kind: "present",
+      report: derived,
+    });
   }
 
   // IR が読めずクロスチェックを導けない場合。導けないものを stale のまま残さず、
   // 不在にする——次の成功実行が組み直す。
   withoutCrossCheck(): VerificationDirectory {
-    return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, null);
+    return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, { kind: "absent" });
   }
 
   // 契約2 への適合。候補とクロスチェックの両方を同じスキーマで適合させる
@@ -119,8 +144,12 @@ export class VerificationDirectory {
     const crossCheck = this.#crossCheck;
     const conformedCandidate = candidate === null ? null : candidate.conformedTo(schema);
     // 候補が変わったら、以前の reports から導いた cross-check は無効。
-    const conformedCrossCheck =
-      conformedCandidate !== candidate || crossCheck === null ? null : crossCheck.conformedTo(schema);
+    const conformedCrossCheck: CrossCheckState =
+      conformedCandidate !== candidate || crossCheck.kind === "absent"
+        ? { kind: "absent" }
+        : crossCheck.kind === "unreadable"
+          ? crossCheck
+          : { kind: "present", report: crossCheck.report.conformedTo(schema) };
     const reports =
       conformedCandidate === null
         ? this.#reports
@@ -155,8 +184,11 @@ export class VerificationDirectory {
     return this.#candidate;
   }
 
-  // 境界: 公開するクロスチェック文書。導けなかったときは不在。
-  crossCheck(): VerificationReport | null {
-    return this.#crossCheck;
+  // 境界: 公開するクロスチェック文書。導けなかったときは ok(null)、読み込んだ
+  // 派生物が破損しているときは err(error) として欠如と取得障害を区別する。
+  crossCheck(): Result<VerificationReport | null, ErrorMessage> {
+    if (this.#crossCheck.kind === "present") return ok(this.#crossCheck.report);
+    if (this.#crossCheck.kind === "unreadable") return err(this.#crossCheck.error);
+    return ok(null);
   }
 }

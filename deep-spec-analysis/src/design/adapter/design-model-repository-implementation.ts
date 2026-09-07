@@ -1,13 +1,12 @@
 // 設計形式モデルの実 Gateway 実装。形式モデル markdown から唯一の ```json
 // fence を取り出し、寛容パースで DesignModel を再構成する。irHash（生 IR の
 // 正準 JSON の sha256）はここで導出——正準化は形式知識。corrupt.cause の文言は
-// 降格文書（golden 凍結）に逐語で載る。旧 existsSync ゲートの「stat 失敗は
-// 理由を問わず不在」も忠実に再現する（PR4 レビューの教訓）。
+// 降格文書（golden 凍結）に逐語で載る。不在だけを not-found とし、
+// 読取障害は原因を保持して io-failed へ変換する。
 
-import { existsSync, readFileSync } from "node:fs";
 import { DesignModel, type DesignModelIdentifier } from "@deep-spec-analysis/design-domain";
 import type { DesignModelRepository } from "@deep-spec-analysis/design-usecase";
-import { extractFences, writeFileAtomically } from "@deep-spec-analysis/kernel-adapter";
+import { extractFences, readArtifactBytes, writeFileAtomically } from "@deep-spec-analysis/kernel-adapter";
 import { ContentHash } from "@deep-spec-analysis/kernel-domain";
 import { canonicalStringify, err, type Json, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
@@ -17,21 +16,10 @@ export class DesignModelRepositoryImplementation implements DesignModelRepositor
   findById(id: DesignModelIdentifier): Result<DesignModel, RepositoryError> {
     const modelPath = id.artifactPath().asString();
     // 原文は生バイト列で一度だけ読む（UTF-8 復号は解析専用）。
-    let bytes: Buffer;
-    try {
-      bytes = readFileSync(modelPath);
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === "ENOENT" || !existsSync(modelPath)) {
-        return err({ kind: "not-found", path: modelPath });
-      }
-      return err({
-        kind: "io-failed",
-        operation: "read",
-        path: modelPath,
-        cause: e instanceof Error ? e.message : String(e),
-      });
-    }
-    const md = bytes.toString("utf-8");
+    const read = readArtifactBytes(modelPath);
+    if (!read.ok) return err(read.error);
+    const bytes = read.value;
+    const md = Buffer.from(bytes).toString("utf-8");
     const fences = extractFences(md, "json");
     const body = fences.length === 1 ? (fences[0]?.body ?? null) : null;
     let raw: Json = null;
@@ -55,7 +43,7 @@ export class DesignModelRepositoryImplementation implements DesignModelRepositor
       DesignModel.compose({
         id,
         irHash: ContentHash.ofText(canonicalStringify(raw)),
-        sourceDocument: new Uint8Array(bytes),
+        sourceDocument: bytes,
         ...composition.value,
       }),
     );

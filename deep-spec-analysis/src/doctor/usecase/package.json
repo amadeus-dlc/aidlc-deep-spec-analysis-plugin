@@ -7,6 +7,8 @@
     ".": "./index.ts"
   },
   "dependencies": {
-    "@deep-spec-analysis/doctor-domain": "workspace:*"
+    "@deep-spec-analysis/doctor-domain": "workspace:*",
+    "@deep-spec-analysis/kernel-infrastructure": "workspace:*",
+    "@deep-spec-analysis/kernel-usecase": "workspace:*"
   }
 }

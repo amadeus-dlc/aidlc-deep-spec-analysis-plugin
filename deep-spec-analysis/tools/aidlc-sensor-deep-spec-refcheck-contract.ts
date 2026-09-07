@@ -3,25 +3,9 @@
 import { basename as basename3, dirname as dirname4, join as join6 } from "path";
 import { fileURLToPath } from "url";
 
-// src/kernel/adapter/atomic-write.ts
-import { mkdirSync, renameSync, rmSync, writeFileSync } from "fs";
-import { basename, dirname, join } from "path";
-var sequence = 0;
-function writeFileAtomically(path, data) {
-  const dir = dirname(path);
-  mkdirSync(dir, { recursive: true });
-  sequence += 1;
-  const tmp = join(dir, `.${basename(path)}.tmp-${Date.now().toString(36)}-${sequence.toString(36)}`);
-  try {
-    writeFileSync(tmp, data);
-    renameSync(tmp, path);
-  } catch (e) {
-    try {
-      rmSync(tmp, { force: true });
-    } catch {}
-    throw e;
-  }
-}
+// src/kernel/adapter/artifact-io.ts
+import { readdirSync, readFileSync, statSync } from "fs";
+
 // src/kernel/infrastructure/illegal-argument-exception.ts
 class IllegalArgumentException extends Error {
   problem;
@@ -353,6 +337,69 @@ function* schemaErrors(root, schema, value, path) {
     }
   }
   return;
+}
+// src/kernel/adapter/artifact-io.ts
+function readFailure(path, error) {
+  const code = error.code;
+  if (code === "ENOENT")
+    return { kind: "not-found", path };
+  return {
+    kind: "io-failed",
+    operation: "read",
+    path,
+    cause: error instanceof Error ? error.message : String(error)
+  };
+}
+function readArtifactBytes(path) {
+  let bytes;
+  try {
+    bytes = readFileSync(path);
+  } catch (error) {
+    return err(readFailure(path, error));
+  }
+  return ok(bytes);
+}
+function readArtifactText(path) {
+  try {
+    return ok(readFileSync(path, "utf-8"));
+  } catch (error) {
+    return err(readFailure(path, error));
+  }
+}
+function readDirectory(path) {
+  let entries;
+  try {
+    entries = readdirSync(path, { withFileTypes: true });
+  } catch (error) {
+    return err(readFailure(path, error));
+  }
+  return ok(Object.freeze(entries));
+}
+function readArtifactStat(path) {
+  try {
+    return ok(statSync(path));
+  } catch (error) {
+    return err(readFailure(path, error));
+  }
+}
+// src/kernel/adapter/atomic-write.ts
+import { mkdirSync, renameSync, rmSync, writeFileSync } from "fs";
+import { basename, dirname, join } from "path";
+var sequence = 0;
+function writeFileAtomically(path, data) {
+  const dir = dirname(path);
+  mkdirSync(dir, { recursive: true });
+  sequence += 1;
+  const tmp = join(dir, `.${basename(path)}.tmp-${Date.now().toString(36)}-${sequence.toString(36)}`);
+  try {
+    writeFileSync(tmp, data);
+    renameSync(tmp, path);
+  } catch (e) {
+    try {
+      rmSync(tmp, { force: true });
+    } catch {}
+    throw e;
+  }
 }
 // src/kernel/domain/artifact-path.ts
 class ArtifactPath {
@@ -2048,10 +2095,10 @@ class VerificationMethod {
   }
 }
 // src/kernel/adapter/contract-schema.ts
-import { readFileSync } from "fs";
+import { readFileSync as readFileSync2 } from "fs";
 function readContractSchema(path) {
   try {
-    const document = JSON.parse(readFileSync(path, "utf-8"));
+    const document = JSON.parse(readFileSync2(path, "utf-8"));
     if (!isObject(document))
       return err({ cause: "contract schema must be a JSON object" });
     return ok(document);
@@ -2068,7 +2115,7 @@ function readFindingsSchema(path) {
 }
 // src/kernel/adapter/directory-finalization-lock.ts
 import { randomBytes } from "crypto";
-import { mkdirSync as mkdirSync2, readFileSync as readFileSync2, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
+import { mkdirSync as mkdirSync2, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
 import { join as join2 } from "path";
 var DESIGN_LOCK_BASENAME = ".deep-spec-design-finalization.lock";
 var METADATA_BASENAME = "owner.lockmeta";
@@ -2104,24 +2151,24 @@ class DirectoryFinalizationLock {
       return { kind: "acquired" };
     }
     const observed = this.#readMetadata(canonical);
-    if (observed === null) {
+    if (!observed.ok) {
       return { kind: "lock-contended", cause: `owner metadata is unreadable (${blocked})` };
     }
-    if (observed.state !== "held") {
-      return { kind: "lock-contended", cause: `owner metadata is in state "${observed.state}"` };
+    if (observed.value.state !== "held") {
+      return { kind: "lock-contended", cause: `owner metadata is in state "${observed.value.state}"` };
     }
-    if (this.#clock.now() < observed.leaseExpiresAtMs) {
+    if (this.#clock.now() < observed.value.leaseExpiresAtMs) {
       return { kind: "lock-contended", cause: "the lease has not expired" };
     }
-    const status = this.#liveness.statusOf(observed.pid);
+    const status = this.#liveness.statusOf(observed.value.pid);
     if (status !== "absent") {
-      return { kind: "lock-contended", cause: `owner process ${observed.pid} is ${status}` };
+      return { kind: "lock-contended", cause: `owner process ${observed.value.pid} is ${status}` };
     }
     const reread = this.#readMetadata(canonical);
-    if (reread === null || reread.token !== observed.token) {
+    if (!reread.ok || reread.value.token !== observed.value.token) {
       return { kind: "lock-contended", cause: "the lock changed hands during the recovery check" };
     }
-    const stale = `${canonical}.stale.${observed.token}.${token}`;
+    const stale = `${canonical}.stale.${observed.value.token}.${token}`;
     try {
       renameSync2(canonical, stale);
     } catch (e) {
@@ -2133,7 +2180,7 @@ class DirectoryFinalizationLock {
       return { kind: "lock-recovery-failed", cause: lost };
     }
     this.#ownerTokens.set(canonical, token);
-    return { kind: "recovered", displacedToken: observed.token };
+    return { kind: "recovered", displacedToken: observed.value.token };
   }
   holdsOwnership(directory) {
     const canonical = this.canonicalPathOf(directory);
@@ -2141,7 +2188,7 @@ class DirectoryFinalizationLock {
     if (mine === undefined)
       return false;
     const observed = this.#readMetadata(canonical);
-    return observed !== null && observed.state === "held" && observed.token === mine;
+    return observed.ok && observed.value.state === "held" && observed.value.token === mine;
   }
   release(directory) {
     const canonical = this.canonicalPathOf(directory);
@@ -2151,7 +2198,7 @@ class DirectoryFinalizationLock {
     }
     this.#ownerTokens.delete(canonical);
     const observed = this.#readMetadata(canonical);
-    if (observed === null || observed.token !== mine) {
+    if (!observed.ok || observed.value.token !== mine) {
       return { kind: "lock-release-failed", cause: "the canonical lock is no longer owned by this writer" };
     }
     const cleanup = `${canonical}.cleanup.${mine}`;
@@ -2194,26 +2241,30 @@ class DirectoryFinalizationLock {
     }
   }
   #readMetadata(canonical) {
+    const path = join2(canonical, METADATA_BASENAME);
+    const read = readArtifactText(path);
+    if (!read.ok)
+      return err(read.error);
     let raw;
     try {
-      raw = JSON.parse(readFileSync2(join2(canonical, METADATA_BASENAME), "utf-8"));
-    } catch {
-      return null;
+      raw = JSON.parse(read.value);
+    } catch (error) {
+      return err({ kind: "corrupt", path, cause: error instanceof Error ? error.message : String(error) });
     }
     if (typeof raw !== "object" || raw === null)
-      return null;
+      return err({ kind: "corrupt", path, cause: "owner metadata must be an object" });
     const doc = raw;
     if (typeof doc.state !== "string" || typeof doc.token !== "string")
-      return null;
+      return err({ kind: "corrupt", path, cause: "owner metadata lacks state or token" });
     if (typeof doc.pid !== "number" || typeof doc.acquiredAtMs !== "number" || typeof doc.leaseExpiresAtMs !== "number")
-      return null;
-    return {
+      return err({ kind: "corrupt", path, cause: "owner metadata has invalid numeric fields" });
+    return ok({
       state: doc.state,
       token: doc.token,
       pid: doc.pid,
       acquiredAtMs: doc.acquiredAtMs,
       leaseExpiresAtMs: doc.leaseExpiresAtMs
-    };
+    });
   }
   #discard(ownPath) {
     try {
@@ -2348,15 +2399,6 @@ function parseFindingsValues(raw) {
     return err(JSON.stringify(parsed.error));
   return ok({ ...parsed.value, checked: doc.checked, unavailable: doc.unavailable });
 }
-// src/kernel/adapter/list-subdirectories.ts
-import { readdirSync } from "fs";
-function listSubdirectories(dir) {
-  try {
-    return readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
-  } catch {
-    return [];
-  }
-}
 // src/kernel/adapter/markdown-table.ts
 function parseMarkdownTables(md) {
   const tables = [];
@@ -2381,25 +2423,27 @@ function parseMarkdownTables(md) {
   }
   return tables;
 }
-// src/kernel/adapter/read-if-exists.ts
-import { existsSync, readFileSync as readFileSync3 } from "fs";
-function readIfExists(path) {
-  return existsSync(path) ? readFileSync3(path, "utf-8") : null;
-}
 // src/kernel/adapter/record-root.ts
-import { existsSync as existsSync2 } from "fs";
 import { dirname as dirname2, join as join3 } from "path";
 function findRecordRoot(startDir) {
   let d = startDir;
   for (let i = 0;i < 8; i++) {
-    if (existsSync2(join3(d, "inception")) || existsSync2(join3(d, "aidlc-state.md")))
-      return d;
+    const inception = readArtifactStat(join3(d, "inception"));
+    if (inception.ok)
+      return ok(d);
+    if (inception.error.kind !== "not-found")
+      return err(inception.error);
+    const state = readArtifactStat(join3(d, "aidlc-state.md"));
+    if (state.ok)
+      return ok(d);
+    if (state.error.kind !== "not-found")
+      return err(state.error);
     const parent = dirname2(d);
     if (parent === d)
       break;
     d = parent;
   }
-  return null;
+  return ok(null);
 }
 function relArtifact(recordRoot, absPath) {
   if (recordRoot && absPath.startsWith(`${recordRoot}/`)) {
@@ -6286,7 +6330,6 @@ function assessSpecBlocks(md) {
   return SpecificationBlockAssessments.parse(blocks);
 }
 // src/refcheck/adapter/design-record-repository-implementation.ts
-import { readFileSync as readFileSync4 } from "fs";
 import { basename as basename2, dirname as dirname3, join as join4 } from "path";
 
 // src/refcheck/adapter/functional-design-parser.ts
@@ -6695,17 +6738,18 @@ function buildSiblingUnitEntities(texts) {
 class DesignRecordRepositoryImplementation {
   findById(id) {
     const artifactPath = id.artifactPath().asString();
-    let sourceBytes;
-    try {
-      sourceBytes = new Uint8Array(readFileSync4(artifactPath));
-    } catch {
-      return err({ kind: "not-found", path: artifactPath });
-    }
+    const source = readArtifactBytes(artifactPath);
+    if (!source.ok)
+      return source;
+    const sourceBytes = source.value;
     const md = Buffer.from(sourceBytes).toString("utf-8");
     const targetBase = basename2(artifactPath);
     const fdDir = dirname3(artifactPath);
     const isFunctional = basename2(fdDir) === "functional-design";
-    const recordRoot = findRecordRoot(isFunctional ? fdDir : dirname3(artifactPath));
+    const foundRecordRoot = findRecordRoot(isFunctional ? fdDir : dirname3(artifactPath));
+    if (!foundRecordRoot.ok)
+      return err(foundRecordRoot.error);
+    const recordRoot = foundRecordRoot.value;
     const rel = (p) => relArtifact(recordRoot, p);
     const input = (p, text) => InputAnchor.of({ artifact: rel(p), sha256: ContentHash.ofText(text) });
     let contractSummary = null;
@@ -6713,10 +6757,13 @@ class DesignRecordRepositoryImplementation {
       const specBlocks = assessSpecBlocks(md);
       if (!specBlocks.ok)
         return err({ kind: "corrupt", path: artifactPath, cause: JSON.stringify(specBlocks.error) });
+      const declaredUnits = this.#declaredUnits(recordRoot);
+      if (!declaredUnits.ok)
+        return declaredUnits;
       contractSummary = {
         contractsTable: parseContractsTable(md),
         specBlocks: specBlocks.value,
-        declaredUnits: this.#declaredUnits(recordRoot)
+        declaredUnits: declaredUnits.value
       };
     }
     const functional = isFunctional ? this.#functional(recordRoot, fdDir) : ok(null);
@@ -6744,28 +6791,39 @@ class DesignRecordRepositoryImplementation {
   }
   #declaredUnits(recordRoot) {
     const depPath = recordRoot === null ? null : join4(recordRoot, "inception", "units-generation", "unit-of-work-dependency.md");
-    const depMd = depPath === null ? null : readIfExists(depPath);
-    if (depPath === null || depMd === null) {
-      return {
-        artifactName: ArtifactPath.of(depPath === null ? "unit-of-work-dependency.md" : relArtifact(recordRoot, depPath)),
+    if (depPath === null) {
+      return ok({
+        artifactName: ArtifactPath.of("unit-of-work-dependency.md"),
         document: null
-      };
+      });
     }
-    return {
+    const depMd = readArtifactText(depPath);
+    if (!depMd.ok) {
+      if (depMd.error.kind === "not-found")
+        return ok({
+          artifactName: ArtifactPath.of(relArtifact(recordRoot, depPath)),
+          document: null
+        });
+      return depMd;
+    }
+    return ok({
       artifactName: ArtifactPath.of(relArtifact(recordRoot, depPath)),
       document: {
-        input: InputAnchor.of({ artifact: relArtifact(recordRoot, depPath), sha256: ContentHash.ofText(depMd) }),
-        outcome: parseDeclaredUnits(depMd)
+        input: InputAnchor.of({ artifact: relArtifact(recordRoot, depPath), sha256: ContentHash.ofText(depMd.value) }),
+        outcome: parseDeclaredUnits(depMd.value)
       }
-    };
+    });
   }
   #functional(recordRoot, fdDir) {
     const rel = (p) => relArtifact(recordRoot, p);
     const load = (path, parse) => {
-      const text = readIfExists(path);
-      if (text === null)
-        return null;
-      return { input: InputAnchor.of({ artifact: rel(path), sha256: ContentHash.ofText(text) }), outcome: parse(text) };
+      const text = readArtifactText(path);
+      if (!text.ok)
+        return text.error.kind === "not-found" ? ok(null) : text;
+      return ok({
+        input: InputAnchor.of({ artifact: rel(path), sha256: ContentHash.ofText(text.value) }),
+        outcome: parse(text.value)
+      });
     };
     const unitDir = dirname3(fdDir);
     const unit = recordRoot !== null && basename2(unitDir) !== "construction" && unitDir !== recordRoot ? basename2(unitDir) : undefined;
@@ -6773,36 +6831,59 @@ class DesignRecordRepositoryImplementation {
     if (!parsedUnit.ok)
       return err({ kind: "corrupt", path: fdDir, cause: JSON.stringify(parsedUnit.error) });
     const entitiesPath = join4(fdDir, "entities.md");
-    const entities = load(entitiesPath, (t) => parseEntitiesDocument(t));
+    const entitiesResult = load(entitiesPath, (t) => parseEntitiesDocument(t));
+    if (!entitiesResult.ok)
+      return entitiesResult;
+    const entities = entitiesResult.value;
     const rulesPath = join4(fdDir, "rules.md");
-    const rules = load(rulesPath, (t) => parseRulesDocument(t));
+    const rulesResult = load(rulesPath, (t) => parseRulesDocument(t));
+    if (!rulesResult.ok)
+      return rulesResult;
+    const rules = rulesResult.value;
     const specPath = join4(fdDir, "functional-spec.md");
-    const spec = load(specPath, (t) => parseFunctionalSpecDocument(t));
+    const specResult = load(specPath, (t) => parseFunctionalSpecDocument(t));
+    if (!specResult.ok)
+      return specResult;
+    const spec = specResult.value;
     const reqPath = recordRoot === null ? null : join4(recordRoot, "inception", "requirements-analysis", "requirements.md");
     let requirements = null;
     if (rules?.outcome.isExtracted() && reqPath !== null) {
-      const text = readIfExists(reqPath);
-      if (text !== null) {
-        const parsed = parseRequirementIdentifiers(text);
+      const text = readArtifactText(reqPath);
+      if (!text.ok) {
+        if (text.error.kind !== "not-found")
+          return text;
+      } else {
+        const parsed = parseRequirementIdentifiers(text.value);
         if (!parsed.ok)
           return err({ kind: "corrupt", path: reqPath, cause: JSON.stringify(parsed.error) });
         requirements = {
-          input: InputAnchor.of({ artifact: rel(reqPath), sha256: ContentHash.ofText(text) }),
+          input: InputAnchor.of({ artifact: rel(reqPath), sha256: ContentHash.ofText(text.value) }),
           outcome: parsed.value
         };
       }
     }
     const componentsPath = recordRoot === null ? null : join4(recordRoot, "inception", "domain-design", "components.md");
-    const components = componentsPath === null ? null : load(componentsPath, (t) => parseDomainEntitiesDocument(t));
+    const componentsResult = componentsPath === null ? ok(null) : load(componentsPath, (t) => parseDomainEntitiesDocument(t));
+    if (!componentsResult.ok)
+      return componentsResult;
+    const components = componentsResult.value;
     const siblingTexts = [];
     if (components?.outcome.isExtracted() && recordRoot !== null) {
       const constructionDir = join4(recordRoot, "construction");
-      for (const u of listSubdirectories(constructionDir)) {
-        const p = join4(constructionDir, u, "functional-design", "entities.md");
-        const text = readIfExists(p);
-        if (text !== null)
-          siblingTexts.push({ unit: u, path: p, text });
-      }
+      const construction = readDirectory(constructionDir);
+      if (!construction.ok) {
+        if (construction.error.kind !== "not-found")
+          return construction;
+      } else
+        for (const u of construction.value.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort()) {
+          const p = join4(constructionDir, u, "functional-design", "entities.md");
+          const text = readArtifactText(p);
+          if (!text.ok) {
+            if (text.error.kind !== "not-found")
+              return text;
+          } else
+            siblingTexts.push({ unit: u, path: p, text: text.value });
+        }
     }
     const siblingInputs = InputAnchors.parse(siblingTexts.filter((s) => s.path !== entitiesPath).map((s) => InputAnchor.of({ artifact: rel(s.path), sha256: ContentHash.ofText(s.text) })));
     if (!siblingInputs.ok)
@@ -6824,7 +6905,6 @@ class DesignRecordRepositoryImplementation {
   }
 }
 // src/refcheck/adapter/reference-check-report-repository-implementation.ts
-import { existsSync as existsSync3, readFileSync as readFileSync5 } from "fs";
 import { join as join5 } from "path";
 
 // src/refcheck/adapter/reference-check-report-serializer.ts
@@ -6893,12 +6973,12 @@ var encoder = new TextEncoder;
 class ReferenceCheckReportRepositoryImplementation {
   findById(aggregateId) {
     const path = join5(aggregateId.directory().asString(), aggregateId.fileName());
-    if (!existsSync3(path)) {
-      return err({ kind: "not-found", path });
-    }
+    const text = readArtifactText(path);
+    if (!text.ok)
+      return text;
     let raw;
     try {
-      raw = JSON.parse(readFileSync5(path, "utf-8"));
+      raw = JSON.parse(text.value);
     } catch (e) {
       return err({ kind: "corrupt", path, cause: e instanceof Error ? e.message : String(e) });
     }

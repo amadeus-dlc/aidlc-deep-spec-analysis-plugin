@@ -8,9 +8,14 @@
 // 旧 aidlc-sensor-deep-spec-ir-valid.ts の findRequirementsFile ＋ source
 // anchoring 節からの逐語移植（記録ルートの導出は材料ゲートウェイ側へ移動）。
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseRequirementIdentifiers, writeFileAtomically } from "@deep-spec-analysis/kernel-adapter";
+import {
+  parseRequirementIdentifiers,
+  readArtifactBytes,
+  readArtifactStat,
+  readDirectory,
+  writeFileAtomically,
+} from "@deep-spec-analysis/kernel-adapter";
 import { ArtifactPath, ContentHash } from "@deep-spec-analysis/kernel-domain";
 import { err, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
@@ -24,18 +29,18 @@ type RequirementsFileSearch =
 
 function findRequirementsFile(recordDir: string): RequirementsFileSearch {
   const direct = join(recordDir, "inception", "requirements-analysis", "requirements.md");
-  if (existsSync(direct)) return { kind: "found", path: direct };
-  // 記録ルート自体の不在は「読取障害」ではなく不在（not-found の凍結分類）。
-  if (!existsSync(recordDir)) return { kind: "absent" };
-  try {
-    for (const phase of readdirSync(recordDir).sort()) {
-      const candidate = join(recordDir, phase, "requirements-analysis", "requirements.md");
-      if (existsSync(candidate)) return { kind: "found", path: candidate };
-    }
-  } catch (e) {
-    // recordDir が読めない——不在ではなく読取障害として区別する（use case の
-    // verdict 写像は同一だが、Result 契約の分類を正しく保つ）。
-    return { kind: "unreadable", cause: e instanceof Error ? e.message : String(e) };
+  const directStat = readArtifactStat(direct);
+  if (directStat.ok) return { kind: "found", path: direct };
+  if (directStat.error.kind === "io-failed") return { kind: "unreadable", cause: directStat.error.cause };
+  const phases = readDirectory(recordDir);
+  if (!phases.ok) {
+    return phases.error.kind === "not-found" ? { kind: "absent" } : { kind: "unreadable", cause: phases.error.cause };
+  }
+  for (const phase of [...phases.value].map((entry) => entry.name).sort()) {
+    const candidate = join(recordDir, phase, "requirements-analysis", "requirements.md");
+    const candidateStat = readArtifactStat(candidate);
+    if (candidateStat.ok) return { kind: "found", path: candidate };
+    if (candidateStat.error.kind === "io-failed") return { kind: "unreadable", cause: candidateStat.error.cause };
   }
   return { kind: "absent" };
 }
@@ -47,18 +52,10 @@ export class RequirementsSourceRepositoryImplementation implements RequirementsS
       return err({ kind: "io-failed", operation: "read", path: id.recordRoot().asString(), cause: search.cause });
     }
     if (search.kind === "absent") return err({ kind: "not-found", path: id.recordRoot().asString() });
-    let bytes: Buffer;
-    try {
-      bytes = readFileSync(search.path);
-    } catch (e) {
-      return err({
-        kind: "io-failed",
-        operation: "read",
-        path: search.path,
-        cause: e instanceof Error ? e.message : String(e),
-      });
-    }
-    const knownIds = parseRequirementIdentifiers(bytes.toString("utf-8"));
+    const read = readArtifactBytes(search.path);
+    if (!read.ok) return err(read.error);
+    const bytes = read.value;
+    const knownIds = parseRequirementIdentifiers(Buffer.from(bytes).toString("utf-8"));
     if (!knownIds.ok) return err({ kind: "corrupt", path: search.path, cause: JSON.stringify(knownIds.error) });
     return ok(
       RequirementsSource.of({

@@ -186,12 +186,18 @@ class SeamRepository implements DesignVerifyDirectoryRepository {
 
   // 導けなかった cross-check を伴わない finalization（IR unreadable 経路）。
   withoutCrossCheck(): DesignVerifyDirectory[] {
-    return this.storedAggregates.filter((a) => a.crossCheck() === null);
+    return this.storedAggregates.filter((a) => {
+      const crossCheck = a.crossCheck();
+      return crossCheck.ok && crossCheck.value === null;
+    });
   }
 
   // 両文書 finalization。
   withCrossCheck(): DesignVerifyDirectory[] {
-    return this.storedAggregates.filter((a) => a.crossCheck() !== null);
+    return this.storedAggregates.filter((a) => {
+      const crossCheck = a.crossCheck();
+      return crossCheck.ok && crossCheck.value !== null;
+    });
   }
 
   fileNamesFinalized(): string[] {
@@ -274,7 +280,8 @@ describe("#14 report finalization は 1 実装——1 か所の変更が両 back
     const aggregate = marked.storedAggregates[0];
     expect(aggregate?.candidate()?.unavailableReason()).toBe("findings schema unreadable: boom");
     // 同じ 1 つの FindingsSchema が cross-check にも及ぶ（適合先は 2 文書）。
-    expect(aggregate?.crossCheck()?.unavailableReason()).toBe("findings schema unreadable: boom");
+    const crossCheck = aggregate?.crossCheck();
+    expect(crossCheck?.ok && crossCheck.value?.unavailableReason()).toBe("findings schema unreadable: boom");
     // 集約の中の兄弟集合にも適合済みの候補が入っている（cross-check の導出元）。
     expect(
       aggregate

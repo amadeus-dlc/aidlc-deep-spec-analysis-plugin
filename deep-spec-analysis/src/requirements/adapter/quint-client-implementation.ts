@@ -7,10 +7,13 @@
 // 旧 main の CLI 編成部からの逐語移植。
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readArtifactText, readDirectory } from "@deep-spec-analysis/kernel-adapter";
 import { ErrorMessage, KeyedIndex, VerificationMethod } from "@deep-spec-analysis/kernel-domain";
+import { err, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
 import type { RequirementsModel } from "@deep-spec-analysis/requirements-domain";
 import {
   ObligationIdentifier,
@@ -27,6 +30,7 @@ import type { CompiledQuintMachine } from "./compiled-quint-machine.ts";
 import { decodeItfTrace, itfStatus } from "./itf-decoder.ts";
 import type { QuintClientConfiguration } from "./quint-client-configuration.ts";
 import { compileQuintMachine } from "./quint-compilation.ts";
+import { hasQuintDeadlockDiagnostic } from "./quint-process-diagnostics.ts";
 
 const SEED = "0x2a";
 const MAX_STEPS = 8;
@@ -34,6 +38,11 @@ const MAX_SAMPLES = 200;
 const RUN_TIMEOUT_MS = 30_000;
 const VERIFY_TIMEOUT_MS = 45_000;
 const SCENARIO_TIMEOUT_MS = 15_000;
+
+function errorMessageOrFallback(raw: string, fallback: string): ErrorMessage {
+  const parsed = ErrorMessage.parse(raw);
+  return parsed.ok ? parsed.value : ErrorMessage.of(fallback);
+}
 
 interface QuintRun {
   timedOut: boolean;
@@ -45,6 +54,7 @@ interface QuintRun {
   stdout: string;
   stderr: string;
   itf: string | null;
+  itfError: string | null;
 }
 
 export class QuintClientImplementation implements QuintClient {
@@ -60,13 +70,21 @@ export class QuintClientImplementation implements QuintClient {
       return QuintCheckResult.of({ kind: "cli-unavailable" });
     }
     const bounded = this.#detectBoundedMode();
-    const method = bounded ? "bounded" : "simulation";
+    if (!bounded.ok)
+      return QuintCheckResult.of({
+        kind: "backend-unavailable",
+        reason: errorMessageOrFallback(
+          `could not inspect Quint Apalache distribution: ${this.#repositoryErrorDetail(bounded.error)}`,
+          "could not inspect Quint Apalache distribution",
+        ),
+      });
+    const method = bounded.value ? "bounded" : "simulation";
     const compiled = compileQuintMachine(model);
     if (compiled.kind === "uncompilable") {
       return QuintCheckResult.of({
         kind: "machine-uncompilable",
         method: VerificationMethod.of(method),
-        error: ErrorMessage.of(compiled.error),
+        error: errorMessageOrFallback(compiled.error, "Quint machine could not be compiled"),
       });
     }
     const machine = compiled.machine;
@@ -75,7 +93,7 @@ export class QuintClientImplementation implements QuintClient {
     const modulePath = join(work, "main.qnt");
     writeFileSync(modulePath, machine.moduleText, "utf-8");
     try {
-      const machineRun = this.#runMachinePhase(machine, modulePath, bounded, work);
+      const machineRun = this.#runMachinePhase(machine, modulePath, bounded.value, work);
       // phase 2 の「既に skip 済みの義務は走らせない」凍結ガード：コンパイル時
       // skip と、機械フェーズの判定が命じる対象一括 skip（timeout / run-failed）。
       const skipTargets = new Set(machine.compileSkips.map((s) => s.target().asString()));
@@ -84,7 +102,7 @@ export class QuintClientImplementation implements QuintClient {
           skipTargets.add(t.asString());
         }
       }
-      const temporals = bounded
+      const temporals = bounded.value
         ? this.#runTemporalPhase(machine, modulePath, skipTargets, work)
         : new Map<string, QuintTemporalVerdict>();
       const scenarios = this.#runScenarioPhase(machine, modulePath, work);
@@ -105,18 +123,16 @@ export class QuintClientImplementation implements QuintClient {
     }
   }
 
-  #detectBoundedMode(): boolean {
+  #detectBoundedMode(): Result<boolean, RepositoryError> {
     const override = this.#config.methodOverride;
-    if (override === "bounded") return true;
-    if (override === "simulation") return false;
+    if (override === "bounded") return ok(true);
+    if (override === "simulation") return ok(false);
     const java = spawnSync("java", ["-version"], { encoding: "utf-8", timeout: 10_000 });
-    if (java.error || java.status !== 0) return false;
-    if (this.#config.apalacheDistSet) return true;
-    try {
-      return readdirSync(join(this.#config.homeDirectory, ".quint")).some((f) => f.startsWith("apalache-dist-"));
-    } catch {
-      return false;
-    }
+    if (java.error || java.status !== 0) return ok(false);
+    if (this.#config.apalacheDistSet) return ok(true);
+    const quintDirectory = readDirectory(join(this.#config.homeDirectory, ".quint"));
+    if (!quintDirectory.ok) return quintDirectory.error.kind === "not-found" ? ok(false) : err(quintDirectory.error);
+    return ok(quintDirectory.value.some((entry) => entry.isDirectory() && entry.name.startsWith("apalache-dist-")));
   }
 
   // 予算超過は SIGINT で止める（spawnSync の既定 SIGTERM ではない）。quint 0.32 は
@@ -143,14 +159,17 @@ export class QuintClientImplementation implements QuintClient {
     // 「0 でない」に含まれる。
     const failed = !timedOut && (res.error !== undefined || res.status !== 0);
     let itf: string | null = null;
-    if (itfPath && existsSync(itfPath)) {
-      try {
-        itf = readFileSync(itfPath, "utf-8");
-      } catch {
-        itf = null;
-      }
+    let itfError: string | null = null;
+    if (itfPath) {
+      const read = readArtifactText(itfPath);
+      if (read.ok) itf = read.value;
+      else if (read.error.kind !== "not-found") itfError = this.#repositoryErrorDetail(read.error);
     }
-    return { timedOut, failed, stdout: res.stdout ?? "", stderr: res.stderr ?? "", itf };
+    return { timedOut, failed, stdout: res.stdout ?? "", stderr: res.stderr ?? "", itf, itfError };
+  }
+
+  #repositoryErrorDetail(error: RepositoryError): string {
+    return "cause" in error ? `${error.kind}: ${error.cause}` : error.kind;
   }
 
   #outputTail(run: QuintRun): string {
@@ -198,7 +217,8 @@ export class QuintClientImplementation implements QuintClient {
           work,
         );
     if (run.timedOut) return QuintMachineRunVerdict.timeout();
-    if (`${run.stdout}\n${run.stderr}`.toLowerCase().includes("deadlock")) {
+    if (run.itfError !== null) return QuintMachineRunVerdict.runFailed(`quint ITF read failed: ${run.itfError}`);
+    if (run.failed && hasQuintDeadlockDiagnostic(run.stderr)) {
       if (!run.itf) return QuintMachineRunVerdict.deadlock(null);
       const trace = decodeItfTrace(run.itf, machine.varToPath);
       return trace.ok ? QuintMachineRunVerdict.deadlock(trace.value) : QuintMachineRunVerdict.runFailed(trace.error);
@@ -241,6 +261,8 @@ export class QuintClientImplementation implements QuintClient {
       );
       if (run.timedOut) {
         out.set(obId, QuintTemporalVerdict.timeout());
+      } else if (run.itfError !== null) {
+        out.set(obId, QuintTemporalVerdict.runFailed(`quint ITF read failed: ${run.itfError}`));
       } else if (run.itf) {
         const trace = decodeItfTrace(run.itf, machine.varToPath);
         out.set(
@@ -286,6 +308,8 @@ export class QuintClientImplementation implements QuintClient {
       );
       if (run.timedOut) {
         out.set(scId, QuintScenarioVerdict.timeout());
+      } else if (run.itfError !== null) {
+        out.set(scId, QuintScenarioVerdict.runFailed(`quint ITF read failed: ${run.itfError}`));
       } else if (!run.itf && run.failed) {
         out.set(scId, QuintScenarioVerdict.runFailed(this.#outputTail(run)));
       } else {

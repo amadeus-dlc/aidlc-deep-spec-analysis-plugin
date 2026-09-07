@@ -29,6 +29,7 @@ export { StructuralDebt } from "./structural-debt.ts";
 export { StructuralObservation } from "./structural-observation.ts";
 export { UnitCoverage } from "./unit-coverage.ts";
 export { UnitCoverageProblem } from "./unit-coverage-problem.ts";
+export { VerificationEvidence } from "./verification-evidence.ts";
 export { VerificationObservation } from "./verification-observation.ts";
 export { VerificationStaleness } from "./verification-staleness.ts";
 export { VersionAdvisory } from "./version-advisory.ts";

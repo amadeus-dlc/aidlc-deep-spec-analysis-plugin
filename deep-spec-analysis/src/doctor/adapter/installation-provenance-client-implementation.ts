@@ -1,4 +1,3 @@
-import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   InstallationProvenance,
@@ -7,6 +6,7 @@ import {
   PluginVersion,
 } from "@deep-spec-analysis/doctor-domain";
 import type { InstallationProvenanceClient } from "@deep-spec-analysis/doctor-usecase";
+import { readArtifactText } from "@deep-spec-analysis/kernel-adapter";
 import { ArtifactPath, ErrorMessage } from "@deep-spec-analysis/kernel-domain";
 
 export class InstallationProvenanceClientImplementation implements InstallationProvenanceClient {
@@ -17,11 +17,19 @@ export class InstallationProvenanceClientImplementation implements InstallationP
   }
 
   read(): InstallationProvenance {
-    if (!existsSync(this.#path)) return InstallationProvenance.missing();
+    const read = readArtifactText(this.#path);
+    if (!read.ok) {
+      if (read.error.kind === "not-found") return InstallationProvenance.missing();
+      const reason = ErrorMessage.parse(read.error.cause);
+      return InstallationProvenance.malformed(
+        reason.ok ? reason.value : ErrorMessage.of("provenance read failure could not be represented"),
+      );
+    }
     let value: unknown;
     try {
-      value = JSON.parse(readFileSync(this.#path, "utf-8")) as unknown;
-    } catch {
+      value = JSON.parse(read.value) as unknown;
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
       return InstallationProvenance.malformed(ErrorMessage.of("file is not readable JSON"));
     }
     if (!value || typeof value !== "object" || Array.isArray(value)) {

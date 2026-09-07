@@ -3157,6 +3157,18 @@ class VerificationReport {
       unavailableReason: "quint CLI is not available (install: npm i -g @informalsystems/quint)"
     });
   }
+  static quintBackendUnavailable(id, model, reason) {
+    const detail = `quint backend unavailable: ${reason.asString()}`;
+    return VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method: "simulation",
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail }))),
+      unavailableReason: detail
+    });
+  }
   static machineUncompilable(id, model, method, machineError) {
     return VerificationReport.compose({
       id,
@@ -3673,6 +3685,8 @@ class QuintCheckResult {
     switch (result.kind) {
       case "cli-unavailable":
         return VerificationReport.quintUnavailable(id, model);
+      case "backend-unavailable":
+        return VerificationReport.quintBackendUnavailable(id, model, result.reason);
       case "machine-uncompilable":
         return VerificationReport.machineUncompilable(id, model, result.method.asString(), result.error.asString());
       case "checked": {
@@ -3693,6 +3707,7 @@ class QuintCheckResult {
   match(cases) {
     switch (this.#result.kind) {
       case "cli-unavailable":
+      case "backend-unavailable":
         return cases.unavailable();
       case "machine-uncompilable":
         return cases.uncompilable();
@@ -5116,7 +5131,10 @@ class VerificationDirectory {
     this.#crossCheck = crossCheck;
   }
   static of(directory, reports, crossCheck) {
-    return new VerificationDirectory(directory, reports, null, crossCheck);
+    return new VerificationDirectory(directory, reports, null, crossCheck === null ? { kind: "absent" } : { kind: "present", report: crossCheck });
+  }
+  static unreadableCrossCheck(directory, reports, error) {
+    return new VerificationDirectory(directory, reports, null, { kind: "unreadable", error });
   }
   finalizing(candidate) {
     if (!candidate.id().directory().equals(this.#directory)) {
@@ -5140,27 +5158,33 @@ class VerificationDirectory {
       else
         merged.splice(at, 0, candidate);
     }
-    return new VerificationDirectory(this.#directory, VerificationReports.of(merged), candidate, null);
+    return new VerificationDirectory(this.#directory, VerificationReports.of(merged), candidate, { kind: "absent" });
   }
   finalizedWith(candidate, model, schema) {
     const staged = this.finalizing(candidate.conformedTo(schema));
     if (model === null)
       return staged;
     const derived = staged.#reports.crossChecked(VerificationReportIdentifier.of(this.#directory, CROSS_CHECK_BACKEND), model, candidate.irHash());
-    return new VerificationDirectory(this.#directory, staged.#reports, staged.#candidate, derived.conformedTo(schema));
+    return new VerificationDirectory(this.#directory, staged.#reports, staged.#candidate, {
+      kind: "present",
+      report: derived.conformedTo(schema)
+    });
   }
   crossChecked(model, irHash) {
     const derived = this.#reports.crossChecked(VerificationReportIdentifier.of(this.#directory, CROSS_CHECK_BACKEND), model, irHash);
-    return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, derived);
+    return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, {
+      kind: "present",
+      report: derived
+    });
   }
   withoutCrossCheck() {
-    return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, null);
+    return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, { kind: "absent" });
   }
   conformedTo(schema) {
     const candidate = this.#candidate;
     const crossCheck = this.#crossCheck;
     const conformedCandidate = candidate === null ? null : candidate.conformedTo(schema);
-    const conformedCrossCheck = conformedCandidate !== candidate || crossCheck === null ? null : crossCheck.conformedTo(schema);
+    const conformedCrossCheck = conformedCandidate !== candidate || crossCheck.kind === "absent" ? { kind: "absent" } : crossCheck.kind === "unreadable" ? crossCheck : { kind: "present", report: crossCheck.report.conformedTo(schema) };
     const reports = conformedCandidate === null ? this.#reports : VerificationReports.of(this.#reports.toArray().map((r) => r.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : r));
     return new VerificationDirectory(this.#directory, reports, conformedCandidate, conformedCrossCheck);
   }
@@ -5180,7 +5204,11 @@ class VerificationDirectory {
     return this.#candidate;
   }
   crossCheck() {
-    return this.#crossCheck;
+    if (this.#crossCheck.kind === "present")
+      return ok(this.#crossCheck.report);
+    if (this.#crossCheck.kind === "unreadable")
+      return err(this.#crossCheck.error);
+    return ok(null);
   }
 }
 // src/design/domain/design-skipped.ts
@@ -9703,7 +9731,10 @@ class DesignVerifyDirectory {
     this.#crossCheck = crossCheck;
   }
   static of(directory, reports, crossCheck) {
-    return new DesignVerifyDirectory(directory, reports, null, crossCheck);
+    return new DesignVerifyDirectory(directory, reports, null, crossCheck === null ? { kind: "absent" } : { kind: "present", report: crossCheck });
+  }
+  static unreadableCrossCheck(directory, reports, error) {
+    return new DesignVerifyDirectory(directory, reports, null, { kind: "unreadable", error });
   }
   finalizing(candidate) {
     if (!candidate.id().directory().equals(this.#directory)) {
@@ -9727,27 +9758,33 @@ class DesignVerifyDirectory {
       else
         merged.splice(at, 0, candidate);
     }
-    return new DesignVerifyDirectory(this.#directory, DesignReports.of(merged), candidate, null);
+    return new DesignVerifyDirectory(this.#directory, DesignReports.of(merged), candidate, { kind: "absent" });
   }
   finalizedWith(candidate, model, schema) {
     const staged = this.finalizing(candidate.conformedTo(schema));
     if (model === null)
       return staged;
     const derived = staged.#reports.crossChecked(DesignReportIdentifier.of(this.#directory, CROSS_CHECK_BACKEND2), model, candidate.irHash());
-    return new DesignVerifyDirectory(this.#directory, staged.#reports, staged.#candidate, derived.conformedTo(schema));
+    return new DesignVerifyDirectory(this.#directory, staged.#reports, staged.#candidate, {
+      kind: "present",
+      report: derived.conformedTo(schema)
+    });
   }
   crossChecked(model, irHash) {
     const derived = this.#reports.crossChecked(DesignReportIdentifier.of(this.#directory, CROSS_CHECK_BACKEND2), model, irHash);
-    return new DesignVerifyDirectory(this.#directory, this.#reports, this.#candidate, derived);
+    return new DesignVerifyDirectory(this.#directory, this.#reports, this.#candidate, {
+      kind: "present",
+      report: derived
+    });
   }
   withoutCrossCheck() {
-    return new DesignVerifyDirectory(this.#directory, this.#reports, this.#candidate, null);
+    return new DesignVerifyDirectory(this.#directory, this.#reports, this.#candidate, { kind: "absent" });
   }
   conformedTo(schema) {
     const candidate = this.#candidate;
     const crossCheck = this.#crossCheck;
     const conformedCandidate = candidate === null ? null : candidate.conformedTo(schema);
-    const conformedCrossCheck = conformedCandidate !== candidate || crossCheck === null ? null : crossCheck.conformedTo(schema);
+    const conformedCrossCheck = conformedCandidate !== candidate || crossCheck.kind === "absent" ? { kind: "absent" } : crossCheck.kind === "unreadable" ? crossCheck : { kind: "present", report: crossCheck.report.conformedTo(schema) };
     const reports = conformedCandidate === null ? this.#reports : DesignReports.of(this.#reports.toArray().map((r) => r.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : r));
     return new DesignVerifyDirectory(this.#directory, reports, conformedCandidate, conformedCrossCheck);
   }
@@ -9766,7 +9803,11 @@ class DesignVerifyDirectory {
     return this.#candidate;
   }
   crossCheck() {
-    return this.#crossCheck;
+    if (this.#crossCheck.kind === "present")
+      return ok(this.#crossCheck.report);
+    if (this.#crossCheck.kind === "unreadable")
+      return err(this.#crossCheck.error);
+    return ok(null);
   }
 }
 // src/design/domain/event-mapping.ts
@@ -11767,6 +11808,51 @@ function renderDesignEntities(entities) {
     return out;
   });
 }
+// src/kernel/adapter/artifact-io.ts
+import { readdirSync, readFileSync, statSync } from "fs";
+function readFailure(path, error) {
+  const code = error.code;
+  if (code === "ENOENT")
+    return { kind: "not-found", path };
+  return {
+    kind: "io-failed",
+    operation: "read",
+    path,
+    cause: error instanceof Error ? error.message : String(error)
+  };
+}
+function readArtifactBytes(path) {
+  let bytes;
+  try {
+    bytes = readFileSync(path);
+  } catch (error) {
+    return err(readFailure(path, error));
+  }
+  return ok(bytes);
+}
+function readArtifactText(path) {
+  try {
+    return ok(readFileSync(path, "utf-8"));
+  } catch (error) {
+    return err(readFailure(path, error));
+  }
+}
+function readDirectory(path) {
+  let entries;
+  try {
+    entries = readdirSync(path, { withFileTypes: true });
+  } catch (error) {
+    return err(readFailure(path, error));
+  }
+  return ok(Object.freeze(entries));
+}
+function readArtifactStat(path) {
+  try {
+    return ok(statSync(path));
+  } catch (error) {
+    return err(readFailure(path, error));
+  }
+}
 // src/kernel/adapter/atomic-write.ts
 import { mkdirSync, renameSync, rmSync, writeFileSync } from "fs";
 import { basename, dirname, join } from "path";
@@ -11818,10 +11904,10 @@ function decodeScenarioBindings(raw) {
   return bindings.ok ? bindings : err(JSON.stringify(bindings.error));
 }
 // src/kernel/adapter/contract-schema.ts
-import { readFileSync } from "fs";
+import { readFileSync as readFileSync2 } from "fs";
 function readContractSchema(path) {
   try {
-    const document = JSON.parse(readFileSync(path, "utf-8"));
+    const document = JSON.parse(readFileSync2(path, "utf-8"));
     if (!isObject(document))
       return err({ cause: "contract schema must be a JSON object" });
     return ok(document);
@@ -11831,7 +11917,7 @@ function readContractSchema(path) {
 }
 // src/kernel/adapter/directory-finalization-lock.ts
 import { randomBytes } from "crypto";
-import { mkdirSync as mkdirSync2, readFileSync as readFileSync2, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
+import { mkdirSync as mkdirSync2, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
 import { join as join2 } from "path";
 var DESIGN_LOCK_BASENAME = ".deep-spec-design-finalization.lock";
 var METADATA_BASENAME = "owner.lockmeta";
@@ -11867,24 +11953,24 @@ class DirectoryFinalizationLock {
       return { kind: "acquired" };
     }
     const observed = this.#readMetadata(canonical);
-    if (observed === null) {
+    if (!observed.ok) {
       return { kind: "lock-contended", cause: `owner metadata is unreadable (${blocked})` };
     }
-    if (observed.state !== "held") {
-      return { kind: "lock-contended", cause: `owner metadata is in state "${observed.state}"` };
+    if (observed.value.state !== "held") {
+      return { kind: "lock-contended", cause: `owner metadata is in state "${observed.value.state}"` };
     }
-    if (this.#clock.now() < observed.leaseExpiresAtMs) {
+    if (this.#clock.now() < observed.value.leaseExpiresAtMs) {
       return { kind: "lock-contended", cause: "the lease has not expired" };
     }
-    const status = this.#liveness.statusOf(observed.pid);
+    const status = this.#liveness.statusOf(observed.value.pid);
     if (status !== "absent") {
-      return { kind: "lock-contended", cause: `owner process ${observed.pid} is ${status}` };
+      return { kind: "lock-contended", cause: `owner process ${observed.value.pid} is ${status}` };
     }
     const reread = this.#readMetadata(canonical);
-    if (reread === null || reread.token !== observed.token) {
+    if (!reread.ok || reread.value.token !== observed.value.token) {
       return { kind: "lock-contended", cause: "the lock changed hands during the recovery check" };
     }
-    const stale = `${canonical}.stale.${observed.token}.${token}`;
+    const stale = `${canonical}.stale.${observed.value.token}.${token}`;
     try {
       renameSync2(canonical, stale);
     } catch (e) {
@@ -11896,7 +11982,7 @@ class DirectoryFinalizationLock {
       return { kind: "lock-recovery-failed", cause: lost };
     }
     this.#ownerTokens.set(canonical, token);
-    return { kind: "recovered", displacedToken: observed.token };
+    return { kind: "recovered", displacedToken: observed.value.token };
   }
   holdsOwnership(directory) {
     const canonical = this.canonicalPathOf(directory);
@@ -11904,7 +11990,7 @@ class DirectoryFinalizationLock {
     if (mine === undefined)
       return false;
     const observed = this.#readMetadata(canonical);
-    return observed !== null && observed.state === "held" && observed.token === mine;
+    return observed.ok && observed.value.state === "held" && observed.value.token === mine;
   }
   release(directory) {
     const canonical = this.canonicalPathOf(directory);
@@ -11914,7 +12000,7 @@ class DirectoryFinalizationLock {
     }
     this.#ownerTokens.delete(canonical);
     const observed = this.#readMetadata(canonical);
-    if (observed === null || observed.token !== mine) {
+    if (!observed.ok || observed.value.token !== mine) {
       return { kind: "lock-release-failed", cause: "the canonical lock is no longer owned by this writer" };
     }
     const cleanup = `${canonical}.cleanup.${mine}`;
@@ -11957,26 +12043,30 @@ class DirectoryFinalizationLock {
     }
   }
   #readMetadata(canonical) {
+    const path = join2(canonical, METADATA_BASENAME);
+    const read = readArtifactText(path);
+    if (!read.ok)
+      return err(read.error);
     let raw;
     try {
-      raw = JSON.parse(readFileSync2(join2(canonical, METADATA_BASENAME), "utf-8"));
-    } catch {
-      return null;
+      raw = JSON.parse(read.value);
+    } catch (error) {
+      return err({ kind: "corrupt", path, cause: error instanceof Error ? error.message : String(error) });
     }
     if (typeof raw !== "object" || raw === null)
-      return null;
+      return err({ kind: "corrupt", path, cause: "owner metadata must be an object" });
     const doc = raw;
     if (typeof doc.state !== "string" || typeof doc.token !== "string")
-      return null;
+      return err({ kind: "corrupt", path, cause: "owner metadata lacks state or token" });
     if (typeof doc.pid !== "number" || typeof doc.acquiredAtMs !== "number" || typeof doc.leaseExpiresAtMs !== "number")
-      return null;
-    return {
+      return err({ kind: "corrupt", path, cause: "owner metadata has invalid numeric fields" });
+    return ok({
       state: doc.state,
       token: doc.token,
       pid: doc.pid,
       acquiredAtMs: doc.acquiredAtMs,
       leaseExpiresAtMs: doc.leaseExpiresAtMs
-    };
+    });
   }
   #discard(ownPath) {
     try {
@@ -12111,25 +12201,27 @@ function parseFindingsValues(raw) {
     return err(JSON.stringify(parsed.error));
   return ok({ ...parsed.value, checked: doc.checked, unavailable: doc.unavailable });
 }
-// src/kernel/adapter/read-if-exists.ts
-import { existsSync, readFileSync as readFileSync3 } from "fs";
-function readIfExists(path) {
-  return existsSync(path) ? readFileSync3(path, "utf-8") : null;
-}
 // src/kernel/adapter/record-root.ts
-import { existsSync as existsSync2 } from "fs";
 import { dirname as dirname2, join as join3 } from "path";
 function findRecordRoot(startDir) {
   let d = startDir;
   for (let i = 0;i < 8; i++) {
-    if (existsSync2(join3(d, "inception")) || existsSync2(join3(d, "aidlc-state.md")))
-      return d;
+    const inception = readArtifactStat(join3(d, "inception"));
+    if (inception.ok)
+      return ok(d);
+    if (inception.error.kind !== "not-found")
+      return err(inception.error);
+    const state = readArtifactStat(join3(d, "aidlc-state.md"));
+    if (state.ok)
+      return ok(d);
+    if (state.error.kind !== "not-found")
+      return err(state.error);
     const parent = dirname2(d);
     if (parent === d)
       break;
     d = parent;
   }
-  return null;
+  return ok(null);
 }
 function relArtifact(recordRoot, absPath) {
   if (recordRoot && absPath.startsWith(`${recordRoot}/`)) {
@@ -12329,7 +12421,6 @@ function parseBusinessRuleReferenceIndex(markdown) {
 }
 
 // src/design/adapter/design-intermediate-representation-validation-materials-repository-implementation.ts
-import { existsSync as existsSync3, readFileSync as readFileSync4 } from "fs";
 import { basename as basename2, dirname as dirname3, join as join4 } from "path";
 var DESIGN_MODEL_BASENAME = "deep-spec-analysis-functional-formal-model.md";
 function asExpression(v) {
@@ -12345,7 +12436,7 @@ function businessRuleReferencesOrUndefined(v) {
   const parsed = flatMapResult(traverseResult(arr, BusinessRuleReference.parse), BusinessRuleReferences.parse);
   return parsed.ok ? ok(parsed.value) : parsed;
 }
-function buildUnitView(rawUnit, unitName, recordRoot) {
+function buildUnitView(rawUnit, unitName, directoryExists, rulesMarkdown) {
   const unit = DesignUnitIdentifier.parse(unitName);
   if (!unit.ok)
     return err(JSON.stringify(unit.error));
@@ -12484,9 +12575,6 @@ function buildUnitView(rawUnit, unitName, recordRoot) {
         unformalizedTargets.push(t);
     }
   }
-  const directoryExists = recordRoot === null ? true : existsSync3(join4(recordRoot, "construction", unitName));
-  const rulesPath = recordRoot === null ? null : join4(recordRoot, "construction", unitName, "functional-design", "rules.md");
-  const rulesMarkdown = rulesPath === null ? null : readIfExists(rulesPath);
   const rules = rulesMarkdown === null ? ok(null) : parseBusinessRuleReferenceIndex(rulesMarkdown);
   if (!rules.ok)
     return err(JSON.stringify(rules.error));
@@ -12518,22 +12606,15 @@ class DesignIntermediateRepresentationValidationMaterialsRepositoryImplementatio
   }
   findById(id) {
     const outputPath = id.modelId().artifactPath().asString();
-    if (basename2(outputPath) !== DESIGN_MODEL_BASENAME || !existsSync3(outputPath)) {
+    if (basename2(outputPath) !== DESIGN_MODEL_BASENAME) {
       return err({ kind: "not-found", path: outputPath });
     }
     const corrupt = (cause) => err({ kind: "corrupt", path: outputPath, cause });
-    let bytes;
-    try {
-      bytes = readFileSync4(outputPath);
-    } catch (e) {
-      return err({
-        kind: "io-failed",
-        operation: "read",
-        path: outputPath,
-        cause: e instanceof Error ? e.message : String(e)
-      });
-    }
-    const md = bytes.toString("utf-8");
+    const read = readArtifactBytes(outputPath);
+    if (!read.ok)
+      return err(read.error);
+    const bytes = read.value;
+    const md = Buffer.from(bytes).toString("utf-8");
     const fences = extractFences(md, "json");
     if (fences.length !== 1) {
       return corrupt("formal model must contain exactly one ```json fence");
@@ -12547,8 +12628,9 @@ class DesignIntermediateRepresentationValidationMaterialsRepositoryImplementatio
     if (!isObject(ir)) {
       return corrupt("design IR fence must contain a JSON object");
     }
-    if (!existsSync3(this.#schemaPath)) {
-      return corrupt(`design IR schema not installed at ${this.#schemaPath} \u2014 run plugin sync`);
+    const schemaStat = readArtifactStat(this.#schemaPath);
+    if (!schemaStat.ok) {
+      return corrupt(schemaStat.error.kind === "not-found" ? `design IR schema not installed at ${this.#schemaPath} \u2014 run plugin sync` : `design IR schema unreadable: ${schemaStat.error.cause}`);
     }
     const schema = readContractSchema(this.#schemaPath);
     if (!schema.ok) {
@@ -12566,11 +12648,17 @@ class DesignIntermediateRepresentationValidationMaterialsRepositoryImplementatio
     const semanticGateOpen = schemaErrors2.length === 0 && !(Number.isInteger(major) && major !== SUPPORTED_DESIGN_IR_MAJOR);
     const units = [];
     if (semanticGateOpen) {
-      const recordRoot = findRecordRoot(dirname3(outputPath));
+      const foundRecordRoot = findRecordRoot(dirname3(outputPath));
+      if (!foundRecordRoot.ok)
+        return err(foundRecordRoot.error);
+      const recordRoot = foundRecordRoot.value;
       for (const rawUnit of Array.isArray(ir.units) ? ir.units : []) {
         if (!isObject(rawUnit) || typeof rawUnit.unit !== "string")
           continue;
-        const parsed = buildUnitView(rawUnit, rawUnit.unit, recordRoot);
+        const unitMaterials = this.#readUnitMaterials(recordRoot, rawUnit.unit);
+        if (!unitMaterials.ok)
+          return err(unitMaterials.error);
+        const parsed = buildUnitView(rawUnit, rawUnit.unit, unitMaterials.value.directoryExists, unitMaterials.value.rulesMarkdown);
         if (!parsed.ok)
           return corrupt(parsed.error);
         units.push(parsed.value);
@@ -12584,8 +12672,23 @@ class DesignIntermediateRepresentationValidationMaterialsRepositoryImplementatio
       irVersion: irVersion.value,
       schemaErrors: messages.value,
       units: declarations.value,
-      sourceDocument: new Uint8Array(bytes)
+      sourceDocument: bytes
     }));
+  }
+  #readUnitMaterials(recordRoot, unitName) {
+    if (recordRoot === null)
+      return ok({ directoryExists: true, rulesMarkdown: null });
+    const unitDirectory = join4(recordRoot, "construction", unitName);
+    const directory = readArtifactStat(unitDirectory);
+    if (!directory.ok && directory.error.kind !== "not-found")
+      return err(directory.error);
+    const rules = readArtifactText(join4(unitDirectory, "functional-design", "rules.md"));
+    if (!rules.ok && rules.error.kind !== "not-found")
+      return err(rules.error);
+    return ok({
+      directoryExists: directory.ok && directory.value.isDirectory(),
+      rulesMarkdown: rules.ok ? rules.value : null
+    });
   }
   store(materials) {
     const outputPath = materials.id().modelId().artifactPath().asString();
@@ -12660,7 +12763,7 @@ function parseSiblingDesignReportDocument(directory, fileName, raw) {
   }));
 }
 // src/design/adapter/design-verify-directory-repository-implementation.ts
-import { existsSync as existsSync4, mkdirSync as mkdirSync3, readdirSync, readFileSync as readFileSync5, renameSync as renameSync3, rmSync as rmSync3 } from "fs";
+import { mkdirSync as mkdirSync3, renameSync as renameSync3, rmSync as rmSync3 } from "fs";
 import { join as join5 } from "path";
 var CROSS_CHECK_BASENAME = "cross-check.json";
 var STALE_CROSS_CHECK_BASENAME = ".cross-check.stale";
@@ -12674,6 +12777,11 @@ function causeOf2(e) {
 }
 function lockCauseOf(outcome) {
   return "cause" in outcome ? `${outcome.kind}: ${outcome.cause}` : outcome.kind;
+}
+function crossCheckFailure(error) {
+  const detail = "cause" in error ? `${error.kind}: ${error.cause}` : error.kind;
+  const parsed = ErrorMessage.parse(`cross-check could not be loaded (${detail})`);
+  return parsed.ok ? parsed.value : ErrorMessage.of("cross-check could not be loaded");
 }
 function documentsByFileName(reports) {
   const out = new Map;
@@ -12695,11 +12803,16 @@ class DesignVerifyDirectoryRepositoryImplementation {
     if (!reports.ok)
       return err({ kind: "corrupt", path: directory.asString(), cause: JSON.stringify(reports.error) });
     const crossPath = join5(directory.asString(), CROSS_CHECK_BASENAME);
-    if (!existsSync4(crossPath)) {
+    const crossText = readArtifactText(crossPath);
+    if (!crossText.ok && crossText.error.kind === "not-found") {
       return ok(DesignVerifyDirectory.of(directory, reports.value, null));
     }
-    const crossCheck = this.#readReport(directory, CROSS_CHECK_BASENAME);
-    return ok(DesignVerifyDirectory.of(directory, reports.value, crossCheck.ok ? crossCheck.value : null));
+    if (!crossText.ok)
+      return ok(DesignVerifyDirectory.unreadableCrossCheck(directory, reports.value, crossCheckFailure(crossText.error)));
+    const crossCheck = this.#parseReport(directory, CROSS_CHECK_BASENAME, crossText.value);
+    if (!crossCheck.ok)
+      return ok(DesignVerifyDirectory.unreadableCrossCheck(directory, reports.value, crossCheckFailure(crossCheck.error)));
+    return ok(DesignVerifyDirectory.of(directory, reports.value, crossCheck.value));
   }
   store(aggregate) {
     const directory = aggregate.directory();
@@ -12736,11 +12849,16 @@ class DesignVerifyDirectoryRepositoryImplementation {
     if (!unchanged.ok)
       return err(unchanged.error);
     const crossCheck = aggregate.crossCheck();
+    if (!crossCheck.ok)
+      return err({ kind: "corrupt", path: crossPath, cause: crossCheck.error.asString() });
     const backendBytes = renderDesignReportBytes(candidate);
-    const crossBytes = crossCheck === null ? null : renderDesignReportBytes(crossCheck);
+    const crossBytes = crossCheck.value === null ? null : renderDesignReportBytes(crossCheck.value);
     if (!this.#lock.holdsOwnership(directory))
       return this.#fenced(directory, crossPath);
-    if (existsSync4(crossPath)) {
+    const crossStat = readArtifactStat(crossPath);
+    if (!crossStat.ok && crossStat.error.kind === "io-failed")
+      return err({ kind: "io-failed", operation: "write", path: crossPath, cause: crossStat.error.cause });
+    if (crossStat.ok) {
       try {
         renameSync3(crossPath, stalePath);
       } catch (e) {
@@ -12794,14 +12912,12 @@ class DesignVerifyDirectoryRepositoryImplementation {
     });
   }
   #siblingsOf(directory) {
-    if (!existsSync4(directory.asString()))
+    const directoryRead = readDirectory(directory.asString());
+    if (!directoryRead.ok && directoryRead.error.kind === "not-found")
       return ok([]);
-    let entries;
-    try {
-      entries = readdirSync(directory.asString()).filter((f) => f.endsWith(".json") && f !== CROSS_CHECK_BASENAME).sort();
-    } catch (e) {
-      return err({ kind: "io-failed", operation: "read", path: directory.asString(), cause: causeOf2(e) });
-    }
+    if (!directoryRead.ok)
+      return err(directoryRead.error);
+    const entries = directoryRead.value.map((entry) => entry.name).filter((f) => f.endsWith(".json") && f !== CROSS_CHECK_BASENAME).sort();
     const reports = [];
     for (const file of entries) {
       const report = this.#readReport(directory, file);
@@ -12813,9 +12929,17 @@ class DesignVerifyDirectoryRepositoryImplementation {
   }
   #readReport(directory, fileName) {
     const path = join5(directory.asString(), fileName);
+    const read = readArtifactText(path);
+    if (!read.ok) {
+      return read.error.kind === "not-found" ? err({ kind: "io-failed", operation: "read", path, cause: "artifact disappeared during read" }) : err(read.error);
+    }
+    return this.#parseReport(directory, fileName, read.value);
+  }
+  #parseReport(directory, fileName, text) {
+    const path = join5(directory.asString(), fileName);
     let raw;
     try {
-      raw = JSON.parse(readFileSync5(path, "utf-8"));
+      raw = JSON.parse(text);
     } catch (e) {
       return err({ kind: "corrupt", path, cause: causeOf2(e) });
     }
@@ -12906,11 +13030,7 @@ function reachabilityVariant(base, attrPath, state) {
     background: Array.isArray(base.background) ? base.background : []
   };
 }
-// src/design/adapter/refinement-map-repository-implementation.ts
-import { existsSync as existsSync5, readFileSync as readFileSync7 } from "fs";
-
 // src/design/adapter/refinement-materials-repository-implementation.ts
-import { readFileSync as readFileSync6 } from "fs";
 import { dirname as dirname4, join as join6 } from "path";
 var REFINEMENT_MAP_BASENAME = "deep-spec-analysis-refinement-map.md";
 var REQUIREMENTS_MODEL_RELPATH = [
@@ -12930,7 +13050,10 @@ class RefinementMaterialsRepositoryImplementation {
   }
   findById(id) {
     const modelPath = id.modelArtifactPath().asString();
-    const recordRoot = findRecordRoot(dirname4(modelPath));
+    const foundRecordRoot = findRecordRoot(dirname4(modelPath));
+    if (!foundRecordRoot.ok)
+      return err(foundRecordRoot.error);
+    const recordRoot = foundRecordRoot.value;
     if (recordRoot === null)
       return ok(RefinementMaterials.inactive(id));
     const requirements = this.#loadRequirements(recordRoot);
@@ -12943,13 +13066,7 @@ class RefinementMaterialsRepositoryImplementation {
     return ok(RefinementMaterials.active(id, requirements.value.model, map.value));
   }
   #read(path) {
-    try {
-      return ok(new Uint8Array(readFileSync6(path)));
-    } catch (e) {
-      if (e.code === "ENOENT")
-        return err({ kind: "not-found", path });
-      return err({ kind: "io-failed", operation: "read", path, cause: e instanceof Error ? e.message : String(e) });
-    }
+    return readArtifactBytes(path);
   }
   #loadRequirements(recordRoot) {
     const path = join6(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
@@ -13103,8 +13220,15 @@ function parseRefinementMapDocument(bytes, id, mapSchemaPath) {
       error: `refinement map fence is not valid JSON: ${err2 instanceof Error ? err2.message : String(err2)}`
     };
   }
+  const schemaText = readArtifactText(mapSchemaPath);
+  if (!schemaText.ok) {
+    return {
+      kind: "malformed",
+      error: `refinement map schema unreadable: ${schemaText.error.kind === "not-found" ? mapSchemaPath : schemaText.error.cause}`
+    };
+  }
   try {
-    const schemaDoc = JSON.parse(readFileSync6(mapSchemaPath, "utf-8"));
+    const schemaDoc = JSON.parse(schemaText.value);
     const errors = [];
     validateSchema(schemaDoc, schemaDoc, raw, "", errors);
     if (errors.length > 0)
@@ -13215,15 +13339,10 @@ class RefinementMapRepositoryImplementation {
   }
   findById(id) {
     const path = id.artifactPath().asString();
-    if (!existsSync5(path))
-      return err({ kind: "not-found", path });
-    let bytes;
-    try {
-      bytes = readFileSync7(path);
-    } catch (e) {
-      return err({ kind: "io-failed", operation: "read", path, cause: e instanceof Error ? e.message : String(e) });
-    }
-    const parsed = parseRefinementMapDocument(new Uint8Array(bytes), id, this.#mapSchemaPath);
+    const read = readArtifactBytes(path);
+    if (!read.ok)
+      return err(read.error);
+    const parsed = parseRefinementMapDocument(read.value, id, this.#mapSchemaPath);
     if (parsed.kind === "malformed")
       return err({ kind: "corrupt", path, cause: parsed.error });
     return ok(parsed.map);
@@ -13672,7 +13791,7 @@ class RefinementSolverClientImplementation {
 }
 // src/design/adapter/sibling-backend-client-implementation.ts
 import { spawnSync as spawnSync2 } from "child_process";
-import { mkdtempSync, readFileSync as readFileSync8, rmSync as rmSync4, writeFileSync as writeFileSync3 } from "fs";
+import { mkdtempSync, rmSync as rmSync4, writeFileSync as writeFileSync3 } from "fs";
 import { tmpdir } from "os";
 import { join as join7 } from "path";
 
@@ -13711,6 +13830,11 @@ function parseSiblingVerdictDocument(raw) {
 }
 
 // src/design/adapter/sibling-backend-client-implementation.ts
+function errorMessageOrFallback(raw, fallback) {
+  const parsed = ErrorMessage.parse(raw);
+  return parsed.ok ? parsed.value : ErrorMessage.of(fallback);
+}
+
 class SiblingBackendClientImplementation {
   #config;
   constructor(config) {
@@ -13718,8 +13842,10 @@ class SiblingBackendClientImplementation {
   }
   runLowered(backend, unit, lowered, wallTimeoutMs) {
     const run = this.#spawn(backend, renderLoweredDocument(unit, lowered), wallTimeoutMs);
-    const document = run.doc === null ? null : parseSiblingVerdictDocument(run.doc);
     const refinementFailure = ErrorMessage.of(`refinement pass could not run (${run.note.slice(0, 120)})`);
+    if (!run.document.ok)
+      return SiblingVerificationResult.incomplete(errorMessageOrFallback(`lowered v1 backend findings document could not be read (${this.#errorDetail(run.document.error)})`, "lowered v1 backend findings document could not be read"), refinementFailure);
+    const document = run.document.value === null ? null : parseSiblingVerdictDocument(run.document.value);
     if (run.exit === 127) {
       const reason = document?.unavailableReason() ?? (backend === "smt" ? "z3 could not be executed by the lowered v1 backend" : "quint CLI could not be executed by the lowered v1 backend");
       const parsedReason = ErrorMessage.parse(reason);
@@ -13740,9 +13866,9 @@ class SiblingBackendClientImplementation {
   probeState(probe, wallTimeoutMs) {
     const variant = reachabilityVariant(renderLoweredDocument(probe.unit(), probe.lowered()), probe.attributePath(), probe.state());
     const run = this.#spawn("quint", variant, wallTimeoutMs);
-    if (run.exit !== 0 || run.doc === null)
+    if (run.exit !== 0 || !run.document.ok || run.document.value === null)
       return ReachabilityVerdict.unverified();
-    return parseSiblingVerdictDocument(run.doc).reachabilityOf(probe.attributePath(), probe.state());
+    return parseSiblingVerdictDocument(run.document.value).reachabilityOf(probe.attributePath(), probe.state());
   }
   #spawn(backend, loweredDoc, wallTimeoutMs) {
     const tool = this.#config.siblingToolPaths[backend];
@@ -13762,17 +13888,40 @@ ${JSON.stringify(loweredDoc, null, 2)}
         ...this.#config.spawnEnvironment ? { env: this.#config.spawnEnvironment } : {}
       });
       const findingsPath = join7(work, "deep-spec-verify", `${backend}.json`);
-      let doc = null;
-      try {
-        doc = JSON.parse(readFileSync8(findingsPath, "utf-8"));
-      } catch {
-        doc = null;
-      }
+      const document = this.#readDocument(findingsPath);
       const note = res.error ? String(res.error) : (res.stdout ?? "").trim().split(`
 `).pop() ?? "";
-      return { exit: res.status, doc, note };
+      return {
+        exit: res.status,
+        document,
+        note
+      };
     } finally {
       rmSync4(work, { recursive: true, force: true });
+    }
+  }
+  #readDocument(path) {
+    const text = readArtifactText(path);
+    if (!text.ok)
+      return text.error.kind === "not-found" ? ok(null) : err(text.error);
+    try {
+      return ok(JSON.parse(text.value));
+    } catch (error) {
+      return err({
+        kind: "corrupt",
+        path,
+        cause: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+  #errorDetail(error) {
+    switch (error.kind) {
+      case "not-found":
+        return `not-found: ${error.path}`;
+      case "io-failed":
+        return `io-failed: ${error.cause}`;
+      case "corrupt":
+        return `corrupt: ${error.cause}`;
     }
   }
 }

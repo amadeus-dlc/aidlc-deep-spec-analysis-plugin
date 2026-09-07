@@ -1,0 +1,175 @@
+[
+  {
+    "case": "requirements",
+    "file": "inception/deep-spec-analysis-verify/deep-spec-verify/cross-check.json",
+    "sha256": "200f4f46a8f6ddd0dd0d7b2be12bcd60e0855d55e12333a4e3cf8deefe4621cb",
+    "method": "exhaustive",
+    "findings": 0,
+    "checked": 0,
+    "kinds": []
+  },
+  {
+    "case": "requirements",
+    "file": "inception/deep-spec-analysis-verify/deep-spec-verify/quint.json",
+    "sha256": "8b903f35cce3df4d0f6db8b6e7b9786961fd0ea00ba4a6da97ae318193f55d84",
+    "method": "bounded",
+    "findings": 2,
+    "checked": 0,
+    "kinds": [
+      "conflict",
+      "scenario-violation"
+    ]
+  },
+  {
+    "case": "requirements",
+    "file": "inception/deep-spec-analysis-verify/deep-spec-verify/smt.json",
+    "sha256": "89fccdeee569e03421637de5875bdc948b41bd92ea52e13b59552999b2ad6def",
+    "method": "exhaustive",
+    "findings": 5,
+    "checked": 0,
+    "kinds": [
+      "completeness-gap",
+      "conflict",
+      "scenario-violation"
+    ]
+  },
+  {
+    "case": "refcheck",
+    "file": "construction/u1-orders/functional-design/deep-spec-refcheck/functional-design.json",
+    "sha256": "6737726e5700c312b2d64cdfff4c795f738bff458a1088477f4777d425a7da52",
+    "method": "static",
+    "findings": 15,
+    "checked": 2,
+    "kinds": [
+      "consistency-mismatch",
+      "reference-broken",
+      "structure-invalid"
+    ]
+  },
+  {
+    "case": "refcheck",
+    "file": "inception/contract-design/deep-spec-refcheck/contract-summary.json",
+    "sha256": "2deb25b64aaa612acfc7a1063fddabb2edc475ad713a5ae1d485b36a88aed000",
+    "method": "static",
+    "findings": 4,
+    "checked": 0,
+    "kinds": [
+      "consistency-mismatch",
+      "reference-broken",
+      "structure-invalid"
+    ]
+  },
+  {
+    "case": "refcheck",
+    "file": "inception/domain-design/deep-spec-refcheck/components.json",
+    "sha256": "c99041baec90414b979392847fad2c4e0d5388124eec8feda7c170916bf60996",
+    "method": "static",
+    "findings": 9,
+    "checked": 1,
+    "kinds": [
+      "reference-broken",
+      "structure-invalid"
+    ]
+  },
+  {
+    "case": "design",
+    "file": "construction/deep-spec-analysis-functional-verify/deep-spec-design-verify/cross-check.json",
+    "sha256": "52e43b33d6c12d4f8421665d29fba1ec3d5d6ed17cfb3186f563797322333576",
+    "method": "exhaustive",
+    "findings": 0,
+    "checked": 0,
+    "kinds": []
+  },
+  {
+    "case": "design",
+    "file": "construction/deep-spec-analysis-functional-verify/deep-spec-design-verify/quint.json",
+    "sha256": "176a383971d3e64d15ec767a6e9ee59078a941ab083a277609f2023a3cfa4a5b",
+    "method": "bounded",
+    "findings": 2,
+    "checked": 1,
+    "kinds": [
+      "conflict",
+      "unreachable"
+    ]
+  },
+  {
+    "case": "design",
+    "file": "construction/deep-spec-analysis-functional-verify/deep-spec-design-verify/smt.json",
+    "sha256": "d6f16144eedf9aba9cfaf8279a606cb09d143ef9f4cfe616f525c708e9fc13b3",
+    "method": "exhaustive",
+    "findings": 7,
+    "checked": 1,
+    "kinds": [
+      "completeness-gap",
+      "conflict",
+      "redundancy",
+      "unreachable"
+    ]
+  },
+  {
+    "case": "refinement",
+    "file": "construction/deep-spec-analysis-functional-verify/deep-spec-design-verify/cross-check.json",
+    "sha256": "feb9e70ae2c3f0a8288c5a266b13a8e9b6608691e7aac64fa92c2de83a00213e",
+    "method": "exhaustive",
+    "findings": 0,
+    "checked": 0,
+    "kinds": []
+  },
+  {
+    "case": "refinement",
+    "file": "construction/deep-spec-analysis-functional-verify/deep-spec-design-verify/quint.json",
+    "sha256": "8384972a4fbc088d455c2ef4fade7defee8e3886ca23ebbb410e6b813a3180c9",
+    "method": "bounded",
+    "findings": 3,
+    "checked": 1,
+    "kinds": [
+      "completeness-gap",
+      "mapping-gap",
+      "refinement-violation"
+    ]
+  },
+  {
+    "case": "refinement",
+    "file": "construction/deep-spec-analysis-functional-verify/deep-spec-design-verify/smt.json",
+    "sha256": "4be9788fc123039f3c3b76b578029e19c5554a2807d54a633edbdfa518f8a43f",
+    "method": "exhaustive",
+    "findings": 6,
+    "checked": 1,
+    "kinds": [
+      "completeness-gap",
+      "mapping-gap",
+      "refinement-violation"
+    ]
+  },
+  {
+    "case": "refinement",
+    "file": "inception/deep-spec-analysis-verify/deep-spec-verify/cross-check.json",
+    "sha256": "d7757bec3040579791668c7cada06577188145960bed50ac2e467ba1c7393ec8",
+    "method": "exhaustive",
+    "findings": 0,
+    "checked": 0,
+    "kinds": []
+  },
+  {
+    "case": "refinement",
+    "file": "inception/deep-spec-analysis-verify/deep-spec-verify/quint.json",
+    "sha256": "dc7fb7c36ca735acce34bb6f846a73dc58b5e17f46dedc0f3cc1e8876a27af2a",
+    "method": "bounded",
+    "findings": 1,
+    "checked": 0,
+    "kinds": [
+      "conflict"
+    ]
+  },
+  {
+    "case": "refinement",
+    "file": "inception/deep-spec-analysis-verify/deep-spec-verify/smt.json",
+    "sha256": "755d3c951ba04134fcf23c975ec8c73bc382b64e797148c87e7a6be5eb9e39b0",
+    "method": "exhaustive",
+    "findings": 1,
+    "checked": 0,
+    "kinds": [
+      "completeness-gap"
+    ]
+  }
+]

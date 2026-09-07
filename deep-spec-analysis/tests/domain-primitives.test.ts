@@ -430,11 +430,12 @@ describe("DesignVerifyDirectory は backend ごとに 1 report という不変�
       DesignReports.of([reportOf(directory, "smt")]),
       reportOf(directory, "cross-check"),
     );
-    expect(loaded.crossCheck()?.id().fileName()).toBe("cross-check.json");
+    const loadedCrossCheck = loaded.crossCheck();
+    expect(loadedCrossCheck.ok && loadedCrossCheck.value?.id().fileName()).toBe("cross-check.json");
     // 候補が変われば「いまの reports から導いたもの」でなくなる——落とす。
     const staged = loaded.finalizing(reportOf(directory, "smt", "simulation"));
-    expect(staged.crossCheck()).toBe(null);
-    expect(staged.withoutCrossCheck().crossCheck()).toBe(null);
+    expect(staged.crossCheck()).toEqual({ ok: true, value: null });
+    expect(staged.withoutCrossCheck().crossCheck()).toEqual({ ok: true, value: null });
     // load 直後は候補を持たない。
     expect(loaded.candidate()).toBe(null);
     expect(loaded.directory().asString()).toBe("/records/deep-spec-design-verify");
@@ -508,11 +509,12 @@ describe("VerificationDirectory は backend ごとに 1 report という不変�
       VerificationReports.of([verificationReportOf(directory, "smt")]),
       verificationReportOf(directory, "cross-check"),
     );
-    expect(loaded.crossCheck()?.id().fileName()).toBe("cross-check.json");
+    const loadedCrossCheck = loaded.crossCheck();
+    expect(loadedCrossCheck.ok && loadedCrossCheck.value?.id().fileName()).toBe("cross-check.json");
     // 候補が変われば「いまの reports から導いたもの」でなくなる——落とす。
     const staged = loaded.finalizing(verificationReportOf(directory, "smt", "simulation"));
-    expect(staged.crossCheck()).toBe(null);
-    expect(staged.withoutCrossCheck().crossCheck()).toBe(null);
+    expect(staged.crossCheck()).toEqual({ ok: true, value: null });
+    expect(staged.withoutCrossCheck().crossCheck()).toEqual({ ok: true, value: null });
     // load 直後は候補を持たない。
     expect(loaded.candidate()).toBe(null);
     expect(loaded.directory().asString()).toBe("/records/deep-spec-verify");
@@ -530,6 +532,7 @@ describe("VerificationDirectory は backend ごとに 1 report という不変�
         .toArray()
         .map((r) => r.isUnavailable()),
     ).toEqual([true]);
-    expect(loaded.conformedTo(unreadable).crossCheck()?.unavailableReason()).toBe(reason);
+    const conformedCrossCheck = loaded.conformedTo(unreadable).crossCheck();
+    expect(conformedCrossCheck.ok && conformedCrossCheck.value?.unavailableReason()).toBe(reason);
   });
 });

@@ -1,0 +1,62 @@
+[
+  {
+    "sensor": "requirements/deep-spec-ir-valid",
+    "result": "passed"
+  },
+  {
+    "sensor": "requirements/deep-spec-verify-smt",
+    "result": "failed"
+  },
+  {
+    "sensor": "requirements/deep-spec-verify-quint",
+    "result": "failed"
+  },
+  {
+    "sensor": "refcheck/deep-spec-refcheck-domain",
+    "result": "failed"
+  },
+  {
+    "sensor": "refcheck/deep-spec-refcheck-contract",
+    "result": "failed"
+  },
+  {
+    "sensor": "refcheck/deep-spec-refcheck-functional",
+    "result": "failed"
+  },
+  {
+    "sensor": "design/deep-spec-design-ir-valid",
+    "result": "passed"
+  },
+  {
+    "sensor": "design/deep-spec-design-verify-smt",
+    "result": "failed"
+  },
+  {
+    "sensor": "design/deep-spec-design-verify-quint",
+    "result": "failed"
+  },
+  {
+    "sensor": "refinement/deep-spec-ir-valid",
+    "result": "failed"
+  },
+  {
+    "sensor": "refinement/deep-spec-verify-smt",
+    "result": "failed"
+  },
+  {
+    "sensor": "refinement/deep-spec-verify-quint",
+    "result": "failed"
+  },
+  {
+    "sensor": "refinement/deep-spec-design-ir-valid",
+    "result": "passed"
+  },
+  {
+    "sensor": "refinement/deep-spec-design-verify-smt",
+    "result": "failed"
+  },
+  {
+    "sensor": "refinement/deep-spec-design-verify-quint",
+    "result": "failed"
+  }
+]

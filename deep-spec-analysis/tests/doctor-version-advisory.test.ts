@@ -27,7 +27,7 @@ import {
   type ReleaseTagsClient,
 } from "@deep-spec-analysis/doctor-usecase";
 import { ArtifactPath, ErrorMessage } from "@deep-spec-analysis/kernel-domain";
-import { IllegalArgumentException } from "@deep-spec-analysis/kernel-infrastructure";
+import { IllegalArgumentException, ok } from "@deep-spec-analysis/kernel-infrastructure";
 
 class FixedProvenanceClient implements InstallationProvenanceClient {
   readonly #result: InstallationProvenance;
@@ -186,18 +186,20 @@ describe("doctor version advisory", () => {
       new FixedReleaseTagsClient(available(["v0.5.0"])),
     ).execute();
     const verdict = HealthVerdict.of([
-      ...presenter.installation([
-        InstalledStatus.of(ManifestEntry.error(ArtifactPath.of("tools/deep-spec-analysis-doctor.ts")), true),
-      ]),
+      ...presenter.installation(
+        ok([InstalledStatus.of(ManifestEntry.error(ArtifactPath.of("tools/deep-spec-analysis-doctor.ts")), true)]),
+      ),
       presenter.version(version),
       ...presenter.solvers(
-        SolverAvailability.of({
-          z3Package: true,
-          nodeRuntime: true,
-          quintCli: true,
-          apalache: true,
-          apalacheServerStale: false,
-        }),
+        ok(
+          SolverAvailability.of({
+            z3Package: true,
+            nodeRuntime: true,
+            quintCli: true,
+            apalache: true,
+            apalacheServerStale: false,
+          }),
+        ),
       ),
     ]).document();
 

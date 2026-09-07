@@ -13,14 +13,21 @@
 // 候補の公開・クロスチェックの公開を、それぞれの直前の token fencing つきで
 // 行う。非公開の temp／stale name は `*.json` にせず兄弟列挙へ混ぜない。
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { mkdirSync, renameSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { DesignReport } from "@deep-spec-analysis/design-domain";
 import { DesignReports, DesignVerifyDirectory } from "@deep-spec-analysis/design-domain";
 import type { DesignVerifyDirectoryRepository } from "@deep-spec-analysis/design-usecase";
 import type { DirectoryFinalizationLockOutcome, ProcessLiveness } from "@deep-spec-analysis/kernel-adapter";
-import { DirectoryFinalizationLock, SystemClock, writeFileAtomically } from "@deep-spec-analysis/kernel-adapter";
-import type { ArtifactPath } from "@deep-spec-analysis/kernel-domain";
+import {
+  DirectoryFinalizationLock,
+  readArtifactStat,
+  readArtifactText,
+  readDirectory,
+  SystemClock,
+  writeFileAtomically,
+} from "@deep-spec-analysis/kernel-adapter";
+import { type ArtifactPath, ErrorMessage } from "@deep-spec-analysis/kernel-domain";
 import type { Json } from "@deep-spec-analysis/kernel-infrastructure";
 import { err, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
@@ -48,6 +55,12 @@ function lockCauseOf(outcome: DirectoryFinalizationLockOutcome): string {
   return "cause" in outcome ? `${outcome.kind}: ${outcome.cause}` : outcome.kind;
 }
 
+function crossCheckFailure(error: RepositoryError): ErrorMessage {
+  const detail = "cause" in error ? `${error.kind}: ${error.cause}` : error.kind;
+  const parsed = ErrorMessage.parse(`cross-check could not be loaded (${detail})`);
+  return parsed.ok ? parsed.value : ErrorMessage.of("cross-check could not be loaded");
+}
+
 // 突き合わせは文書像で行う——adapter のバイト列を集約に持たせないため。
 function documentsByFileName(reports: readonly DesignReport[]): Map<string, string> {
   const out = new Map<string, string>();
@@ -68,14 +81,22 @@ export class DesignVerifyDirectoryRepositoryImplementation implements DesignVeri
     const reports = DesignReports.parse(siblings.value);
     if (!reports.ok) return err({ kind: "corrupt", path: directory.asString(), cause: JSON.stringify(reports.error) });
     const crossPath = join(directory.asString(), CROSS_CHECK_BASENAME);
-    if (!existsSync(crossPath)) {
+    const crossText = readArtifactText(crossPath);
+    if (!crossText.ok && crossText.error.kind === "not-found") {
       return ok(DesignVerifyDirectory.of(directory, reports.value, null));
     }
-    // 公開済みクロスチェックは導出物であって入力ではない：読めなければ不在と
-    // して扱い、次の成功実行に組み直させる（BR2.5）。型のある失敗にするのは
-    // 比較へ参加する兄弟 backend 文書だけ（BR2.7）。
-    const crossCheck = this.#readReport(directory, CROSS_CHECK_BASENAME);
-    return ok(DesignVerifyDirectory.of(directory, reports.value, crossCheck.ok ? crossCheck.value : null));
+    // 公開済みクロスチェックも取得物として観測する。派生物であっても読取・
+    // 解析障害は集約の明示状態へ残し、finalizing が兄弟から再導出できるようにする。
+    if (!crossText.ok)
+      return ok(
+        DesignVerifyDirectory.unreadableCrossCheck(directory, reports.value, crossCheckFailure(crossText.error)),
+      );
+    const crossCheck = this.#parseReport(directory, CROSS_CHECK_BASENAME, crossText.value);
+    if (!crossCheck.ok)
+      return ok(
+        DesignVerifyDirectory.unreadableCrossCheck(directory, reports.value, crossCheckFailure(crossCheck.error)),
+      );
+    return ok(DesignVerifyDirectory.of(directory, reports.value, crossCheck.value));
   }
 
   store(aggregate: DesignVerifyDirectory): Result<void, RepositoryError> {
@@ -122,11 +143,15 @@ export class DesignVerifyDirectoryRepositoryImplementation implements DesignVeri
     if (!unchanged.ok) return err(unchanged.error);
     // 9. 公開する文書を render する。ここまでの失敗では公開ファイルを変えない。
     const crossCheck = aggregate.crossCheck();
+    if (!crossCheck.ok) return err({ kind: "corrupt", path: crossPath, cause: crossCheck.error.asString() });
     const backendBytes = renderDesignReportBytes(candidate);
-    const crossBytes = crossCheck === null ? null : renderDesignReportBytes(crossCheck);
+    const crossBytes = crossCheck.value === null ? null : renderDesignReportBytes(crossCheck.value);
     // 10/11. 既存 cross-check を public path から先に外す（BR2.2）。
     if (!this.#lock.holdsOwnership(directory)) return this.#fenced(directory, crossPath);
-    if (existsSync(crossPath)) {
+    const crossStat = readArtifactStat(crossPath);
+    if (!crossStat.ok && crossStat.error.kind === "io-failed")
+      return err({ kind: "io-failed", operation: "write", path: crossPath, cause: crossStat.error.cause });
+    if (crossStat.ok) {
       try {
         renameSync(crossPath, stalePath);
       } catch (e) {
@@ -199,15 +224,13 @@ export class DesignVerifyDirectoryRepositoryImplementation implements DesignVeri
   #siblingsOf(directory: ArtifactPath): Result<DesignReport[], RepositoryError> {
     // まだ作られていない verify ディレクトリは「report がまだ 1 つも無い」で
     // あって読込の失敗ではない——初回実行の集約は空で解決する（作成は store）。
-    if (!existsSync(directory.asString())) return ok([]);
-    let entries: string[];
-    try {
-      entries = readdirSync(directory.asString())
-        .filter((f) => f.endsWith(".json") && f !== CROSS_CHECK_BASENAME)
-        .sort();
-    } catch (e) {
-      return err({ kind: "io-failed", operation: "read", path: directory.asString(), cause: causeOf(e) });
-    }
+    const directoryRead = readDirectory(directory.asString());
+    if (!directoryRead.ok && directoryRead.error.kind === "not-found") return ok([]);
+    if (!directoryRead.ok) return err(directoryRead.error);
+    const entries = directoryRead.value
+      .map((entry) => entry.name)
+      .filter((f) => f.endsWith(".json") && f !== CROSS_CHECK_BASENAME)
+      .sort();
     const reports: DesignReport[] = [];
     for (const file of entries) {
       const report = this.#readReport(directory, file);
@@ -220,9 +243,20 @@ export class DesignVerifyDirectoryRepositoryImplementation implements DesignVeri
   // 1 文書の読込。JSON 構文と文書の形の不正はいずれも型のある失敗にする。
   #readReport(directory: ArtifactPath, fileName: string): Result<DesignReport, RepositoryError> {
     const path = join(directory.asString(), fileName);
+    const read = readArtifactText(path);
+    if (!read.ok) {
+      return read.error.kind === "not-found"
+        ? err({ kind: "io-failed", operation: "read", path, cause: "artifact disappeared during read" })
+        : err(read.error);
+    }
+    return this.#parseReport(directory, fileName, read.value);
+  }
+
+  #parseReport(directory: ArtifactPath, fileName: string, text: string): Result<DesignReport, RepositoryError> {
+    const path = join(directory.asString(), fileName);
     let raw: Json;
     try {
-      raw = JSON.parse(readFileSync(path, "utf-8")) as Json;
+      raw = JSON.parse(text) as Json;
     } catch (e) {
       return err({ kind: "corrupt", path, cause: causeOf(e) });
     }
