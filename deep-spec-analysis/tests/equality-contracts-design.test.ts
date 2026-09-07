@@ -401,6 +401,21 @@ describe("契約3 設計 IR の宣言", () => {
           min: DeclaredBound.of(0),
         }),
     });
+
+    // NaN の境界は診断対象として有効な宣言。生の `===` で比べていたころは、
+    // この宣言が自身と等しくならなかった。
+    const nanBounded = () =>
+      DesignAttributeDeclaration.of({
+        name: DesignAttributeName.of("total"),
+        kind: AttributeKind.of("int"),
+        min: DeclaredBound.of(Number.NaN),
+        max: DeclaredBound.of(Number.NaN),
+      });
+    const declaration = nanBounded();
+    expect(declaration.equals(declaration)).toBe(true);
+    expect(declaration.equals(nanBounded())).toBe(true);
+    expect(declaration.hashCode()).toBe(nanBounded().hashCode());
+    expect(declaration.equals(build())).toBe(false);
   });
 
   test("DesignEntityDeclaration の等価性とハッシュは名前・説明・属性宣言の列で決まる", () => {
@@ -981,21 +996,26 @@ describe("契約4 refinement の語彙", () => {
     });
   });
 
-  test("RefinementQuintInvariant の等価性とハッシュは要件義務 id と表明式で決まる", () => {
+  test("RefinementQuintInvariant の等価性とハッシュは要件義務 id・FR 参照・表明式で決まる", () => {
     assertEqualityContract(
       () => RefinementQuintInvariant.of(ObligationIdentifier.of("OB-1"), frRefs("FR-1"), expr(true)),
       {
         reqId: () => RefinementQuintInvariant.of(ObligationIdentifier.of("OB-2"), frRefs("FR-1"), expr(true)),
+        functionalRequirementReferences: () =>
+          RefinementQuintInvariant.of(ObligationIdentifier.of("OB-1"), frRefs("FR-2"), expr(true)),
         expr: () => RefinementQuintInvariant.of(ObligationIdentifier.of("OB-1"), frRefs("FR-1"), expr(false)),
       },
     );
   });
 
-  test("RefinementQuintInvariant の恒等は FR 参照を含まない——運ぶだけの帰属は同一視される", () => {
+  test("FR 参照だけが違う不変量は、異なる lowered obligation を生む——だから等しくない", () => {
+    const loweredId = LoweredIdentifier.of("OB-9");
     const invariant = RefinementQuintInvariant.of(ObligationIdentifier.of("OB-1"), frRefs("FR-1"), expr(true));
     const otherReferences = RefinementQuintInvariant.of(ObligationIdentifier.of("OB-1"), frRefs("FR-2"), expr(true));
-    expect(invariant.equals(otherReferences)).toBe(true);
-    expect(invariant.hashCode()).toBe(otherReferences.hashCode());
+    expect(invariant.equals(otherReferences)).toBe(false);
+    // 同一性が出力の差を見落としていないこと——これが等しくない理由。
+    expect(invariant.loweredAs(loweredId).equals(otherReferences.loweredAs(loweredId))).toBe(false);
+    // 兄弟の RefinementScenario と同じ扱い（FR 参照は帰属であって、運ぶだけの飾りではない）。
   });
 
   test("EventMapping の等価性とハッシュは要件トリガ・写像先の遷移・免除理由で決まる", () => {

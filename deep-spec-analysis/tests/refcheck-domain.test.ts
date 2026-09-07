@@ -450,7 +450,12 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
       .add(decl)
       .add(UnitDeclaration.of({ name: UnitName.of("a"), dependsOn: UnitNames.of([]) }));
     // 宣言済みの依存先だけを値順で（未宣言 "ghost" は落ちる）。
-    expect(decl.declaredDependencies(decls).map((d) => d.asString())).toEqual(["a"]);
+    expect(
+      decl
+        .declaredDependencies(decls)
+        .toArray()
+        .map((d) => d.asString()),
+    ).toEqual(["a"]);
     expect(decl.dependsOn().count()).toBe(2);
     expect(decls.declares("b")).toBe(true);
     expect(decls.declares("z")).toBe(false);
@@ -587,11 +592,13 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
       ]),
       entities: ComponentEntities.of([]),
     });
-    expect(self.selfReferences().map((r) => r.element().asString())).toEqual([
-      "components[0].depends_on[0].component",
-      "components[0].dependents[1].component",
-    ]);
-    expect(bare("A", "components[0]").selfReferences()).toEqual([]);
+    expect(
+      self
+        .selfReferences()
+        .toArray()
+        .map((r) => r.element().asString()),
+    ).toEqual(["components[0].depends_on[0].component", "components[0].dependents[1].component"]);
+    expect(bare("A", "components[0]").selfReferences().isEmpty()).toBe(true);
 
     // DD-5: 識別子の有無はエンティティ自身の判定（未宣言・空文字は所有不能）。
     const entityOf = (identifier: string | null): ComponentEntity =>

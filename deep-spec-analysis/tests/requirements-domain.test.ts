@@ -40,7 +40,7 @@ import {
   TraceState,
   TraceStates,
   TraceValue,
-  type VerificationSkipped,
+  type VerificationSkips,
   VerificationWitness,
 } from "@deep-spec-analysis/requirements-domain";
 
@@ -238,8 +238,8 @@ describe("ir background decl", () => {
 
 describe("quint machine run verdict", () => {
   const targets = TargetIdentifiers.of(Array.from(["OB-1", "OB-2"], (raw) => TargetIdentifier.of(raw)));
-  const flat = (skips: readonly VerificationSkipped[]) =>
-    skips.map((s) => `${s.target().asString()}:${s.reason()}:${s.detail()}`);
+  const flat = (skips: VerificationSkips) =>
+    skips.toArray().map((s) => `${s.target().asString()}:${s.reason()}:${s.detail()}`);
 
   test("timeout and run-failed abort the machine targets and skip each of them with the frozen wording", () => {
     const timeout = QuintMachineRunVerdict.timeout();
@@ -250,10 +250,12 @@ describe("quint machine run verdict", () => {
     ]);
     const failed = QuintMachineRunVerdict.runFailed("boom");
     expect(failed.abortsMachineTargets()).toBe(true);
-    expect(failed.skipsFor(targets, false).map((s) => s.detail())).toEqual([
-      "quint run failed unexpectedly: boom",
-      "quint run failed unexpectedly: boom",
-    ]);
+    expect(
+      failed
+        .skipsFor(targets, false)
+        .toArray()
+        .map((s) => s.detail()),
+    ).toEqual(["quint run failed unexpectedly: boom", "quint run failed unexpectedly: boom"]);
     expect(
       flat(failed.skipsFor(TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))), true)),
     ).toEqual(["OB-1:unavailable:quint verify failed unexpectedly: boom"]);
@@ -264,7 +266,7 @@ describe("quint machine run verdict", () => {
     const trace = TraceStates.of([st({ "T.ok": true }), st({ "T.ok": false })]);
     const deadlock = QuintMachineRunVerdict.deadlock(trace);
     expect(deadlock.abortsMachineTargets()).toBe(false);
-    expect(deadlock.skipsFor(targets, true)).toEqual([]);
+    expect(deadlock.skipsFor(targets, true).isEmpty()).toBe(true);
     expect(deadlock.isDeadlock()).toBe(true);
     expect(deadlock.isViolation()).toBe(false);
     expect(deadlock.witness().toDocument()).toEqual({ trace: [{ "T.ok": true }, { "T.ok": false }] });
@@ -282,7 +284,7 @@ describe("quint machine run verdict", () => {
   test("a clean run neither aborts, skips, nor reports", () => {
     const clean = QuintMachineRunVerdict.clean();
     expect(clean.abortsMachineTargets()).toBe(false);
-    expect(clean.skipsFor(targets, false)).toEqual([]);
+    expect(clean.skipsFor(targets, false).isEmpty()).toBe(true);
     expect(clean.isDeadlock()).toBe(false);
     expect(clean.isViolation()).toBe(false);
   });

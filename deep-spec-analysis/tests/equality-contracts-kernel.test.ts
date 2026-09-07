@@ -10,6 +10,7 @@ import {
   Declaration,
   DeclaredBindings,
   DeclaredBindingValue,
+  DeclaredBound,
   EnumerationMember,
   EnumerationMembers,
   ErrorMessage,
@@ -163,6 +164,43 @@ describe("Declaration", () => {
     // canonicalStringify がキーを整列するので、キー順違いでもハッシュは一致する
     expect(a.hashCode()).toBe(sameContentDifferentKeyOrder.hashCode());
     expect(a.hashCode()).toBe(a.hashCode());
+  });
+});
+
+describe("DeclaredBound", () => {
+  test("等価性とハッシュは宣言値で決まり対で成り立つ", () => {
+    const a = DeclaredBound.of(10);
+    const same = DeclaredBound.of(10);
+    const other = DeclaredBound.of(11);
+
+    expect(a.equals(same)).toBe(true);
+    expect(a.equals(other)).toBe(false);
+    expect(a.hashCode()).toBe(same.hashCode());
+    expect(a.hashCode()).toBe(a.hashCode());
+  });
+
+  // NaN の境界は「不適合な数値の宣言も診断対象として有効」の帰結として到達可能。
+  // `===` で比べると自身と等しくならず、同値関係の反射性が壊れる。
+  test("NaN を宣言した境界は自身と等しく、同じ NaN 同士も等しい", () => {
+    const nan = DeclaredBound.of(Number.NaN);
+    const otherNan = DeclaredBound.of(Number.NaN);
+
+    expect(nan.equals(nan)).toBe(true);
+    expect(nan.equals(otherNan)).toBe(true);
+    expect(nan.hashCode()).toBe(otherNan.hashCode());
+    expect(nan.equals(DeclaredBound.of(0))).toBe(false);
+    expect(DeclaredBound.of(0).equals(nan)).toBe(false);
+  });
+
+  // ±0 は exceeds が順序として区別しないので、同値関係でも区別しない。
+  test("+0 と -0 は同じ境界として扱われ、ハッシュも一致する", () => {
+    const zero = DeclaredBound.of(0);
+    const negativeZero = DeclaredBound.of(-0);
+
+    expect(zero.equals(negativeZero)).toBe(true);
+    expect(zero.hashCode()).toBe(negativeZero.hashCode());
+    expect(zero.exceeds(negativeZero)).toBe(false);
+    expect(negativeZero.exceeds(zero)).toBe(false);
   });
 });
 

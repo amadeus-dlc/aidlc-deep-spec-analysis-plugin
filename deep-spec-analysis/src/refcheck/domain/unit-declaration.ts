@@ -39,7 +39,7 @@ export class UnitDeclaration {
   }
 
   // 宣言済みユニットへの依存先を値順で（未宣言の辺は落とす——凍結挙動）。
-  declaredDependencies(declared: UnitDeclarations): readonly UnitName[] {
+  declaredDependencies(declared: UnitDeclarations): UnitNames {
     return this.#dependsOn.sortedByValue().declaredIn(declared);
   }
 }

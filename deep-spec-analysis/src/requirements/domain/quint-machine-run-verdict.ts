@@ -13,7 +13,6 @@ import { TraceState } from "./trace-state.ts";
 import type { TraceStates } from "./trace-states.ts";
 import { VerificationFinding } from "./verification-finding.ts";
 import { VerificationFindings } from "./verification-findings.ts";
-import { VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationSkips } from "./verification-skips.ts";
 import { VerificationWitness } from "./verification-witness.ts";
 
@@ -77,32 +76,27 @@ export class QuintMachineRunVerdict {
   // 対象ごとの skip（timeout は budget 文言、run-failed は method 別の失敗
   // 文言——いずれも golden 凍結、対象の順を保つ）。deadlock / violation /
   // clean は何も skip しない。
-  skipsFor(targets: TargetIdentifiers, bounded: boolean): VerificationSkipped[] {
+  skipsFor(targets: TargetIdentifiers, bounded: boolean): VerificationSkips {
     const kind = this.#kind;
     if (kind === "missing")
-      return this.#skipEach(
+      return VerificationSkips.coveringAll(
         targets,
         SkipReason.unavailable(),
         "quint returned no machine run: the event machine was not decided",
       );
     if (kind === "timeout")
-      return this.#skipEach(targets, SkipReason.of("timeout"), "machine invariant check exceeded its budget");
+      return VerificationSkips.coveringAll(
+        targets,
+        SkipReason.of("timeout"),
+        "machine invariant check exceeded its budget",
+      );
     if (kind === "run-failed")
-      return this.#skipEach(
+      return VerificationSkips.coveringAll(
         targets,
         SkipReason.of("unavailable"),
         `quint ${bounded ? "verify" : "run"} failed unexpectedly: ${this.#outputTail}`,
       );
-    return [];
-  }
-
-  // 対象ごとに同じ理由・同じ文言の skip を、対象の順で並べる。呼び手の
-  // 配列面（凍結）に合わせるため、畳み込みの蓄積器は配列 1 本だけ。
-  #skipEach(targets: TargetIdentifiers, reason: SkipReason, detail: string): VerificationSkipped[] {
-    return targets.foldLeft<VerificationSkipped[]>([], (skips, target) => {
-      skips.push(VerificationSkipped.of({ target, reason, detail }));
-      return skips;
-    });
+    return VerificationSkips.of([]);
   }
 
   interpret(
@@ -152,7 +146,7 @@ export class QuintMachineRunVerdict {
     }
     return ok({
       findings: VerificationFindings.of(findings),
-      skipped: VerificationSkips.of(this.skipsFor(machineTargets, method.isBounded())),
+      skipped: this.skipsFor(machineTargets, method.isBounded()),
     });
   }
 
