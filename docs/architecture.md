@@ -101,8 +101,8 @@ aidlc-deep-spec-analysis-plugin/
 │   ├── stages/ sensors/ tools/  # stage definitions · sensors · doctor
 │   ├── tests/                   # byte-exact conformance suites
 │   └── docs/decisions.md        # the canonical record of design decisions
-├── aidlc-workflows/             # framework submodule — supplies validate/build/test; never edited
+├── .cache/aidlc-workflows/      # AI-DLC 2.8.1 development fixture (gitignored)
 └── deep-spec-analysis-sandbox/  # compose-verification target (gitignored, disposable)
 ```
 
-The entire toolchain is borrowed from the submodule: `aidlc-plugin-validate.ts` (convention checks) → `aidlc-plugin-build.ts` (emits to 7 harnesses) → `aidlc-plugin-test.ts --install` (a compose dry-run that never modifies the target).
+The development toolchain comes from the disposable AI-DLC 2.8.1 checkout: `aidlc-plugin-validate.ts` (convention checks) → `aidlc-plugin-build.ts` (emits to 7 harnesses) → `aidlc-plugin-test.ts --install` (a compose dry-run that never modifies the target).

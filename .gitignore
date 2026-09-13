@@ -70,3 +70,6 @@ aidlc/diagnostics/
 
 # bun test --coverage が書き出す LCOV（機械ローカルの生成物）。
 coverage/
+
+# Disposable upstream release fixture for development and CI.
+.cache/aidlc-workflows/

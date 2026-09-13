@@ -101,8 +101,8 @@ aidlc-deep-spec-analysis-plugin/
 │   ├── stages/ sensors/ tools/  # ステージ定義・3 センサー・doctor
 │   ├── tests/                   # バイト一致 conformance スイート
 │   └── docs/decisions.md        # 設計判断の正典
-├── aidlc-workflows/             # フレームワーク submodule — validate/build/test の供給元。編集しない
+├── .cache/aidlc-workflows/      # AI-DLC 2.8.1 の開発用 fixture（gitignored）
 └── deep-spec-analysis-sandbox/  # compose 検証のターゲット（gitignored・使い捨て）
 ```
 
-ツールチェーンはすべて submodule 側から借りる：`aidlc-plugin-validate.ts`（規約検査）→ `aidlc-plugin-build.ts`（7 ハーネスへ emit）→ `aidlc-plugin-test.ts --install`（compose のドライラン。ターゲットは変更しない）。
+開発用ツールは使い捨ての AI-DLC 2.8.1 checkout から実行する：`aidlc-plugin-validate.ts`（規約検査）→ `aidlc-plugin-build.ts`（7 ハーネスへ emit）→ `aidlc-plugin-test.ts --install`（compose のドライラン。ターゲットは変更しない）。

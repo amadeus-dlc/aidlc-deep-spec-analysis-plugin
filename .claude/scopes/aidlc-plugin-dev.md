@@ -22,8 +22,8 @@ build-and-test の 11 ステージで、Operation フェーズは持たない。
 
 ## Why these stages, why skip those
 
-プラグインは単一パッケージに集約されているが、その挙動は vendored エンジン
-（`aidlc-workflows/`）の compile / overlay merge / 7 ハーネス projection という
+プラグインは単一パッケージに集約されているが、その挙動は本家エンジン
+（`.cache/aidlc-workflows/`）の compile / overlay merge / 7 ハーネス projection という
 設定駆動の仕組みで決まる。そのため brownfield の `reverse-engineering` で
 エンジンの拡張点と現行プラグイン構造を local codekb store に写し、
 `requirements-analysis` で contributions の機能分解・制約（エンジン版ピン、
@@ -46,7 +46,7 @@ Units Generation を SKIP した「Unit を切らない」ワークフローで�
 （[awslabs/aidlc-workflows#1020](https://github.com/awslabs/aidlc-workflows/issues/1020)）、
 traceability センサーは Unit を導けずに必ず失敗する
 （[awslabs/aidlc-workflows#1011](https://github.com/awslabs/aidlc-workflows/issues/1011)）。
-このリポジトリではフレームワークを書き換えない（`aidlc-workflows/` は開発対象外）ので、
+このリポジトリではフレームワークを書き換えない（`.cache/aidlc-workflows/` は開発対象外）ので、
 refactor scope で回した Intent `260904-ddd-clean-architecture` では導入コピーへの
 暫定パッチで回避し、その後の裁定で戻した（追跡: issue #138）。Units Generation を
 回して Unit を 1 つ以上切れば、Unit ごとのステージは `construction/<unit>/` 配下に

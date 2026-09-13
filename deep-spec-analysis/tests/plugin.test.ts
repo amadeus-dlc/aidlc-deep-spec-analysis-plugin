@@ -1,8 +1,7 @@
 // Content validation for the deep-spec-analysis plugin (FR12.3).
 //
-// Runs the framework's offline validator against this authored root. The
-// framework checkout is expected as a sibling directory (`aidlc-workflows`,
-// this repository's submodule) or via AIDLC_WORKFLOWS_CHECKOUT.
+// Runs the framework's offline validator against this authored root using
+// the AI-DLC 2.8.1 development fixture (see the repository Development guide).
 
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
@@ -12,21 +11,13 @@ import { fileURLToPath } from "node:url";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-function checkoutDir(): string | null {
-  const candidates = [process.env.AIDLC_WORKFLOWS_CHECKOUT, join(pluginRoot, "..", "aidlc-workflows")];
-  for (const c of candidates) {
-    if (c && existsSync(join(c, "core", "tools", "aidlc-plugin-validate.ts"))) return c;
-  }
-  return null;
-}
-
 test("plugin content passes aidlc-plugin-validate", () => {
-  const checkout = checkoutDir();
-  if (!checkout) {
-    console.warn("SKIP: aidlc-workflows checkout not found (set AIDLC_WORKFLOWS_CHECKOUT)");
-    return;
+  const checkout = process.env.AIDLC_WORKFLOWS_CHECKOUT ?? join(pluginRoot, "..", ".cache", "aidlc-workflows");
+  const validator = join(checkout, "core", "tools", "aidlc-plugin-validate.ts");
+  if (!existsSync(validator)) {
+    throw new Error(`AI-DLC validator not found at ${validator} — follow the repository Development guide`);
   }
-  const res = spawnSync("bun", [join(checkout, "core", "tools", "aidlc-plugin-validate.ts"), pluginRoot], {
+  const res = spawnSync("bun", [validator, pluginRoot], {
     encoding: "utf-8",
     timeout: 60_000,
   });

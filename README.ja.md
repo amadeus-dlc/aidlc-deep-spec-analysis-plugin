@@ -71,7 +71,7 @@ curl -fsSL "https://raw.githubusercontent.com/j5ik2o/deep-spec-analysis/${VERSIO
 
 ### 代替：ホストプラグインストア経由のインストール
 
-まず `deep-spec-analysis/` から投影をビルドします：`bun ../aidlc-workflows/core/tools/aidlc-plugin-build.ts . claude`（または `codex`）。
+[開発手順](#開発)で検証環境を準備し、`deep-spec-analysis/` から投影をビルドします：`bun ../.cache/aidlc-workflows/core/tools/aidlc-plugin-build.ts . claude`（または `codex`）。
 
 Claude Code では、対象プロジェクト内で：
 
@@ -94,8 +94,11 @@ codex plugin add aidlc-deep-spec-analysis@aidlc-plugins   # 初回のみフッ�
 開発する場合は、リポジトリを clone して dev 依存を導入します：
 
 ```sh
-git clone --recurse-submodules https://github.com/j5ik2o/deep-spec-analysis.git
-cd deep-spec-analysis/deep-spec-analysis
+git clone https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin.git
+cd aidlc-deep-spec-analysis-plugin
+git clone --depth 1 --branch v2.8.1 https://github.com/awslabs/aidlc-workflows.git .cache/aidlc-workflows
+bun .cache/aidlc-workflows/scripts/package.ts claude
+cd deep-spec-analysis
 bun install        # dev 依存のみ——どのプロジェクトにも何もインストールしません
 ```
 
@@ -103,9 +106,9 @@ bun install        # dev 依存のみ——どのプロジェクトにも何も�
 
 ```sh
 bun test                                                    # バイト一致の conformance スイート
-bun ../aidlc-workflows/core/tools/aidlc-plugin-validate.ts .
-bun ../aidlc-workflows/core/tools/aidlc-plugin-build.ts . claude   # → dist/claude/
-bun ../aidlc-workflows/core/tools/aidlc-plugin-test.ts . --install <aidlc-project> --harness claude
+bun ../.cache/aidlc-workflows/core/tools/aidlc-plugin-validate.ts .
+bun ../.cache/aidlc-workflows/core/tools/aidlc-plugin-build.ts . claude   # → dist/claude/
+bun ../.cache/aidlc-workflows/core/tools/aidlc-plugin-test.ts . --install <aidlc-project> --harness claude
                                 # compose のドライラン——対象を変更せずにマージを検証
 ```
 
@@ -114,7 +117,7 @@ bun ../aidlc-workflows/core/tools/aidlc-plugin-test.ts . --install <aidlc-projec
 | パス | 役割 |
 |---|---|
 | [`deep-spec-analysis/`](deep-spec-analysis/) | プラグインの authored source：ステージ・センサー・ツール・契約・テスト |
-| [`aidlc-workflows/`](https://github.com/awslabs/aidlc-workflows) | フレームワーク checkout（submodule）——validate/build/test ツールチェーンの供給元。ここでは編集しない |
+| `.cache/aidlc-workflows/` | 検証・ビルド・結合テスト用の AI-DLC 2.8.1 checkout（gitignored・使い捨て） |
 | `deep-spec-analysis-sandbox/` | compose テストの対象に使う使い捨て AI-DLC インストール（`aidlc-plugin-test.ts --install`）——gitignored |
 
 ## ドキュメント
