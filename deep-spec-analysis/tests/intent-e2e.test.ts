@@ -34,7 +34,8 @@ import { fileURLToPath } from "node:url";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceRoot = join(pluginRoot, "..");
-const aidlcDist = join(workspaceRoot, "aidlc-workflows", "dist", "claude");
+const aidlcCheckout = process.env.AIDLC_WORKFLOWS_CHECKOUT ?? join(workspaceRoot, ".cache", "aidlc-workflows");
+const aidlcDist = join(aidlcCheckout, "dist", "claude");
 const installer = join(pluginRoot, "scripts", "install.ts");
 const fixtures = join(pluginRoot, "tests", "fixtures", "intent-e2e");
 const quintBin = join(pluginRoot, "node_modules", ".bin", "quint");
@@ -117,7 +118,7 @@ function stateOfNewestIntent(): string {
 beforeAll(
   () => {
     if (!existsSync(aidlcDist)) {
-      throw new Error(`vanilla AI-DLC dist not found at ${aidlcDist} — init the aidlc-workflows submodule`);
+      throw new Error(`vanilla AI-DLC dist not found at ${aidlcDist} — follow the repository Development guide`);
     }
     sandbox = mkdtempSync(join(tmpdir(), "deep-spec-intent-e2e-"));
     cpSync(aidlcDist, sandbox, { recursive: true });

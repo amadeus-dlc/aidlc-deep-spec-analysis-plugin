@@ -2,7 +2,9 @@
 
 English | [日本語](README.ja.md)
 
-Run with `bun install && bun test` from the plugin root.
+Prepare the AI-DLC 2.8.1 fixture as described in the repository
+[Development guide](../../README.md#development), then run
+`bun install && bun test` from the plugin root.
 
 The suites that spawn a sensor drive the SHIPPED artifact — the bundles
 under `tools/`, generated from `src/entries/` by `bun scripts/build-tools.ts`
@@ -11,8 +13,8 @@ sensor dispatcher resolves a manifest `command` by looking for a token ending
 in `.ts`) but its contents are bundled JavaScript. Regenerate `tools/` after
 touching `src/`, or the spawn suites exercise the previous build.
 
-- `plugin.test.ts` — offline content validation via the sibling
-  `aidlc-workflows` checkout's `aidlc-plugin-validate.ts` (set
+- `plugin.test.ts` — offline content validation via the gitignored
+  `.cache/aidlc-workflows` checkout's `aidlc-plugin-validate.ts` (set
   `AIDLC_WORKFLOWS_CHECKOUT` if the checkout lives elsewhere).
 - `intent-e2e.test.ts` — the deterministic end-to-end path, replayed on a
   throwaway vanilla AI-DLC install: `scripts/install.ts` (store harness ⇒

@@ -82,7 +82,7 @@ And you don't have to *remember* any of that: the installer ends with a coverage
 
 ### Alternative: install through the host plugin store
 
-Build the projection first, from `deep-spec-analysis/`: `bun ../aidlc-workflows/core/tools/aidlc-plugin-build.ts . claude` (or `codex`).
+Prepare the fixture in [Development](#development), then build the projection from `deep-spec-analysis/`: `bun ../.cache/aidlc-workflows/core/tools/aidlc-plugin-build.ts . claude` (or `codex`).
 
 In Claude Code, inside the target project:
 
@@ -105,8 +105,11 @@ On the next session start the plugin's SessionStart hook composes into `.claude/
 For development, clone the repository and install its dev dependencies:
 
 ```sh
-git clone --recurse-submodules https://github.com/j5ik2o/deep-spec-analysis.git
-cd deep-spec-analysis/deep-spec-analysis
+git clone https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin.git
+cd aidlc-deep-spec-analysis-plugin
+git clone --depth 1 --branch v2.8.1 https://github.com/awslabs/aidlc-workflows.git .cache/aidlc-workflows
+bun .cache/aidlc-workflows/scripts/package.ts claude
+cd deep-spec-analysis
 bun install        # dev dependencies only — installs nothing into any project
 ```
 
@@ -114,9 +117,9 @@ Verify changes with:
 
 ```sh
 bun test                                                    # byte-exact conformance suite
-bun ../aidlc-workflows/core/tools/aidlc-plugin-validate.ts .
-bun ../aidlc-workflows/core/tools/aidlc-plugin-build.ts . claude   # → dist/claude/
-bun ../aidlc-workflows/core/tools/aidlc-plugin-test.ts . --install <aidlc-project> --harness claude
+bun ../.cache/aidlc-workflows/core/tools/aidlc-plugin-validate.ts .
+bun ../.cache/aidlc-workflows/core/tools/aidlc-plugin-build.ts . claude   # → dist/claude/
+bun ../.cache/aidlc-workflows/core/tools/aidlc-plugin-test.ts . --install <aidlc-project> --harness claude
                                 # compose dry-run — verifies the merge without modifying the target
 ```
 
@@ -125,7 +128,7 @@ bun ../aidlc-workflows/core/tools/aidlc-plugin-test.ts . --install <aidlc-projec
 | Path | Role |
 |---|---|
 | [`deep-spec-analysis/`](deep-spec-analysis/) | The plugin's authored source: stage, sensors, tools, contracts, tests |
-| [`aidlc-workflows/`](https://github.com/awslabs/aidlc-workflows) | Framework checkout (submodule) — supplies the validate/build/test toolchain; never edited here |
+| `.cache/aidlc-workflows/` | Disposable AI-DLC 2.8.1 checkout for validate/build/test and vanilla integration fixtures (gitignored) |
 | `deep-spec-analysis-sandbox/` | Disposable AI-DLC install used as the compose-test target (`aidlc-plugin-test.ts --install`) — gitignored |
 
 ## Documentation

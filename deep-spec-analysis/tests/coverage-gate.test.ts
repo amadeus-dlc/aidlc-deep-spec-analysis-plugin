@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   ABSOLUTE_THRESHOLD,
+  checkoutBaseWorktree,
   failedTestCount,
   failedTestNames,
   geWithTolerance,
@@ -233,4 +234,44 @@ describe("coverage gate — one coverage config for head and base", () => {
       "base worktree に deep-spec-analysis/ がありません",
     );
   });
+});
+
+describe("coverage gate — base fixture compatibility", () => {
+  for (const legacy of [false, true]) {
+    test(
+      legacy ? "initializes the old base's submodule" : "shares the fixture without initializing a removed submodule",
+      () => {
+        const repoRoot = mkdtempSync(join(tmpdir(), "deep-spec-coverage-fixture-"));
+        let worktreeDir = "";
+        const calls: string[] = [];
+        try {
+          mkdirSync(join(repoRoot, "deep-spec-analysis"));
+          writeFileSync(join(repoRoot, "deep-spec-analysis", "bunfig.toml"), "[test]\n");
+          mkdirSync(join(repoRoot, ".cache", "aidlc-workflows"), { recursive: true });
+          writeFileSync(join(repoRoot, ".cache", "aidlc-workflows", "version"), "2.8.1");
+          const result = checkoutBaseWorktree(repoRoot, "base", (command, args, cwd) => {
+            calls.push(`${command} ${args.slice(0, 2).join(" ")}`);
+            if (command === "git" && args[0] === "worktree" && args[1] === "add") {
+              worktreeDir = args[3];
+              mkdirSync(join(worktreeDir, "deep-spec-analysis"), { recursive: true });
+              if (legacy) writeFileSync(join(worktreeDir, ".gitmodules"), '[submodule "aidlc-workflows"]\n');
+            }
+            if (command === "bun") {
+              expect(readFileSync(join(cwd, "bunfig.toml"), "utf-8")).toBe("[test]\n");
+            }
+            return { status: 0, stdout: "", stderr: "" };
+          });
+          expect(result).toBe(worktreeDir);
+          expect(calls.includes("git submodule update")).toBe(legacy);
+          expect(calls.includes("bun install --frozen-lockfile")).toBe(true);
+          if (!legacy) {
+            expect(readFileSync(join(result, ".cache", "aidlc-workflows", "version"), "utf-8")).toBe("2.8.1");
+          }
+        } finally {
+          if (worktreeDir) rmSync(worktreeDir, { recursive: true, force: true });
+          rmSync(repoRoot, { recursive: true, force: true });
+        }
+      },
+    );
+  }
 });

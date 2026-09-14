@@ -2,6 +2,7 @@
 
 [English](README.md) | 日本語
 
+[開発手順](../../README.ja.md#開発)に従って AI-DLC 2.8.1 の検証環境を準備し、
 プラグインルートで `bun install && bun test` を実行する。
 
 センサーを spawn するスイートは出荷物——`src/entries/` から
@@ -12,7 +13,7 @@
 済みの JavaScript である。`src/` を触ったら `tools/` を再生成すること。
 さもないと spawn 系スイートは前回のビルドを検査してしまう。
 
-- `plugin.test.ts` — 隣接する `aidlc-workflows` checkout の
+- `plugin.test.ts` — 開発用の `.cache/aidlc-workflows` checkout の
   `aidlc-plugin-validate.ts` によるオフライン内容検証（checkout が別の場所に
   ある場合は `AIDLC_WORKFLOWS_CHECKOUT` を設定）。
 - `intent-e2e.test.ts` — 使い捨てのバニラ AI-DLC インストール上で再生する

@@ -29,12 +29,11 @@
 //   - PBT の RNG シードに相当するものは無い。quint は固定 seed で走り、ITF の #meta は
 //     剥がされる (formal-verification-ops.md §3)。同一コードの再計測で差は出ない。
 //
-// 相対ゲートの base 計測は、worktree に submodule (aidlc-workflows) を展開し、
-// `bun install --frozen-lockfile` で pinned な solver backends を入れてから行う
-// (tests/intent-e2e.test.ts が dist/claude を要求するため)。
+// 相対ゲートは開発用 fixture を base worktree でも共有する。削除前の base は
+// 当時の submodule を展開し、いずれも pinned な solver backends を入れて計測する。
 
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -198,7 +197,7 @@ function requireOk(result: CommandResult, what: string): void {
   if (result.error || result.status !== 0) throw new Error(`${what}: ${describeFailure(result)}`);
 }
 
-/** base ref を一時 worktree に展開し、submodule と依存を整えてルートを返す。 */
+/** base ref を一時 worktree に展開し、検証環境と依存を整えてルートを返す。 */
 export function checkoutBaseWorktree(repoRoot: string, baseRef: string, run: CommandRunner = defaultRunner): string {
   const worktreeDir = mkdtempSync(join(tmpdir(), "deep-spec-coverage-base-"));
   // mktemp が作る空ディレクトリが残っていると `git worktree add` が失敗する
@@ -208,10 +207,15 @@ export function checkoutBaseWorktree(repoRoot: string, baseRef: string, run: Com
     `git worktree add (${baseRef})`,
   );
   try {
-    requireOk(
-      run("git", ["submodule", "update", "--init", "--", "aidlc-workflows"], worktreeDir),
-      "git submodule update (base worktree)",
-    );
+    if (existsSync(join(worktreeDir, ".gitmodules"))) {
+      // この削除 PR の base など、旧テストが要求する固定版を再現する。
+      requireOk(
+        run("git", ["submodule", "update", "--init", "--", "aidlc-workflows"], worktreeDir),
+        "git submodule update (base worktree)",
+      );
+    } else if (existsSync(join(repoRoot, ".cache"))) {
+      symlinkSync(join(repoRoot, ".cache"), join(worktreeDir, ".cache"), "junction");
+    }
     // install より前に写す。bunfig.toml は [install] linker も持つので、依存の
     // 配置も head と同じ条件にする。
     pinCoverageConfig(repoRoot, worktreeDir);
