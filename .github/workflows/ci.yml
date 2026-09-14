@@ -25,11 +25,11 @@ jobs:
           # 実行するので、GITHUB_TOKEN を .git/config に残さない。
           persist-credentials: false
 
-      - name: Fetch AI-DLC 2.8.1 development fixture
+      - name: Fetch AI-DLC 2.8.2 development fixture
         uses: actions/checkout@v5
         with:
           repository: awslabs/aidlc-workflows
-          ref: 215afe1a61cb06e43002f5ace9ede10dfad80ed4 # v2.8.1
+          ref: 355903d6dc8eb07d3c77180be5d40ed679d6a40f # v2.8.2
           path: .cache/aidlc-workflows
           persist-credentials: false
 
@@ -45,6 +45,23 @@ jobs:
 
       - name: Build vanilla AI-DLC fixture
         run: bun ../.cache/aidlc-workflows/scripts/package.ts claude
+
+      - name: Verify bundled Claude and Codex runtimes
+        working-directory: .
+        run: |
+          expected=$(bun -e 'import { AIDLC_VERSION } from "./.cache/aidlc-workflows/core/tools/aidlc-version.ts"; console.log(AIDLC_VERSION)')
+          for harness in .claude .codex; do
+            export AIDLC_HARNESS_DIR="$harness"
+            actual=$(bun "$harness/tools/aidlc.ts" version)
+            test "$actual" = "aidlc $expected (runtime $expected)"
+            bun "$harness/tools/aidlc-graph.ts" compile --check
+            bun "$harness/tools/aidlc-graph.ts" validate-scope plugin-dev
+            bun "$harness/tools/aidlc-runner-gen.ts" check
+            bun "$harness/tools/aidlc-runner-gen.ts" scopes --check
+            bun "$harness/tools/aidlc-utility.ts" scope-table --check
+            bun "$harness/tools/aidlc-utility.ts" stage-table --check
+          done
+          bun test ./.codex/hooks/aidlc-codex-adapter.test.ts
 
       - name: Install pinned dev dependencies
         run: bun install --frozen-lockfile
@@ -101,11 +118,11 @@ jobs:
           # 残さない。
           persist-credentials: false
 
-      - name: Fetch AI-DLC 2.8.1 development fixture
+      - name: Fetch AI-DLC 2.8.2 development fixture
         uses: actions/checkout@v5
         with:
           repository: awslabs/aidlc-workflows
-          ref: 215afe1a61cb06e43002f5ace9ede10dfad80ed4 # v2.8.1
+          ref: 355903d6dc8eb07d3c77180be5d40ed679d6a40f # v2.8.2
           path: .cache/aidlc-workflows
           persist-credentials: false
 

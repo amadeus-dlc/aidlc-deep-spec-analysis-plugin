@@ -1,7 +1,7 @@
 // Content validation for the deep-spec-analysis plugin (FR12.3).
 //
 // Runs the framework's offline validator against this authored root using
-// the AI-DLC 2.8.1 development fixture (see the repository Development guide).
+// the AI-DLC 2.8.2 development fixture (see the repository Development guide).
 
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";

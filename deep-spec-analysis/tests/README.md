@@ -2,7 +2,7 @@
 
 English | [日本語](README.ja.md)
 
-Prepare the AI-DLC 2.8.1 fixture as described in the repository
+Prepare the AI-DLC 2.8.2 fixture as described in the repository
 [Development guide](../../README.md#development), then run
 `bun install && bun test` from the plugin root.
 

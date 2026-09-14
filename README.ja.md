@@ -96,7 +96,7 @@ codex plugin add aidlc-deep-spec-analysis@aidlc-plugins   # 初回のみフッ�
 ```sh
 git clone https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin.git
 cd aidlc-deep-spec-analysis-plugin
-git clone --depth 1 --branch v2.8.1 https://github.com/awslabs/aidlc-workflows.git .cache/aidlc-workflows
+git clone --depth 1 --branch v2.8.2 https://github.com/awslabs/aidlc-workflows.git .cache/aidlc-workflows
 bun .cache/aidlc-workflows/scripts/package.ts claude
 cd deep-spec-analysis
 bun install        # dev 依存のみ——どのプロジェクトにも何もインストールしません
@@ -117,7 +117,7 @@ bun ../.cache/aidlc-workflows/core/tools/aidlc-plugin-test.ts . --install <aidlc
 | パス | 役割 |
 |---|---|
 | [`deep-spec-analysis/`](deep-spec-analysis/) | プラグインの authored source：ステージ・センサー・ツール・契約・テスト |
-| `.cache/aidlc-workflows/` | 検証・ビルド・結合テスト用の AI-DLC 2.8.1 checkout（gitignored・使い捨て） |
+| `.cache/aidlc-workflows/` | 検証・ビルド・結合テスト用の AI-DLC 2.8.2 checkout（gitignored・使い捨て） |
 | `deep-spec-analysis-sandbox/` | compose テストの対象に使う使い捨て AI-DLC インストール（`aidlc-plugin-test.ts --install`）——gitignored |
 
 ## ドキュメント
