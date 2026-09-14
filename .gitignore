@@ -57,14 +57,17 @@ aidlc/spaces/*/intents/*/.aidlc-*
 # Redacted diagnostic reports (/aidlc --doctor --export): regenerated, meant to
 # be shared then deleted — machine-local derived output, never shared truth.
 aidlc/diagnostics/
+# Per-clone audit shards. Previously committed so a PR carried the trail of the
+# work it shipped, but the hooks append on every turn — including the turns that
+# prepare and merge the PR itself — so the shard was never final when the PR was
+# cut and each merge left a tail behind for the next one. Owner decision
+# 2026-09-14: stop tracking them. The shards stay on each machine; the history
+# up to this commit keeps every entry recorded so far.
+aidlc/spaces/*/intents/*/audit/
 #
 # COMMITTED (NOT ignored, listed here for the record — do NOT add ignore rules
 # for these): aidlc/spaces/*/memory/** · aidlc/spaces/*/codekb/** ·
 # aidlc/spaces/*/intents/intents.json · aidlc/spaces/*/intents/*/aidlc-state.md ·
-# aidlc/spaces/*/intents/*/audit/*.md (the audit trail, committed as PER-CLONE
-# SHARDS: each machine appends to audit/<host>-<clone>.md so git never merges
-# concurrent appends — there is intentionally NO .gitattributes merge=union,
-# which was proven to corrupt the multi-line audit blocks) ·
 # aidlc/spaces/*/intents/*/<phase>/<stage>/*.md (artifacts + diary).
 .claude/settings.local.json
 
