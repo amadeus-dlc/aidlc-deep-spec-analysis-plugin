@@ -248,7 +248,7 @@ describe("coverage gate — base fixture compatibility", () => {
           mkdirSync(join(repoRoot, "deep-spec-analysis"));
           writeFileSync(join(repoRoot, "deep-spec-analysis", "bunfig.toml"), "[test]\n");
           mkdirSync(join(repoRoot, ".cache", "aidlc-workflows"), { recursive: true });
-          writeFileSync(join(repoRoot, ".cache", "aidlc-workflows", "version"), "2.8.1");
+          writeFileSync(join(repoRoot, ".cache", "aidlc-workflows", "version"), "2.8.2");
           const result = checkoutBaseWorktree(repoRoot, "base", (command, args, cwd) => {
             calls.push(`${command} ${args.slice(0, 2).join(" ")}`);
             if (command === "git" && args[0] === "worktree" && args[1] === "add") {
@@ -265,7 +265,7 @@ describe("coverage gate — base fixture compatibility", () => {
           expect(calls.includes("git submodule update")).toBe(legacy);
           expect(calls.includes("bun install --frozen-lockfile")).toBe(true);
           if (!legacy) {
-            expect(readFileSync(join(result, ".cache", "aidlc-workflows", "version"), "utf-8")).toBe("2.8.1");
+            expect(readFileSync(join(result, ".cache", "aidlc-workflows", "version"), "utf-8")).toBe("2.8.2");
           }
         } finally {
           if (worktreeDir) rmSync(worktreeDir, { recursive: true, force: true });

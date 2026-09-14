@@ -25,11 +25,11 @@ jobs:
           # 実行するので、GITHUB_TOKEN を .git/config に残さない。
           persist-credentials: false
 
-      - name: Fetch AI-DLC 2.8.1 development fixture
+      - name: Fetch AI-DLC 2.8.2 development fixture
         uses: actions/checkout@v5
         with:
           repository: awslabs/aidlc-workflows
-          ref: 215afe1a61cb06e43002f5ace9ede10dfad80ed4 # v2.8.1
+          ref: 355903d6dc8eb07d3c77180be5d40ed679d6a40f # v2.8.2
           path: .cache/aidlc-workflows
           persist-credentials: false
 
@@ -101,11 +101,11 @@ jobs:
           # 残さない。
           persist-credentials: false
 
-      - name: Fetch AI-DLC 2.8.1 development fixture
+      - name: Fetch AI-DLC 2.8.2 development fixture
         uses: actions/checkout@v5
         with:
           repository: awslabs/aidlc-workflows
-          ref: 215afe1a61cb06e43002f5ace9ede10dfad80ed4 # v2.8.1
+          ref: 355903d6dc8eb07d3c77180be5d40ed679d6a40f # v2.8.2
           path: .cache/aidlc-workflows
           persist-credentials: false
 

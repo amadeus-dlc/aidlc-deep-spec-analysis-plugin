@@ -2,7 +2,7 @@
 
 [English](README.md) | 日本語
 
-[開発手順](../../README.ja.md#開発)に従って AI-DLC 2.8.1 の検証環境を準備し、
+[開発手順](../../README.ja.md#開発)に従って AI-DLC 2.8.2 の検証環境を準備し、
 プラグインルートで `bun install && bun test` を実行する。
 
 センサーを spawn するスイートは出荷物——`src/entries/` から

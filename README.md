@@ -107,7 +107,7 @@ For development, clone the repository and install its dev dependencies:
 ```sh
 git clone https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin.git
 cd aidlc-deep-spec-analysis-plugin
-git clone --depth 1 --branch v2.8.1 https://github.com/awslabs/aidlc-workflows.git .cache/aidlc-workflows
+git clone --depth 1 --branch v2.8.2 https://github.com/awslabs/aidlc-workflows.git .cache/aidlc-workflows
 bun .cache/aidlc-workflows/scripts/package.ts claude
 cd deep-spec-analysis
 bun install        # dev dependencies only — installs nothing into any project
@@ -128,7 +128,7 @@ bun ../.cache/aidlc-workflows/core/tools/aidlc-plugin-test.ts . --install <aidlc
 | Path | Role |
 |---|---|
 | [`deep-spec-analysis/`](deep-spec-analysis/) | The plugin's authored source: stage, sensors, tools, contracts, tests |
-| `.cache/aidlc-workflows/` | Disposable AI-DLC 2.8.1 checkout for validate/build/test and vanilla integration fixtures (gitignored) |
+| `.cache/aidlc-workflows/` | Disposable AI-DLC 2.8.2 checkout for validate/build/test and vanilla integration fixtures (gitignored) |
 | `deep-spec-analysis-sandbox/` | Disposable AI-DLC install used as the compose-test target (`aidlc-plugin-test.ts --install`) — gitignored |
 
 ## Documentation
