@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import { normalizePreToolUseUpdatedInput } from "./aidlc-codex-adapter.ts";
+import { allowUpdatedInput } from "./aidlc-codex-adapter.ts";
 
 const projectDir = resolve(import.meta.dir, "../..");
 const adapterPath = resolve(import.meta.dir, "aidlc-codex-adapter.ts");
@@ -57,7 +57,7 @@ describe("Codex PreToolUse input rewrites", () => {
 
   test("normalizes shared rule-delivery rewrites into the Codex envelope", () => {
     const output = JSON.parse(
-      normalizePreToolUseUpdatedInput(
+      allowUpdatedInput(
         JSON.stringify({
           hookSpecificOutput: {
             hookEventName: "PreToolUse",
@@ -85,12 +85,12 @@ describe("Codex PreToolUse input rewrites", () => {
       },
     });
 
-    expect(normalizePreToolUseUpdatedInput(denied)).toBe(denied);
+    expect(allowUpdatedInput(denied)).toBe(denied);
   });
 
   test("preserves output when no input rewrite is present", () => {
-    expect(normalizePreToolUseUpdatedInput("")).toBe("");
-    expect(normalizePreToolUseUpdatedInput('{"decision":"allow"}\n')).toBe(
+    expect(allowUpdatedInput("")).toBe("");
+    expect(allowUpdatedInput('{"decision":"allow"}\n')).toBe(
       '{"decision":"allow"}\n',
     );
   });

@@ -46,6 +46,23 @@ jobs:
       - name: Build vanilla AI-DLC fixture
         run: bun ../.cache/aidlc-workflows/scripts/package.ts claude
 
+      - name: Verify bundled Claude and Codex runtimes
+        working-directory: .
+        run: |
+          expected=$(bun -e 'import { AIDLC_VERSION } from "./.cache/aidlc-workflows/core/tools/aidlc-version.ts"; console.log(AIDLC_VERSION)')
+          for harness in .claude .codex; do
+            export AIDLC_HARNESS_DIR="$harness"
+            actual=$(bun "$harness/tools/aidlc.ts" version)
+            test "$actual" = "aidlc $expected (runtime $expected)"
+            bun "$harness/tools/aidlc-graph.ts" compile --check
+            bun "$harness/tools/aidlc-graph.ts" validate-scope plugin-dev
+            bun "$harness/tools/aidlc-runner-gen.ts" check
+            bun "$harness/tools/aidlc-runner-gen.ts" scopes --check
+            bun "$harness/tools/aidlc-utility.ts" scope-table --check
+            bun "$harness/tools/aidlc-utility.ts" stage-table --check
+          done
+          bun test ./.codex/hooks/aidlc-codex-adapter.test.ts
+
       - name: Install pinned dev dependencies
         run: bun install --frozen-lockfile
 
