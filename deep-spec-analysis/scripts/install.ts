@@ -6,8 +6,8 @@
 // docs/reference/18-plugin-mechanism.md: build the harness projection with
 // aidlc-plugin-build.ts, copy it into the target project (the drop IS the
 // trust decision — there is no store trust gate on this path), then compose
-// via `aidlc plugin sync` or, when the aidlc CLI is absent, by running the
-// projection's hooks/compose.ts directly. Compose is idempotent, so
+// via `aidlc engine plugin sync` or, when the aidlc CLI is absent, by running
+// the projection's hooks/compose.ts directly. Compose is idempotent, so
 // re-running the installer is safe.
 //
 // Usage: bun deep-spec-analysis/scripts/install.ts --project <path>
@@ -643,9 +643,11 @@ if (import.meta.main) {
     AIDLC_HARNESS_DIR: target.harnessLeaf,
     AIDLC_HARNESS_NAME: target.harnessName,
   };
+  // The CLI routes plugin sync under its engine namespace only; the bare
+  // `aidlc plugin sync` is an unknown command (2.8.1 through 2.11.0).
   const aidlcBin = Bun.which("aidlc");
   if (aidlcBin) {
-    run("compose (aidlc plugin sync)", [aidlcBin, "plugin", "sync"], {
+    run("compose (aidlc engine plugin sync)", [aidlcBin, "engine", "plugin", "sync"], {
       cwd: projectDir,
       env: composeEnv,
     });
