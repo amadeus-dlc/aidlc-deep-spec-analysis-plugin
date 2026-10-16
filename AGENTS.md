@@ -25,7 +25,7 @@ bun test
 bun ../.cache/aidlc-workflows/core/tools/aidlc-plugin-validate.ts .
 ```
 
-- PATH に `aidlc` コマンドがあると、インストーラー（`scripts/install.ts`）はそれを使って compose する。版が合わないと `tests/intent-e2e.test.ts` が `unknown command 'plugin'` で失敗するので、そのときは PATH から外して流す。
+- PATH に `aidlc` コマンドがあると、インストーラー（`scripts/install.ts`）は `aidlc engine plugin sync` で compose し、無ければ投影の `hooks/compose.ts` を直接実行する。どちらの経路も `tests/intent-e2e.test.ts` が検証する。
 - `scripts/prepare-quint-evaluator.ts` は Linux x64 の CI 専用で、macOS では失敗する。
 
 ## 従う規則
