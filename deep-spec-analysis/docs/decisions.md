@@ -2759,3 +2759,13 @@ The kernel collections gained openings that spare the caller from materializing.
 
 The per-bundle ceiling rises from 512 KiB to 1 MiB. The ceiling exists to detect abnormal growth, not to enforce a particular number. When 512 KiB was set on 2026-09-03 the measured range was 49-300 KB; domain types added since then brought the three design bundles to 533 KB, over the ceiling. Rather than choosing units or interpretations that make the threshold pass, the ceiling itself moves to roughly twice the measured size, and the measured range recorded in the test is updated to match.
 
+## Retire the AI-DLC development workspace (2026-10-16)
+
+Development of this plugin moves to takt, so the AI-DLC workspace that drove it here is removed: the harness trees (`.claude/`, `.codex/`, `.cursor/`, `.agents/`), the root `CLAUDE.md` and `AGENTS.md` templates, and `aidlc/` with its three completed intents, its reverse-engineering snapshot and its memory files. The plugin itself still targets AI-DLC. CI and the tests keep using the disposable 2.8.1 fixture in `.cache/aidlc-workflows/`, which never depended on the workspace. The history up to the removal commit keeps everything that was recorded.
+
+What the workspace held that still applies moves into the repository's documents. The shared coding rules move to [`docs/coding-rules/`](../../docs/coding-rules/README.md), and the modeling and formal-verification notes to [`docs/domain-modeling.md`](../../docs/domain-modeling.md) and [`docs/formal-verification-ops.md`](../../docs/formal-verification-ops.md) (all Japanese only). The design rulings the workflow memory summarized were already recorded here, except for one procedure ruled on 2026-09-04, recorded now:
+
+**Changing an external specification takes a per-item ruling.** External behaviour stays compatible with upstream AI-DLC. Contracts 1 to 4, the golden bytes, the findings JSON, the stdout verdict line, the wording, the canonical order and the solver pins do not change as a rule. When a change is unavoidable, each changed item gets its own human ruling before it is implemented; a blanket approval does not cover it. This adds the procedure to the 2026-09-03 discipline that external specifications never change.
+
+The rest of the workflow memory governed the AI-DLC process itself and is retired with it: mapping the testing contract's layers onto this project, the model-delegation rule for the main session, bundling the audit shards into each PR, and the ban on modifying the former `aidlc-workflows` submodule.
+
