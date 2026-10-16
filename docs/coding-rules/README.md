@@ -11,7 +11,7 @@ amadeus-ngの`coding-rules`を、このTypeScriptプロジェクト向けに移�
 
 ## 既存の裁定との関係
 
-ユーザーの明示指示と[projectの裁定](../../../memory/project.md)、[既存の設計規則](../../../../../../deep-spec-analysis/docs/architecture/design-rules.ja.md)に従って適用する。移植元の履歴や別プロジェクトの前提で、現在の裁定を上書きしない。矛盾を見つけたら、正本と根拠を確認して文書上で解消する。
+ユーザーの明示指示と[設計判断記録の裁定](../../deep-spec-analysis/docs/decisions.ja.md)、[既存の設計規則](../../deep-spec-analysis/docs/architecture/design-rules.ja.md)に従って適用する。移植元の履歴や別プロジェクトの前提で、現在の裁定を上書きしない。矛盾を見つけたら、正本と根拠を確認して文書上で解消する。
 
 特に次の裁定を維持する。
 
@@ -49,7 +49,7 @@ amadeus-ngの`coding-rules`を、このTypeScriptプロジェクト向けに移�
 
 ## 検査と運用
 
-規則の自動検査は、実装があるものだけを自動化済みと扱う。型検査、[アーキテクチャテスト](../../../../../../deep-spec-analysis/tests/architecture.test.ts)、[実装された検査規則](../../../../../../deep-spec-analysis/tests/architecture/rules.ts)が現在の確認先である。移植元の`cargo lint`やその機械化ロードマップを、当該に実装済みと記載しない。
+規則の自動検査は、実装があるものだけを自動化済みと扱う。型検査、[アーキテクチャテスト](../../deep-spec-analysis/tests/architecture.test.ts)、[実装された検査規則](../../deep-spec-analysis/tests/architecture/rules.ts)が現在の確認先である。移植元の`cargo lint`やその機械化ロードマップを、当該に実装済みと記載しない。
 
 検査を追加する場合は、違反を検出する例と正当な例を用意する。広い命名規則などを機械化する前に、既存の利用箇所と正当な例外を調べる。未実装の検査はレビュー基準として区別する。
 

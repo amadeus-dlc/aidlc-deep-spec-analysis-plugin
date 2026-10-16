@@ -1,6 +1,6 @@
 # ドメインモデリングの型（Tell-Don't-Ask 全数反転で確立したもの）
 
-issue #71「MECE フェンス」プログラム（波 1〜40、PR #72〜#119）と、その後の裁定キュー（#120〜#124）で確立した設計の型。規則の本文は `memory/project.md` の `## Mandated`、裁定の経緯は `docs/decisions.ja.md`。ここでは「どう作るか」と「どこで転ぶか」を書く。
+issue #71「MECE フェンス」プログラム（波 1〜40、PR #72〜#119）と、その後の裁定キュー（#120〜#124）で確立した設計の型。規則の本文は `deep-spec-analysis/docs/architecture/design-rules.ja.md` と[共有コーディング規則](coding-rules/README.md)、裁定の経緯は `deep-spec-analysis/docs/decisions.ja.md`。ここでは「どう作るか」と「どこで転ぶか」を書く。
 
 ## 1. domain 層の住人は、4 種のドメインオブジェクトとドメインエラー
 
@@ -81,4 +81,4 @@ export class Obligation {
 - **bun の `toEqual` は `#private` を見ない**: class 化した値の比較は `toDocument()` で平文に射影してから行う。
 - **カバレッジ床（`bunfig.toml` 0.9）は行と関数の両方、domain 層のみ**: class 化でメソッドが増えたら、アクセサのラウンドトリップテストを足さないと床が落ちる。触った domain ファイルは 100/100 を目標に、既存の未カバー分は main と比較して退行でないことを示す。
 - **コミット**: Conventional Commits・英語・叙事スタイル（`refactor: the values own their semantics (ruling 2, unit 1)`）、attribution 行なし。squash マージで件名に `(#番号)`。stacked PR は避ける（base 削除で PR が閉じ、reopen できない）。
-- **決定の記録**: `docs/decisions.md` と `.ja.md` の両方に段落を足す（「同 PR」表記、PR 番号は書かない）。裁定は `memory/project.md` の `## Mandated` にも 1 行で。
+- **決定の記録**: `deep-spec-analysis/docs/decisions.md` と `.ja.md` の両方に段落を足す（「同 PR」表記、PR 番号は書かない）。

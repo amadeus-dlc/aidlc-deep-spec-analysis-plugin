@@ -16,7 +16,7 @@ Design rules for DDD and Clean Architecture in `deep-spec-analysis/src/`, writte
 
 - **This is "the current rules"** — what to follow.
 - [`../decisions.md`](../decisions.md) **is "the record"** — which ruling was made when and why. If a rule changed, the reason is over there.
-- The `## Mandated` section of `aidlc/spaces/default/memory/project.md` is a **one-line summary of each ruling**. The workflow reads it automatically.
+- [`docs/coding-rules/`](../../../docs/coding-rules/README.md) **is "the companion guide"** (Japanese only) — the shared coding rules, applied within the rules here and the rulings in the record.
 
 When something conflicts, this document and the code are authoritative (this document was written by reading the code).
 

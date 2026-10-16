@@ -1,6 +1,6 @@
 # 形式検証バックエンドの設計と運用（z3・quint・Apalache）
 
-このプラグインのソルバーは決定論（同じ入力から byte 同一の findings）を契約にしている。その前提で確立した設計判断と、2026-09-03 に実測で突き止めた Apalache の孤児化問題をまとめる。一次資料は `docs/decisions.ja.md` のスパイク結果（A1〜A4）と issue #128。
+このプラグインのソルバーは決定論（同じ入力から byte 同一の findings）を契約にしている。その前提で確立した設計判断と、2026-09-03 に実測で突き止めた Apalache の孤児化問題をまとめる。一次資料は `deep-spec-analysis/docs/decisions.ja.md` のスパイク結果（A1〜A4）と issue #128。
 
 ## 1. 固定版は裁定事項
 
@@ -52,7 +52,7 @@ module probe {
 
 - 実射は必ず実ディスパッチャ（`.claude/tools/aidlc-sensor.ts fire <id> --stage <slug> --output-path <path>`）経由で行う。センサーの outcome は advisory なので、exit code が非 0 になるのは dispatch エラーだけ。
 - ディスパッチャの detail md は **active intent** の `.aidlc-sensors/` に落ちる。別 intent の成果物に発火するときは先に intent を切り替える（doctor の `fix` 文字列がその順で書いてある）。findings JSON は成果物の隣の正しい場所に出る。
-- 期待値の基線は `docs/decisions.ja.md` の実射行（例: intent-e2e fixture で ir-valid pass／SMT 5 件／Quint 2 件／cross-check {SC-3, SC-5}）。
+- 期待値の基線は `deep-spec-analysis/docs/decisions.ja.md` の実射行（例: intent-e2e fixture で ir-valid pass／SMT 5 件／Quint 2 件／cross-check {SC-3, SC-5}）。
 
 ## 6. quint が答えられなかった実行は clean に化けない（2026-09-03 実測）
 
