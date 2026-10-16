@@ -2769,3 +2769,13 @@ What the workspace held that still applies moves into the repository's documents
 
 The rest of the workflow memory governed the AI-DLC process itself and is retired with it: mapping the testing contract's layers onto this project, the model-delegation rule for the main session, bundling the audit shards into each PR, and the ban on modifying the former `aidlc-workflows` submodule.
 
+## Compose through `aidlc engine plugin sync` (2026-10-16)
+
+The bundled installer composes through the aidlc CLI whenever one is on PATH, and the command it ran there, `aidlc plugin sync`, does not exist. The CLI routes `plugin sync` under its `engine` namespace only: the route table in `core/tools/aidlc.ts` places it there in both 2.8.1 and 2.11.0, and the 2.10.0 and 2.11.0 binaries answer the bare form with `unknown command 'plugin'`. Every native AI-DLC install puts `aidlc` on PATH, so its users could not finish the install. CI never saw the failure because its runners carry no aidlc and take the `hooks/compose.ts` branch.
+
+The installer now runs `aidlc engine plugin sync`, the command AI-DLC 2.11.0 defines. With it, the 2.11.0 binary composed the plugin into a project set up by `aidlc config` and into a copied 2.11.0 projection, and the 2.10.0 binary composed it into a 2.8.1 install. The branch without a CLI is unchanged. `tests/intent-e2e.test.ts` now puts a stand-in aidlc on PATH that accepts only the engine-namespaced verb, so every run exercises the CLI branch.
+
+Against the 2.11.0 projection, the suite's two single-stage runs stopped at the engine's new hooks-health check. No host drives them, so no hook has left a heartbeat in the record, and `next --single` returns its "hooks are not running" print instead of the stage. Those two runs now set `AIDLC_SKIP_HUMAN_PRESENCE_GUARD=1`, the switch the upstream suite uses for its synthetic runs. On 2.8.1 it only relaxes approval reports, which the suite never sends.
+
+The development fixture stays at 2.8.1. Building the 2.11.0 projection needs Bun 1.4: its `scripts/package.ts` fails under the pinned Bun 1.3.13. Moving the Bun pin is a separate decision.
+
