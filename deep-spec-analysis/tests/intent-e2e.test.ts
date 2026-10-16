@@ -50,6 +50,14 @@ const quintEnv = {
   AIDLC_DEEP_SPEC_QUINT_BIN: quintBin,
 };
 
+// A single-stage `next` driven straight from the suite runs with no host, so
+// no hook has ever left a heartbeat in the record. AI-DLC 2.11.0 answers such
+// a run with its "hooks are not running" print instead of the stage; the
+// upstream suite lifts the human-presence check with this same switch for its
+// synthetic runs. On 2.8.1 it only relaxes approval reports, which this suite
+// never sends.
+const syntheticRunEnv = { AIDLC_SKIP_HUMAN_PRESENCE_GUARD: "1" };
+
 // 出荷形（FR2.1）: プラグインが harness へ運ぶのは entry バンドル 10 本と
 // data/ の契約スキーマ 4 本の計 14 ファイルだけ。バンドルの中身は bundle 済み
 // JS だが、上流ディスパッチャが manifest の command から .ts で終わるトークンを
@@ -296,14 +304,17 @@ describe("late adoption — the plugin verifies an intent that predates it", () 
   });
 
   test("after the late install, the single-stage engine run accepts that intent", () => {
-    const run = inSandbox([
-      "bun",
-      join(sandbox, ".claude", "tools", "aidlc-orchestrate.ts"),
-      "next",
-      "--stage",
-      "deep-spec-analysis-verify",
-      "--single",
-    ]);
+    const run = inSandbox(
+      [
+        "bun",
+        join(sandbox, ".claude", "tools", "aidlc-orchestrate.ts"),
+        "next",
+        "--stage",
+        "deep-spec-analysis-verify",
+        "--single",
+      ],
+      syntheticRunEnv,
+    );
     expect(run.status).toBe(0);
     const directive = JSON.parse(run.stdout.trim().split("\n")[0]);
     expect(directive.kind).toBe("load-steering");
@@ -999,14 +1010,17 @@ describe("phase-2 design verification — routing, single-run, dispatcher fire, 
   });
 
   test("the engine accepts a single-stage run for the functional verify stage", () => {
-    const run = inSandbox([
-      "bun",
-      join(sandbox, ".claude", "tools", "aidlc-orchestrate.ts"),
-      "next",
-      "--stage",
-      "deep-spec-analysis-functional-verify",
-      "--single",
-    ]);
+    const run = inSandbox(
+      [
+        "bun",
+        join(sandbox, ".claude", "tools", "aidlc-orchestrate.ts"),
+        "next",
+        "--stage",
+        "deep-spec-analysis-functional-verify",
+        "--single",
+      ],
+      syntheticRunEnv,
+    );
     expect(run.status).toBe(0);
     const directive = JSON.parse(run.stdout.trim().split("\n")[0]);
     expect(directive.kind).toBe("load-steering");
