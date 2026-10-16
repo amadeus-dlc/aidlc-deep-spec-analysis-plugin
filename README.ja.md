@@ -126,6 +126,7 @@ bun ../.cache/aidlc-workflows/core/tools/aidlc-plugin-test.ts . --install <aidlc
 - 図解アーキテクチャ概観：[docs/architecture.ja.md](docs/architecture.ja.md)
 - プラグイン設計とステージの詳細：[deep-spec-analysis/README.ja.md](deep-spec-analysis/README.ja.md)
 - 設計判断・スパイク結果・ドラフトからの逸脱：[deep-spec-analysis/docs/decisions.ja.md](deep-spec-analysis/docs/decisions.ja.md)
+- 共有コーディング規則と開発の知見（日本語のみ）：[docs/coding-rules/](docs/coding-rules/README.md)・[docs/domain-modeling.md](docs/domain-modeling.md)・[docs/formal-verification-ops.md](docs/formal-verification-ops.md)
 
 ## ヘルプ
 

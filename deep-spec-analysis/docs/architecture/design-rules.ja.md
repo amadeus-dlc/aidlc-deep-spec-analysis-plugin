@@ -2,7 +2,7 @@
 
 日本語 | [English](design-rules.md)
 
-補助ガイド: [共有コーディング規則](../../../aidlc/spaces/default/knowledge/aidlc-shared/coding-rules/README.md)。CQSを採用し、CQRSは採用しない（2026-09-05、ユーザー確認）。
+補助ガイド: [共有コーディング規則](../../../docs/coding-rules/README.md)。CQSを採用し、CQRSは採用しない（2026-09-05、ユーザー確認）。
 
 この文書は `deep-spec-analysis/src/`（6 文脈・489 ファイル・26,007 行）を全ファイル読んで書き起こした、**いま実際に効いている**設計規則である。「こうありたい」ではなく「こう書かれている」を先に確定し、そこから規範を抜き出した。
 

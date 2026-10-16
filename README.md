@@ -137,6 +137,7 @@ bun ../.cache/aidlc-workflows/core/tools/aidlc-plugin-test.ts . --install <aidlc
 - Illustrated architecture overview: [docs/architecture.md](docs/architecture.md)
 - Plugin design and stage walkthrough: [deep-spec-analysis/README.md](deep-spec-analysis/README.md)
 - Design decisions, spike results, deviations from the draft: [deep-spec-analysis/docs/decisions.md](deep-spec-analysis/docs/decisions.md)
+- Shared coding rules and development notes (Japanese only): [docs/coding-rules/](docs/coding-rules/README.md), [docs/domain-modeling.md](docs/domain-modeling.md), [docs/formal-verification-ops.md](docs/formal-verification-ops.md)
 
 ## Getting help
 
